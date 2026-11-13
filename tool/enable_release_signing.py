@@ -1,6 +1,6 @@
 """Configure la signature Android release dans le Gradle généré par Flutter.
 
-Appelé seulement sur les tags, après création de android/key.properties.
+Appelé pour les APK signés (branches ou tags), après création de android/key.properties.
 La clé privée reste dans les secrets GitHub Actions et n'est jamais commitée.
 """
 
@@ -17,7 +17,7 @@ if debug_signing not in source:
 if "android {" not in source:
     raise SystemExit("Bloc android introuvable dans build.gradle.kts")
 
-signing = """val domoliaSigningProperties = java.util.Properties().apply {
+signing = """val domoliaSigningProperties = Properties().apply {
     rootProject.file("key.properties").inputStream().use { load(it) }
 }
 
@@ -32,7 +32,7 @@ android {
     }
 """
 
-source = source.replace("android {", signing, 1)
+source = "import java.util.Properties\n\n" + source.replace("android {", signing, 1)
 source = source.replace(
     debug_signing,
     'signingConfig = signingConfigs.getByName("domoliaRelease")',
