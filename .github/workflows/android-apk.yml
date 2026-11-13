@@ -88,6 +88,15 @@ jobs:
           fi
 
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+          # Un alias incorrect ne doit pas bloquer la compilation 3 minutes
+          # avant d'indiquer une erreur. On valide le keystore immédiatement.
+          if ! keytool -list \
+            -keystore android/app/upload-keystore.jks \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" >/dev/null 2>&1; then
+            echo "::error::Clé Android introuvable ou keystore non lisible. Vérifie l'alias exact avec 'keytool -list -keystore domolia-release.jks' dans Termux, puis mets à jour ANDROID_KEY_ALIAS."
+            exit 1
+          fi
           printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=upload-keystore.jks\n' \
             "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_PASSWORD" "$ANDROID_KEY_ALIAS" > android/key.properties
           python3 tool/enable_release_signing.py
