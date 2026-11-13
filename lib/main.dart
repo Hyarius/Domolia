@@ -294,7 +294,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 24),
                   FilledButton.icon(
-                    onPressed: () => _openUrl(_devReleaseUrl),
+                    onPressed: () => unawaited(_updates.checkNow()),
                     icon: const Icon(Icons.system_update_alt_rounded),
                     label: const Text('Mise à jour'),
                   ),
@@ -306,7 +306,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 22),
                   Text(
-                    'Canal de développement · '+_updates.channel,
+                    'Canal de développement · ${_updates.channel}',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12,

@@ -55,8 +55,8 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
           const SnackBar(content:Text('Canal de mise à jour enregistré.')));
       }
     } catch(error) {
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content:Text('$error')));
+      if(mounted) { ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content:Text('$error'))); }
     }
   }
 
@@ -70,8 +70,7 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
       const Text('Mises à jour',style:TextStyle(
         color:DomoliaColors.goldLight,fontSize:25,fontWeight:FontWeight.bold)),
       const SizedBox(height:20),
-      Text('Version installée : '+(version==null?'inconnue':
-        version.versionName+' (build '+version.versionCode.toString()+')')),
+      Text('Version installée : ${version == null ? 'inconnue' : '${version.versionName} (build ${version.versionCode})'}'),
       const SizedBox(height:18),
       SwitchListTile(
         title:const Text('Vérifier automatiquement au démarrage'),
@@ -97,10 +96,10 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
       TextButton(onPressed:()=>_saveChannel('dev-latest'),
         child:const Text('Revenir au canal dev-latest')),
       const SizedBox(height:20),
-      Text('Dernière vérification : '+(updater.lastCheck?.toLocal().toString()??'jamais'),
+      Text('Dernière vérification : ${updater.lastCheck?.toLocal() ?? 'jamais'}',
         style:const TextStyle(color:DomoliaColors.muted)),
       const SizedBox(height:8),
-      Text('État : '+switch(updater.phase) {
+      Text('État : ${switch(updater.phase) {
         UpdatePhase.idle => 'en attente',
         UpdatePhase.checking => 'vérification en cours',
         UpdatePhase.upToDate => 'à jour',
@@ -109,7 +108,7 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
         UpdatePhase.installationRequested => 'installation proposée',
         UpdatePhase.permissionRequired => 'autorisation Android requise',
         UpdatePhase.failed => 'erreur',
-      }),
+      }}',
       if(updater.message!=null) Padding(
         padding:const EdgeInsets.only(top:8),
         child:Text(updater.message!,style:const TextStyle(color:DomoliaColors.muted))),

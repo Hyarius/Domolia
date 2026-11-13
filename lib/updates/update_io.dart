@@ -19,7 +19,7 @@ class GitHubReleaseSource implements ReleaseSource {
       request.headers.set(HttpHeaders.acceptHeader,'application/vnd.github+json');
       request.headers.set(HttpHeaders.cacheControlHeader,'no-cache');
       final response=await request.close().timeout(const Duration(seconds:20));
-      if(response.statusCode!=HttpStatus.ok) throw HttpException('HTTP '+response.statusCode.toString(),uri:url);
+      if(response.statusCode!=HttpStatus.ok) throw HttpException('HTTP ${response.statusCode}',uri:url);
       final bytes=<int>[];
       await for(final chunk in response.timeout(const Duration(seconds:20))) {
         bytes.addAll(chunk);
@@ -32,7 +32,7 @@ class GitHubReleaseSource implements ReleaseSource {
   @override
   Future<UpdateCandidate?> latest(String channel) async {
     if(!isValidUpdateChannel(channel)) throw const FormatException('Canal invalide.');
-    final uri=Uri.https('api.github.com','/repos/'+_repo+'/releases/tags/'+channel);
+    final uri=Uri.https('api.github.com','/repos/$_repo/releases/tags/$channel');
     final data=jsonDecode(utf8.decode(await _get(uri)));
     if(data is! Map<String,dynamic> || data['tag_name']!=channel) {
       throw const FormatException('Release GitHub inattendue.');
@@ -40,15 +40,15 @@ class GitHubReleaseSource implements ReleaseSource {
     final assets=data['assets'];
     if(assets is! List) throw const FormatException('Assets GitHub manquants.');
     final names=assets.whereType<Map<String,dynamic>>().map((asset)=>asset['name']).whereType<String>().toSet();
-    if(!names.contains('Domolia-update.json')) return null; // Ancient release.
+    if(!names.contains('Domolia-update.json')) { return null; } // Ancient release.
     final metadata=jsonDecode(utf8.decode(await _get(
-      Uri.https('github.com','/'+_repo+'/releases/download/'+channel+'/Domolia-update.json'),limit:16384)));
+      Uri.https('github.com','/$_repo/releases/download/$channel/Domolia-update.json'),limit:16384)));
     if(metadata is! Map<String,dynamic>) throw const FormatException('Métadonnées invalides.');
     final apk=metadata['apkName'];
     if(apk is! String || !{'Domolia-dev.apk','Domolia-preview.apk','Domolia.apk'}.contains(apk)
         || !names.contains(apk)) throw const FormatException('APK absent.');
     return UpdateCandidate.parse(metadata,
-      Uri.https('github.com','/'+_repo+'/releases/download/'+channel+'/'+apk));
+      Uri.https('github.com','/$_repo/releases/download/$channel/$apk'));
   }
 }
 
@@ -67,10 +67,10 @@ class HttpApkDownloader implements ApkDownloader {
   Future<String> download(UpdateCandidate candidate,DownloadCancellation cancel,
       void Function(double?) onProgress) async {
     final root=await getApplicationSupportDirectory();
-    final folder=Directory(root.path+'/updates');
+    final folder=Directory('${root.path}/updates');
     await folder.create(recursive:true);
-    final temp=File(folder.path+'/candidate.apk.part');
-    final ready=File(folder.path+'/update-'+candidate.versionCode.toString()+'.apk');
+    final temp=File('${folder.path}/candidate.apk.part');
+    final ready=File('${folder.path}/update-${candidate.versionCode}.apk');
     if(await temp.exists()) await temp.delete();
     if(await ready.exists()) await ready.delete();
     final client=HttpClient()..connectionTimeout=const Duration(seconds:15);
@@ -85,7 +85,7 @@ class HttpApkDownloader implements ApkDownloader {
       request.headers.set(HttpHeaders.userAgentHeader,'Domolia-Android-Updater');
       request.headers.set(HttpHeaders.cacheControlHeader,'no-cache');
       final response=await request.close().timeout(const Duration(seconds:25));
-      if(response.statusCode!=HttpStatus.ok) throw HttpException('HTTP '+response.statusCode.toString());
+      if(response.statusCode!=HttpStatus.ok) throw HttpException('HTTP ${response.statusCode}');
       final digest=_HashSink();
       final hasher=sha256.startChunkedConversion(digest);
       output=temp.openWrite();
