@@ -152,20 +152,32 @@ jobs:
 
           # Le certificat public de l'APK doit correspondre exactement à celui
           # du keystore privé fourni via les secrets GitHub Actions.
-          actual="$("$apksigner" verify --print-certs "$apk" |
-            sed -n 's/^Signer #1 certificate SHA-256 digest: //p' |
-            head -n 1 | tr '[:upper:]' '[:lower:]' | tr -d ':')"
+          signer_report="$("$apksigner" verify --print-certs "$apk")"
+          # Accepter d'éventuels espaces initiaux et le format hexadécimal
+          # (avec ou sans deux-points) des versions différentes d'apksigner.
+          actual="$(printf '%s\n' "$signer_report" |
+            sed -n 's/^[[:space:]]*Signer #1 certificate SHA-256 digest:[[:space:]]*//p' |
+            tr '[:upper:]' '[:lower:]' | tr -d '[:space:]:' )"
           expected="$(keytool -exportcert \
             -keystore android/app/upload-keystore.jks \
             -alias "$ANDROID_KEY_ALIAS" \
             -storepass "$ANDROID_KEYSTORE_PASSWORD" |
             sha256sum | awk '{print $1}')"
 
-          if [ -z "$actual" ] || [ "$actual" != "$expected" ]; then
-            echo "::error::Le certificat de l'APK ne correspond pas à la clé Android permanente."
+          # Les empreintes de certificat sont publiques. Elles permettent de
+          # diagnostiquer sans exposer les mots de passe ni le keystore.
+          echo "Empreinte de l'APK : ${actual:-non détectée}"
+          echo "Empreinte du keystore : $expected"
+          if [ -z "$actual" ]; then
+            echo "::error::Impossible de lire le SHA-256 du certificat depuis apksigner."
+            printf '%s\n' "$signer_report" | grep 'certificate SHA-256' || true
             exit 1
           fi
-          echo "Signature Android vérifiée : certificat SHA-256 $actual"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::Le certificat de l'APK ne correspond pas à celui de la clé Android permanente."
+            exit 1
+          fi
+          echo "Signature Android permanente vérifiée."
 
       - name: Conserver l'APK comme artifact GitHub Actions
         uses: actions/upload-artifact@v4
