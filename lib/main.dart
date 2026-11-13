@@ -42,8 +42,10 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   _Page _page = _Page.home;
 
+  // La liste des releases reste accessible avant la première publication
+  // dev-latest (par exemple pour les APK de préversion des branches).
   static final Uri _devReleaseUrl = Uri.parse(
-    'https://github.com/Hyarius/Domolia/releases/tag/dev-latest',
+    'https://github.com/Hyarius/Domolia/releases',
   );
   static final Uri _allReleasesUrl = Uri.parse(
     'https://github.com/Hyarius/Domolia/releases',
@@ -53,7 +55,7 @@ class _HomePageState extends State<HomePage> {
     final opened = await launchUrl(url, mode: LaunchMode.externalApplication);
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Impossible d’ouvrir GitHub.')),
+        const SnackBar(content: Text('Impossible d’ouvrir les versions sur GitHub.')),
       );
     }
   }
