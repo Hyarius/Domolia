@@ -41,6 +41,9 @@ jobs:
       - name: Générer la plateforme Android
         run: flutter create --no-pub --platforms=android --org=fr.domolia --project-name=domolia .
 
+      - name: Installer le pont Android de mise à jour
+        run: python3 tool/configure_android_updates.py
+
       - name: Installer l'icône Android Domolia
         run: python3 tool/install_launcher_icon.py
 
@@ -76,13 +79,8 @@ jobs:
           done
 
           if [ "$supplied" -eq 0 ]; then
-            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-              echo "::error::Les quatre secrets Android sont obligatoires pour les versions stables."
-              exit 1
-            fi
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::APK de développement debug : les futures versions peuvent nécessiter une désinstallation."
-            exit 0
+            echo "::error::Signature Android permanente obligatoire pour les APK publiés (main, branches et tags)."
+            exit 1
           fi
 
           if [ "$supplied" -ne 4 ]; then
@@ -120,9 +118,11 @@ jobs:
           else
             version="0.1.0"
           fi
+          channel="$(python3 tool/update_channels.py)"
           flutter build apk --release \
             --build-name="$version" \
-            --build-number="${GITHUB_RUN_NUMBER}"
+            --build-number="${GITHUB_RUN_NUMBER}" \
+            --dart-define="DOMOLIA_UPDATE_CHANNEL=$channel"
 
       - name: Préparer l'APK à télécharger
         shell: bash
@@ -137,6 +137,10 @@ jobs:
           else
             cp build/app/outputs/flutter-apk/app-debug.apk dist/Domolia-debug.apk
           fi
+
+      - name: Générer les métadonnées du build Android
+        if: github.event_name != 'pull_request'
+        run: python3 tool/generate_update_metadata.py
 
       - name: Vérifier la signature Android permanente
         if: steps.signing.outputs.configured == 'true'
@@ -186,7 +190,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: domolia-apk-${{ github.run_number }}
-          path: dist/*.apk
+          path: dist/*
           if-no-files-found: error
           retention-days: 30
 
@@ -214,19 +218,15 @@ jobs:
         run: |
           set -euo pipefail
           branch="${GITHUB_REF#refs/heads/}"
+          tag="$(python3 -c 'import json;print(json.load(open("dist/Domolia-update.json"))["channel"])')"
+          asset="$(python3 -c 'import json;print(json.load(open("dist/Domolia-update.json"))["apkName"])')"
           if [ "$branch" = "main" ]; then
-            tag="dev-latest"
-            asset="Domolia-dev.apk"
             title="Domolia — dev-latest"
           else
-            # Le hash stabilise le nom même si deux branches ont un slug similaire.
-            slug=$(printf '%s' "$branch" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g; s/^-+//; s/-+$//' | cut -c1-32)
-            digest=$(printf '%s' "$branch" | sha256sum | cut -c1-10)
-            tag="preview-${slug:-branch}-$digest"
-            asset="Domolia-preview.apk"
             title="Domolia — branche $branch"
           fi
           test -s "dist/$asset"
+          test -s "dist/Domolia-update.json"
           {
             echo "tag=$tag"
             echo "asset=$asset"
@@ -274,14 +274,14 @@ jobs:
           git push --force origin "refs/tags/$TAG"
 
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "dist/$ASSET" --clobber
+            gh release upload "$TAG" "dist/$ASSET" "dist/Domolia-update.json" --clobber
             gh release edit "$TAG" \
               --title "$TITLE" \
               --prerelease \
               --latest=false \
               --notes-file release-notes.md
           else
-            gh release create "$TAG" "dist/$ASSET" \
+            gh release create "$TAG" "dist/$ASSET" "dist/Domolia-update.json" \
               --verify-tag \
               --title "$TITLE" \
               --prerelease \
@@ -307,5 +307,7 @@ jobs:
       - name: Créer la GitHub Release stable
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Domolia.apk
+          files: |
+            dist/Domolia.apk
+            dist/Domolia-update.json
           generate_release_notes: true

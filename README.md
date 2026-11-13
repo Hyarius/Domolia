@@ -59,11 +59,11 @@ Le lien propre à une branche apparaît aussi dans le récapitulatif de l'exécu
 2. Autoriser l'installation depuis le navigateur/gestionnaire de fichiers si Android le demande.
 3. Installer `Domolia-dev.apk` et lancer Domolia.
 
-L'application dispose d'un bouton **Mise à jour** qui ouvre ce canal. Android demande toujours une confirmation d'installation.
+À partir de la première version contenant PR02, Domolia **vérifie automatiquement la présence de mises à jour après son lancement**, télécharge tout APK plus récent en affichant une progression discrète, vérifie SHA-256 et la compatibilité Android, puis ouvre l'installateur système. Android conserve sa confirmation et peut demander l'autorisation d'installer depuis Domolia. Le menu **Paramètres → Mises à jour** permet de désactiver cette vérification, choisir `dev-latest` ou un canal `preview-…` (le canal de la branche est sélectionné automatiquement au premier lancement d'un APK preview), consulter la version installée et vérifier manuellement. Les boutons « Mise à jour » utilisent désormais ce mécanisme.
 
 ### Signature Android et mises à jour sans perte de données
 
-Sans configuration supplémentaire, `dev-latest` et les préversions des branches sont compilés en mode **release**, mais signés avec une **clé debug temporaire** liée au runner GitHub. Une version issue d'une autre compilation peut alors exiger une désinstallation — et donc supprimer les données locales.
+**Tous les APK publiés sont obligatoirement signés avec la clé Android persistante.** La CI échoue si les secrets correspondants sont absents ou partiels ; seuls les APK de test de PR non publiés sont compilés en mode debug.
 
 Pour obtenir de vraies mises à jour installables par-dessus l'application existante, il faut une **signature Android persistante**. Créer une clé privée et la sauvegarder en lieu sûr :
 
@@ -81,7 +81,7 @@ Ne jamais mettre la clé privée dans Git. Renseigner ces quatre secrets dans **
 | `ANDROID_KEY_ALIAS` | Alias de la clé (`domolia` dans l'exemple) |
 | `ANDROID_KEY_PASSWORD` | Mot de passe de la clé |
 
-Quand les quatre secrets existent, les builds `main` et les préversions de branches deviennent des APK **release signés avec la même clé**. Les tags stables `v*` **exigent** ces secrets, sinon le workflow échoue.
+Les builds `main`, les préversions de branches et les tags `v*` exigent tous la même clé de signature. Un manifeste `Domolia-update.json`, généré à partir de chaque APK construit, accompagne désormais chaque release.
 
 Les prochaines installations peuvent alors mettre l'application à jour sans effacer ses données, à condition de garder le même identifiant de package Android et d'augmenter le numéro de build. Le workflow utilise `github.run_number` comme numéro de build Android.
 
@@ -120,13 +120,14 @@ Prérequis : Flutter stable, Android SDK et Java 21.
 
 ```bash
 flutter create --platforms=android --org=fr.domolia --project-name=domolia .
+python3 tool/configure_android_updates.py
 flutter pub get
 flutter analyze
 flutter test
 flutter run
 ```
 
-Le dossier Android est généré par Flutter pour l'instant. Il sera versionné explicitement lors de l'ajout des intégrations Android natives.
+Le dossier Android est toujours généré par Flutter. La commande `python3 tool/configure_android_updates.py` **après** `flutter create` restaure Kotlin, le manifeste et FileProvider. La CI exécute cette étape automatiquement. Voir [la PR02](docs/rp/PR02.md) pour le fonctionnement exact et le test réel N → N+1.
 
 ## Suite du projet
 

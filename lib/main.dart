@@ -1,16 +1,23 @@
+import 'dart:async';
+
 import 'package:cupertino_ui/cupertino_ui.dart' as cupertino_ui;
 import 'package:flutter_localizations/flutter_localizations.dart' as flutter_l10n;
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'theme/domolia_theme.dart';
+import 'updates/update_service.dart';
+import 'updates/update_io.dart';
+import 'updates/update_widgets.dart';
 
 void main() {
   runApp(const DomoliaApp());
 }
 
 class DomoliaApp extends StatelessWidget {
-  const DomoliaApp({super.key});
+  const DomoliaApp({super.key, this.updateController});
+
+  final UpdateController? updateController;
 
   @override
   Widget build(BuildContext context) {
@@ -25,15 +32,16 @@ class DomoliaApp extends StatelessWidget {
         flutter_l10n.GlobalWidgetsLocalizations.delegate,
         cupertino_ui.GlobalCupertinoLocalizations.delegate,
       ],
-      home: const HomePage(),
+      home: HomePage(updates: updateController),
     );
   }
 }
 
-enum _Page { home, about }
+enum _Page { home, about, updates }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.updates});
+  final UpdateController? updates;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -41,12 +49,27 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   _Page _page = _Page.home;
+  late final UpdateController _updates;
+  late final bool _ownsUpdates;
+
+  @override
+  void initState() {
+    super.initState();
+    _ownsUpdates = widget.updates == null;
+    _updates = widget.updates ?? createProductionUpdateController();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_updates.initialize());
+    });
+  }
+
+  @override
+  void dispose() {
+    if (_ownsUpdates) _updates.dispose();
+    super.dispose();
+  }
 
   // La liste des releases reste accessible avant la première publication
   // dev-latest (par exemple pour les APK de préversion des branches).
-  static final Uri _devReleaseUrl = Uri.parse(
-    'https://github.com/Hyarius/Domolia/releases',
-  );
   static final Uri _allReleasesUrl = Uri.parse(
     'https://github.com/Hyarius/Domolia/releases',
   );
@@ -67,7 +90,9 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return AnimatedBuilder(
+      animation: _updates,
+      builder: (context, _) => Scaffold(
       appBar: AppBar(
         title: const Text(
           'DOMOLIA',
@@ -80,13 +105,20 @@ class _HomePageState extends State<HomePage> {
         actions: [
           IconButton(
             tooltip: 'Mise à jour',
-            onPressed: () => _openUrl(_devReleaseUrl),
+            onPressed: () => unawaited(_updates.checkNow()),
             icon: const Icon(Icons.system_update_alt_rounded),
           ),
         ],
       ),
       drawer: _buildDrawer(),
-      body: _page == _Page.home ? _buildHome() : _buildAbout(),
+      body: Column(children: [
+        if (_updates.phase == UpdatePhase.downloading)
+          UpdateProgressStrip(controller: _updates),
+        Expanded(child: _page == _Page.home ? _buildHome()
+          : _page == _Page.about ? _buildAbout()
+          : UpdateSettingsPanel(controller: _updates)),
+      ]),
+    ),
     );
   }
 
@@ -151,12 +183,18 @@ class _HomePageState extends State<HomePage> {
             ),
             const Divider(indent: 16, endIndent: 16),
             ListTile(
+              leading: const Icon(Icons.settings_outlined),
+              title: const Text('Paramètres'),
+              selected: _page == _Page.updates,
+              onTap: () => _showPage(_Page.updates),
+            ),
+            ListTile(
               leading: const Icon(Icons.system_update_alt_rounded),
               title: const Text('Mise à jour'),
               iconColor: DomoliaColors.gold,
               onTap: () {
                 Navigator.pop(context);
-                _openUrl(_devReleaseUrl);
+                unawaited(_updates.checkNow());
               },
             ),
             ListTile(
@@ -234,7 +272,7 @@ class _HomePageState extends State<HomePage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Bonjour, monde !',
+                          'Hello World !',
                           style: TextStyle(
                             color: DomoliaColors.goldLight,
                             fontSize: 22,
@@ -256,7 +294,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 24),
                   FilledButton.icon(
-                    onPressed: () => _openUrl(_devReleaseUrl),
+                    onPressed: () => unawaited(_updates.checkNow()),
                     icon: const Icon(Icons.system_update_alt_rounded),
                     label: const Text('Mise à jour'),
                   ),
@@ -267,8 +305,8 @@ class _HomePageState extends State<HomePage> {
                     label: const Text('Toutes les versions'),
                   ),
                   const SizedBox(height: 22),
-                  const Text(
-                    'Canal de développement · dev-latest',
+                  Text(
+                    'Canal de développement · ${_updates.channel}',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12,
