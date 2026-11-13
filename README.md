@@ -2,6 +2,22 @@
 
 Application Android de jeu de rôle narratif, en cours de développement.
 
+## Identité visuelle
+
+![Icône Domolia](assets/images/domolia_emblem.png)
+
+Le thème de l'application reprend les couleurs de l'emblème **D, bouclier et lauriers** :
+
+| Usage | Couleur |
+| --- | --- |
+| Fond de l'application | Vert forêt `#061B10` |
+| Menus et panneaux | Vert profond `#0D2A1B` |
+| Éléments interactifs | Or chaud `#F6CC69` |
+| Titres et accents | Or clair `#FFE6A5` |
+| Texte principal | Crème `#F5EDD6` |
+
+La palette et les thèmes des boutons, champs, menus et barres d'en-tête sont centralisés dans `lib/theme/domolia_theme.dart`. L'emblème est affiché dans l'application et copié dans les ressources du launcher Android par `tool/install_launcher_icon.py` après `flutter create` (c'est également fait automatiquement dans la CI).
+
 ## Télécharger Domolia pour Android
 
 **[Télécharger l'APK de développement — dev-latest](https://github.com/Hyarius/Domolia/releases/download/dev-latest/Domolia-dev.apk)**

@@ -41,6 +41,9 @@ jobs:
       - name: Générer la plateforme Android
         run: flutter create --no-pub --platforms=android --org=fr.domolia --project-name=domolia .
 
+      - name: Installer l'icône Android Domolia
+        run: python3 tool/install_launcher_icon.py
+
       - name: Installer les dépendances
         run: flutter pub get
 
