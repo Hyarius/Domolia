@@ -1,0 +1,26 @@
+# Dart / Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+coverage/
+**/generated_plugin_registrant.dart
+
+# IDE et systèmes
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# Données de signature : ne jamais committer
+*.jks
+*.keystore
+**/key.properties
+
+# Configurations et secrets locaux
+.env
+.env.*
+android/local.properties

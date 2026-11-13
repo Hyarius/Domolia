@@ -1,0 +1,120 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Compiler et tester l'APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer les sources
+        uses: actions/checkout@v4
+
+      - name: Installer Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Installer Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Générer la plateforme Android
+        run: flutter create --no-pub --platforms=android --org=fr.domolia --project-name=domolia .
+
+      - name: Installer les dépendances
+        run: flutter pub get
+
+      - name: Analyse statique
+        run: flutter analyze
+
+      - name: Tests
+        run: flutter test
+
+      - name: Configurer la signature release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Le secret GitHub Actions $name est manquant."
+              exit 1
+            fi
+          done
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=upload-keystore.jks\n' \
+            "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_PASSWORD" "$ANDROID_KEY_ALIAS" > android/key.properties
+          python3 tool/enable_release_signing.py
+
+      - name: Compiler l'APK de test
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        run: flutter build apk --debug --build-number="${{ github.run_number }}"
+
+      - name: Compiler l'APK release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          flutter build apk --release \
+            --build-name="${GITHUB_REF_NAME#v}" \
+            --build-number="${GITHUB_RUN_NUMBER}"
+
+      - name: Préparer l'APK à télécharger
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [ -f build/app/outputs/flutter-apk/app-release.apk ]; then
+            cp build/app/outputs/flutter-apk/app-release.apk dist/Domolia.apk
+          else
+            cp build/app/outputs/flutter-apk/app-debug.apk dist/Domolia-debug.apk
+          fi
+
+      - name: Publier l'APK dans les artifacts Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: domolia-apk-${{ github.run_number }}
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Publier la version GitHub
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+
+    steps:
+      - name: Télécharger l'APK signé
+        uses: actions/download-artifact@v4
+        with:
+          name: domolia-apk-${{ github.run_number }}
+          path: dist
+
+      - name: Créer la GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Domolia.apk
+          generate_release_notes: true
