@@ -1,54 +1,76 @@
 # Domolia
 
-Domolia est une future application Android de jeu de rôle narratif. Cette première version contient un écran de bienvenue et une chaîne d'intégration continue qui construit un **APK installable**.
+Application Android de jeu de rôle narratif, en cours de développement.
 
-## Télécharger une version d'essai
+## Télécharger Domolia pour Android
 
-1. Ouvrir l'onglet [Actions](https://github.com/Hyarius/Domolia/actions/workflows/android-apk.yml).
-2. Ouvrir une exécution **Android APK** terminée avec succès.
-3. Télécharger l'artifact **domolia-apk-…** en bas de la page.
-4. Décompresser l'archive ZIP et installer `Domolia-debug.apk` sur Android, en autorisant l'installation depuis cette source si nécessaire.
+**[Télécharger l'APK de développement — dev-latest](https://github.com/Hyarius/Domolia/releases/download/dev-latest/Domolia-dev.apk)**
 
-**Attention :** les APK de test sont signés avec la clé de débogage temporaire du runner GitHub. Une version d'essai issue d'une autre exécution peut nécessiter de désinstaller la précédente (ce qui supprime ses données locales). Ne pas utiliser ces APK comme canal de mises à jour durables.
+[Voir la release dev-latest et ses notes](https://github.com/Hyarius/Domolia/releases/tag/dev-latest) · [Toutes les versions](https://github.com/Hyarius/Domolia/releases) · [Dernière compilation GitHub Actions](https://github.com/Hyarius/Domolia/actions/workflows/android-apk.yml)
 
-## Bouton « Mise à jour »
+Le lien direct télécharge toujours `Domolia-dev.apk`, sans ouvrir l'onglet Actions ni décompresser un artifact ZIP. **La première release dev-latest apparaîtra après la fusion de la PR d'initialisation et le premier push sur `main`.**
 
-Le bouton de l'application ouvre les [versions publiées sur GitHub](https://github.com/Hyarius/Domolia/releases). Cette première version n'installe **pas** une mise à jour silencieusement. Sur Android, une installation hors Play Store demande l'accord explicite de l'utilisateur.
+### Fonctionnement des versions de développement
 
-Le canal durable sera constitué d'APK **release**, signés avec **la même clé privée à chaque version**, puis publiés sur GitHub Releases.
+Chaque commit poussé sur **`main`** (la branche principale de ce dépôt, équivalent de `master`) lance GitHub Actions. Après succès des tests et de la compilation Android :
 
-## Publier une version APK signée
+1. L'APK du build est envoyé dans les artifacts GitHub Actions.
+2. Le tag mobile **`dev-latest`** pointe sur ce commit.
+3. La GitHub Release **dev-latest** (préversion) est créée ou mise à jour, et son fichier **`Domolia-dev.apk`** est remplacé.
+4. Le lien de téléchargement en haut de cette page reste identique.
 
-Créer une clé Android **privée et conservée en lieu sûr** :
+Les Pull Requests produisent uniquement des artifacts de test et **ne publient pas** dev-latest. Les tags `v*` publient des releases stables indépendantes.
+
+> Un canal à tag mobile nécessite que les **releases immuables** ne soient pas activées pour ce dépôt : GitHub interdit alors de modifier le tag et les assets d'une release existante.
+
+### Installer sur Android
+
+1. Ouvrir le [lien APK direct](https://github.com/Hyarius/Domolia/releases/download/dev-latest/Domolia-dev.apk) depuis le téléphone.
+2. Autoriser l'installation depuis le navigateur/gestionnaire de fichiers si Android le demande.
+3. Installer `Domolia-dev.apk` et lancer Domolia.
+
+L'application dispose d'un bouton **Mise à jour** qui ouvre ce canal. Android demande toujours une confirmation d'installation.
+
+### Signature Android et mises à jour sans perte de données
+
+Sans configuration supplémentaire, `dev-latest` est compilé en **debug**, avec une clé temporaire liée au runner GitHub. Une version issue d'une autre compilation peut alors exiger une désinstallation — et donc supprimer les données locales.
+
+Pour obtenir de vraies mises à jour installables par-dessus l'application existante, il faut une **signature Android persistante**. Créer une clé privée et la sauvegarder en lieu sûr :
 
 ```bash
 keytool -genkeypair -v -keystore domolia-release.jks -alias domolia -keyalg RSA -keysize 3072 -validity 10000
 base64 -w0 domolia-release.jks
 ```
 
-Ne jamais ajouter la clé privée au dépôt. Configurer les secrets GitHub Actions suivants dans *Settings → Secrets and variables → Actions* :
+Ne jamais mettre la clé privée dans Git. Renseigner ces quatre secrets dans **Settings → Secrets and variables → Actions** :
 
-| Secret | Valeur |
-| --- | --- |
-| `ANDROID_KEYSTORE_BASE64` | Contenu base64 du fichier `.jks` |
+| Secret | Description |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | Contenu du keystore `.jks` encodé en base64 |
 | `ANDROID_KEYSTORE_PASSWORD` | Mot de passe du keystore |
-| `ANDROID_KEY_ALIAS` | Alias créé (par exemple `domolia`) |
+| `ANDROID_KEY_ALIAS` | Alias de la clé (`domolia` dans l'exemple) |
 | `ANDROID_KEY_PASSWORD` | Mot de passe de la clé |
 
-Ensuite, pousser un tag de version, par exemple :
+Quand les quatre secrets existent, les builds `main` deviennent des APK **release signés avec la même clé**. Les tags stables `v*` **exigent** ces secrets, sinon le workflow échoue.
+
+Les prochaines installations peuvent alors mettre l'application à jour sans effacer ses données, à condition de garder le même identifiant de package Android et d'augmenter le numéro de build. Le workflow utilise `github.run_number` comme numéro de build Android.
+
+**Attention :** passer d'une ancienne installation debug à une installation release exige une désinstallation unique, faute de signature identique.
+
+### Publier une version stable
+
+Après configuration des secrets :
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Le workflow échoue explicitement si les secrets sont absents sur les tags. Avec les secrets, il construit `Domolia.apk`, le conserve comme artifact et le publie dans [Releases](https://github.com/Hyarius/Domolia/releases).
-
-**Pour que les mises à jour fonctionnent :** conserver le même identifiant de package, la même clé de signature et augmenter le numéro de version Android. Le workflow utilise `github.run_number` comme numéro de build.
+L'APK signé est alors publié sur la page [GitHub Releases](https://github.com/Hyarius/Domolia/releases), sous le nom `Domolia.apk`.
 
 ## Développement local
 
-Pré-requis : Flutter stable, Android SDK et Java 17.
+Prérequis : Flutter stable, Android SDK et Java 17.
 
 ```bash
 flutter create --platforms=android --org=fr.domolia --project-name=domolia .
@@ -58,8 +80,8 @@ flutter test
 flutter run
 ```
 
-Le dossier `android/` est pour l'instant généré par Flutter. Il sera versionné explicitement dès que nous aurons besoin d'intégrations Android natives.
+Le dossier Android est généré par Flutter pour l'instant. Il sera versionné explicitement lors de l'ajout des intégrations Android natives.
 
-## Évolution envisagée
+## Suite du projet
 
-Le jeu de rôle, la mémoire, les PNJ et les illustrations viendront après validation de la base Android et du canal de distribution.
+Les prochaines étapes couvriront la connexion à OpenUncensored, le chat de jeu de rôle, la mémoire persistante, les PNJ et l'illustration des scènes.

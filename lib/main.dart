@@ -28,19 +28,20 @@ class DomoliaApp extends StatelessWidget {
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
-  static final Uri _releasesUrl =
-      Uri.parse('https://github.com/Hyarius/Domolia/releases');
+  static final Uri _devReleaseUrl = Uri.parse(
+    'https://github.com/Hyarius/Domolia/releases/tag/dev-latest',
+  );
 
   Future<void> _openUpdates(BuildContext context) async {
     final opened = await launchUrl(
-      _releasesUrl,
+      _devReleaseUrl,
       mode: LaunchMode.externalApplication,
     );
 
     if (!opened && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Impossible d’ouvrir les versions sur GitHub.'),
+          content: Text('Impossible d’ouvrir la version dev-latest sur GitHub.'),
         ),
       );
     }
@@ -79,7 +80,7 @@ class HomePage extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'Les nouvelles versions s’installent depuis GitHub.',
+                'Dernière version de développement : dev-latest',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
