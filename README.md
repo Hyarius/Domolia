@@ -84,7 +84,7 @@ L'APK signé est alors publié sur la page [GitHub Releases](https://github.com/
 
 ## Développement local
 
-Prérequis : Flutter stable, Android SDK et Java 17.
+Prérequis : Flutter stable, Android SDK et Java 21.
 
 ```bash
 flutter create --platforms=android --org=fr.domolia --project-name=domolia .
