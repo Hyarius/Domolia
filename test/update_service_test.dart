@@ -172,8 +172,8 @@ void main() {
     await controller.initialize();
     expect(controller.phase,UpdatePhase.permissionRequired);
     await controller.checkNow();
-    expect(android.installs,1);
-    expect(controller.phase,UpdatePhase.installationRequested);
+    expect(android.installs,2);
+    expect(controller.phase,UpdatePhase.permissionRequired);
   });
   test('11: concurrent checks share one request and download',() async {
     preferences.enabled=false;

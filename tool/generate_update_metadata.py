@@ -37,6 +37,23 @@ application_id, code, version = match.groups()
 if application_id != "fr.domolia.domolia" or int(code) != run:
     raise SystemExit(f"Wrong package/version in APK: {application_id}, {code}, expected {run}")
 
+permissions = subprocess.check_output(
+    [str(aapt), "dump", "permissions", str(apk)], text=True
+)
+for permission in ("android.permission.INTERNET", "android.permission.REQUEST_INSTALL_PACKAGES"):
+    if permission not in permissions:
+        raise SystemExit(f"Missing generated Android permission: {permission}")
+manifest = subprocess.check_output(
+    [str(aapt), "dump", "xmltree", str(apk), "AndroidManifest.xml"], text=True
+)
+if "androidx.core.content.FileProvider" not in manifest or ".updates.fileprovider" not in manifest:
+    raise SystemExit("FileProvider absent from compiled APK")
+paths_xml = subprocess.check_output(
+    [str(aapt), "dump", "xmltree", str(apk), "res/xml/domolia_update_paths.xml"], text=True
+)
+if "files-path" not in paths_xml or "updates/" not in paths_xml:
+    raise SystemExit("FileProvider path absent from compiled APK")
+
 digest = hashlib.sha256()
 with apk.open("rb") as stream:
     for chunk in iter(lambda: stream.read(1024 * 1024), b""):

@@ -92,6 +92,8 @@ class UpdateController extends ChangeNotifier {
   Future<void> checkNow() {
     if(_closed) return Future<void>.value();
     if(_running!=null) return _running!;
+    // Un clic manuel après l'écran d'autorisation Android peut relancer l'essai.
+    if(phase==UpdatePhase.permissionRequired) _installationAttempted=null;
     final run=_check();
     _running=run.whenComplete(() { _running=null; _cancellation=null; });
     return _running!;

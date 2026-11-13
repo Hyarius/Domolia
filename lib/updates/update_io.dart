@@ -60,6 +60,19 @@ class _HashSink implements Sink<Digest> {
   void close() {}
 }
 
+/// Vérifie le fichier effectivement enregistré dans le dossier privé.
+Future<void> verifyApkSha256(File file, String expectedHash) async {
+  final result = _HashSink();
+  final converter = sha256.startChunkedConversion(result);
+  await for (final bytes in file.openRead()) {
+    converter.add(bytes);
+  }
+  converter.close();
+  if (result.value?.toString() != expectedHash.toLowerCase()) {
+    throw const FormatException('SHA-256 de l’APK incorrect.');
+  }
+}
+
 class HttpApkDownloader implements ApkDownloader {
   const HttpApkDownloader();
 
@@ -86,8 +99,6 @@ class HttpApkDownloader implements ApkDownloader {
       request.headers.set(HttpHeaders.cacheControlHeader,'no-cache');
       final response=await request.close().timeout(const Duration(seconds:25));
       if(response.statusCode!=HttpStatus.ok) throw HttpException('HTTP ${response.statusCode}');
-      final digest=_HashSink();
-      final hasher=sha256.startChunkedConversion(digest);
       output=temp.openWrite();
       var received=0;
       await for(final chunk in response.timeout(const Duration(seconds:40))) {
@@ -95,16 +106,15 @@ class HttpApkDownloader implements ApkDownloader {
         received+=chunk.length;
         if(received>400*1024*1024) throw const FormatException('APK trop volumineux.');
         output.add(chunk);
-        hasher.add(chunk);
         onProgress(response.contentLength>0?(received/response.contentLength).clamp(0.0,1.0):null);
       }
       await output.flush(); await output.close(); output=null;
-      hasher.close();
       if(cancel.cancelled) throw const DownloadCancelled();
-      if(received==0 || (response.contentLength>0 && received!=response.contentLength) ||
-          digest.value.toString()!=candidate.sha256) {
-        throw const FormatException('SHA-256 ou taille de l’APK incorrect.');
+      if(received==0 || (response.contentLength>0 && received!=response.contentLength)) {
+        throw const FormatException('Téléchargement de l’APK incomplet.');
       }
+      await verifyApkSha256(temp, candidate.sha256);
+      if(cancel.cancelled) throw const DownloadCancelled();
       await temp.rename(ready.path);
       return ready.path;
     } catch(error) {
