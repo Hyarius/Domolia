@@ -2,7 +2,7 @@ name: Android APK
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
     tags: ['v*']
   pull_request:
     branches: [main]
@@ -93,12 +93,14 @@ jobs:
           python3 tool/enable_release_signing.py
           echo "configured=true" >> "$GITHUB_OUTPUT"
 
-      - name: Compiler l'APK debug
-        if: github.event_name == 'pull_request' || steps.signing.outputs.configured != 'true'
+      # Sur toutes les branches poussées, compiler un vrai APK "release".
+      # Sans clé durable, Flutter utilise ici la clé debug éphémère du runner.
+      - name: Compiler l'APK debug (pull requests)
+        if: github.event_name == 'pull_request'
         run: flutter build apk --debug --build-number="${{ github.run_number }}"
 
-      - name: Compiler l'APK release signé
-        if: steps.signing.outputs.configured == 'true'
+      - name: Compiler l'APK release (branches et tags)
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
@@ -117,11 +119,9 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             cp build/app/outputs/flutter-apk/app-release.apk dist/Domolia.apk
           elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
-            if [ -f build/app/outputs/flutter-apk/app-release.apk ]; then
-              cp build/app/outputs/flutter-apk/app-release.apk dist/Domolia-dev.apk
-            else
-              cp build/app/outputs/flutter-apk/app-debug.apk dist/Domolia-dev.apk
-            fi
+            cp build/app/outputs/flutter-apk/app-release.apk dist/Domolia-dev.apk
+          elif [[ "$GITHUB_REF" == refs/heads/* ]]; then
+            cp build/app/outputs/flutter-apk/app-release.apk dist/Domolia-preview.apk
           else
             cp build/app/outputs/flutter-apk/app-debug.apk dist/Domolia-debug.apk
           fi
@@ -134,9 +134,9 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  dev-latest:
-    name: Publier dev-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  rolling-release:
+    name: Publier la préversion de branche
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
     runs-on: ubuntu-latest
     needs: build
     permissions:
@@ -152,50 +152,82 @@ jobs:
           name: domolia-apk-${{ github.run_number }}
           path: dist
 
-      - name: Vérifier l'APK
+      - name: Préparer le canal de publication
+        id: channel
         shell: bash
-        run: test -s dist/Domolia-dev.apk
+        run: |
+          set -euo pipefail
+          branch="${GITHUB_REF#refs/heads/}"
+          if [ "$branch" = "main" ]; then
+            tag="dev-latest"
+            asset="Domolia-dev.apk"
+            title="Domolia — dev-latest"
+          else
+            # Le hash stabilise le nom même si deux branches ont un slug similaire.
+            slug=$(printf '%s' "$branch" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g; s/^-+//; s/-+$//' | cut -c1-32)
+            digest=$(printf '%s' "$branch" | sha256sum | cut -c1-10)
+            tag="preview-${slug:-branch}-$digest"
+            asset="Domolia-preview.apk"
+            title="Domolia — branche $branch"
+          fi
+          test -s "dist/$asset"
+          {
+            echo "tag=$tag"
+            echo "asset=$asset"
+            echo "title=$title"
+            echo "branch=$branch"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### APK disponible sur GitHub Releases"
+            echo "Canal : **$tag**"
+            echo "[Télécharger l'APK](https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/$asset)"
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Créer ou mettre à jour la release dev-latest
+      - name: Créer ou actualiser la GitHub Release de préversion
         env:
           GH_TOKEN: ${{ github.token }}
           SIGNED: ${{ needs.build.outputs.signed }}
+          TAG: ${{ steps.channel.outputs.tag }}
+          ASSET: ${{ steps.channel.outputs.asset }}
+          TITLE: ${{ steps.channel.outputs.title }}
+          BRANCH: ${{ steps.channel.outputs.branch }}
         shell: bash
         run: |
           set -euo pipefail
           cat > release-notes.md <<EOF
-          ## Domolia — développement
+          ## Domolia — préversion de développement
 
+          **Branche :** \`$BRANCH\`
           **Commit :** \`$GITHUB_SHA\`
           **Build :** \`$GITHUB_RUN_NUMBER\`
 
-          [Télécharger l'APK de développement](https://github.com/$GITHUB_REPOSITORY/releases/download/dev-latest/Domolia-dev.apk)
+          [Télécharger l'APK](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$ASSET)
 
-          Chaque push sur \`main\` remplace cet APK, après compilation et tests réussis.
+          Cette préversion est actualisée après chaque compilation réussie de la branche.
           EOF
 
           if [ "$SIGNED" = "true" ]; then
-            printf '\n**Signature :** release persistante. Les mises à jour peuvent conserver les données si la même clé et le même identifiant Android sont utilisés.\n' >> release-notes.md
+            printf '\n**Signature :** clé Android persistante. Mise à jour par-dessus une installation signée de la même clé possible avec un build plus récent.\n' >> release-notes.md
           else
-            printf '\n**Signature :** debug temporaire. Une autre compilation peut exiger une désinstallation, avec perte des données locales. Configurez les secrets Android pour des mises à jour durables.\n' >> release-notes.md
+            printf '\n**Signature :** clé de débogage éphémère. La prochaine installation peut demander une désinstallation avec perte des données locales.\n' >> release-notes.md
           fi
 
-          # Tag mobile uniquement pour le canal de développement.
-          # Le déclencheur est limité aux tags v*, donc pas de récursion.
-          git tag -f dev-latest "$GITHUB_SHA"
-          git push --force origin refs/tags/dev-latest
+          # Les tags de canal sont mobiles. Seuls les tags v* déclenchent
+          # les builds officiels : ce push ne redémarre pas la pipeline.
+          git tag -f "$TAG" "$GITHUB_SHA"
+          git push --force origin "refs/tags/$TAG"
 
-          if gh release view dev-latest >/dev/null 2>&1; then
-            gh release upload dev-latest dist/Domolia-dev.apk --clobber
-            gh release edit dev-latest \
-              --title "Domolia — dev-latest" \
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "dist/$ASSET" --clobber
+            gh release edit "$TAG" \
+              --title "$TITLE" \
               --prerelease \
               --latest=false \
               --notes-file release-notes.md
           else
-            gh release create dev-latest dist/Domolia-dev.apk \
+            gh release create "$TAG" "dist/$ASSET" \
               --verify-tag \
-              --title "Domolia — dev-latest" \
+              --title "$TITLE" \
               --prerelease \
               --latest=false \
               --notes-file release-notes.md

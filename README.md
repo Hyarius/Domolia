@@ -19,7 +19,21 @@ Chaque commit poussé sur **`main`** (la branche principale de ce dépôt, équi
 3. La GitHub Release **dev-latest** (préversion) est créée ou mise à jour, et son fichier **`Domolia-dev.apk`** est remplacé.
 4. Le lien de téléchargement en haut de cette page reste identique.
 
-Les Pull Requests produisent uniquement des artifacts de test et **ne publient pas** dev-latest. Les tags `v*` publient des releases stables indépendantes.
+### Tester une branche de travail
+
+Chaque **push sur une branche de travail** (par exemple `feat/accueil`) produit, après réussite de la compilation et des tests, une **GitHub Release de préversion** propre à cette branche :
+
+- Le tag est permanent pour cette branche : `preview-<nom-de-branche>-<hash>`.
+- Le fichier est directement téléchargeable : **`Domolia-preview.apk`**.
+- Les commits suivants remplacent l'APK de cette même préversion.
+- La branche `main` publie son propre canal **`dev-latest`**.
+- Les tags `v*` produisent des **releases officielles**, séparées des préversions.
+
+**[Voir toutes les préversions téléchargeables](https://github.com/Hyarius/Domolia/releases)**
+
+Le lien propre à une branche apparaît aussi dans le récapitulatif de l'exécution GitHub Actions ayant publié l'APK. Les Pull Requests construisent également un APK de test dans les artifacts, mais ne créent pas de release par le seul événement `pull_request` (les commits poussés sur une branche du dépôt créent leur préversion).
+
+**Attention :** « release » désigne ici une **compilation Flutter optimisée en mode release** et une GitHub Release marquée comme **préversion**. Cela ne veut pas dire « version officielle ». Tant que les secrets de signature ne sont pas configurés, l'APK n'offre pas de mise à jour fiable de l'installation précédente.
 
 > Un canal à tag mobile nécessite que les **releases immuables** ne soient pas activées pour ce dépôt : GitHub interdit alors de modifier le tag et les assets d'une release existante.
 
@@ -33,7 +47,7 @@ L'application dispose d'un bouton **Mise à jour** qui ouvre ce canal. Android d
 
 ### Signature Android et mises à jour sans perte de données
 
-Sans configuration supplémentaire, `dev-latest` est compilé en **debug**, avec une clé temporaire liée au runner GitHub. Une version issue d'une autre compilation peut alors exiger une désinstallation — et donc supprimer les données locales.
+Sans configuration supplémentaire, `dev-latest` et les préversions des branches sont compilés en mode **release**, mais signés avec une **clé debug temporaire** liée au runner GitHub. Une version issue d'une autre compilation peut alors exiger une désinstallation — et donc supprimer les données locales.
 
 Pour obtenir de vraies mises à jour installables par-dessus l'application existante, il faut une **signature Android persistante**. Créer une clé privée et la sauvegarder en lieu sûr :
 
@@ -51,7 +65,7 @@ Ne jamais mettre la clé privée dans Git. Renseigner ces quatre secrets dans **
 | `ANDROID_KEY_ALIAS` | Alias de la clé (`domolia` dans l'exemple) |
 | `ANDROID_KEY_PASSWORD` | Mot de passe de la clé |
 
-Quand les quatre secrets existent, les builds `main` deviennent des APK **release signés avec la même clé**. Les tags stables `v*` **exigent** ces secrets, sinon le workflow échoue.
+Quand les quatre secrets existent, les builds `main` et les préversions de branches deviennent des APK **release signés avec la même clé**. Les tags stables `v*` **exigent** ces secrets, sinon le workflow échoue.
 
 Les prochaines installations peuvent alors mettre l'application à jour sans effacer ses données, à condition de garder le même identifiant de package Android et d'augmenter le numéro de build. Le workflow utilise `github.run_number` comme numéro de build Android.
 
