@@ -1,24 +1,14 @@
 """Create public release metadata by inspecting the *built APK*, not source defaults."""
 import hashlib
+from update_channels import channel_for_ref
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
 
-ref = os.environ["GITHUB_REF"]
 run = int(os.environ["GITHUB_RUN_NUMBER"])
-if ref == "refs/heads/main":
-    channel, asset = "dev-latest", "Domolia-dev.apk"
-elif ref.startswith("refs/heads/"):
-    branch = ref.removeprefix("refs/heads/")
-    slug = re.sub(r"[^a-z0-9-]+", "-", branch.lower()).strip("-")[:32]
-    digest = hashlib.sha256(branch.encode()).hexdigest()[:10]
-    channel, asset = f"preview-{slug or 'branch'}-{digest}", "Domolia-preview.apk"
-elif ref.startswith("refs/tags/v"):
-    channel, asset = ref.removeprefix("refs/tags/"), "Domolia.apk"
-else:
-    raise SystemExit(f"No published release for {ref}")
+channel, asset = channel_for_ref(os.environ["GITHUB_REF"])
 
 apk = Path("dist") / asset
 if not apk.is_file():

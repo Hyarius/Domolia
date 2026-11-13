@@ -144,9 +144,11 @@ class MethodChannelAndroidUpdater implements AndroidUpdater {
 
 class SharedPreferencesUpdateStore implements UpdatePreferences {
   const SharedPreferencesUpdateStore();
+  static const _embeddedChannel = String.fromEnvironment(
+    'DOMOLIA_UPDATE_CHANNEL', defaultValue: 'dev-latest');
   @override
   Future<String> channel() async =>
-    (await SharedPreferences.getInstance()).getString('updateChannel')??'dev-latest';
+    (await SharedPreferences.getInstance()).getString('updateChannel')??_embeddedChannel;
   @override
   Future<bool> automatic() async =>
     (await SharedPreferences.getInstance()).getBool('automaticUpdates')??true;

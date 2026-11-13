@@ -59,7 +59,7 @@ Le lien propre à une branche apparaît aussi dans le récapitulatif de l'exécu
 2. Autoriser l'installation depuis le navigateur/gestionnaire de fichiers si Android le demande.
 3. Installer `Domolia-dev.apk` et lancer Domolia.
 
-À partir de la première version contenant PR02, Domolia **vérifie automatiquement la présence de mises à jour après son lancement**, télécharge tout APK plus récent en affichant une progression discrète, vérifie SHA-256 et la compatibilité Android, puis ouvre l'installateur système. Android conserve sa confirmation et peut demander l'autorisation d'installer depuis Domolia. Le menu **Paramètres → Mises à jour** permet de désactiver cette vérification, choisir `dev-latest` ou un canal `preview-…`, consulter la version installée et vérifier manuellement. Les boutons « Mise à jour » utilisent désormais ce mécanisme.
+À partir de la première version contenant PR02, Domolia **vérifie automatiquement la présence de mises à jour après son lancement**, télécharge tout APK plus récent en affichant une progression discrète, vérifie SHA-256 et la compatibilité Android, puis ouvre l'installateur système. Android conserve sa confirmation et peut demander l'autorisation d'installer depuis Domolia. Le menu **Paramètres → Mises à jour** permet de désactiver cette vérification, choisir `dev-latest` ou un canal `preview-…` (le canal de la branche est sélectionné automatiquement au premier lancement d'un APK preview), consulter la version installée et vérifier manuellement. Les boutons « Mise à jour » utilisent désormais ce mécanisme.
 
 ### Signature Android et mises à jour sans perte de données
 
