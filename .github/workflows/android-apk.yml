@@ -1,0 +1,311 @@
+name: Android APK
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Compiler et tester l'APK
+    runs-on: ubuntu-latest
+    outputs:
+      signed: ${{ steps.signing.outputs.configured }}
+
+    steps:
+      - name: Récupérer les sources
+        uses: actions/checkout@v4
+
+      - name: Installer Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Installer Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Générer la plateforme Android
+        run: flutter create --no-pub --platforms=android --org=fr.domolia --project-name=domolia .
+
+      - name: Installer l'icône Android Domolia
+        run: python3 tool/install_launcher_icon.py
+
+      - name: Installer les dépendances
+        run: flutter pub get
+
+      - name: Analyse statique
+        run: flutter analyze
+
+      - name: Tests
+        run: flutter test
+
+      # Les secrets ne sont jamais fournis aux builds de PR.
+      # Sur main, l'APK de développement est signé avec la clé release
+      # si elle existe, sinon il reste un APK debug d'installation ponctuelle.
+      # Sur les tags v*, la signature release est obligatoire.
+      - name: Configurer la signature release
+        id: signing
+        if: github.event_name != 'pull_request'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          fields=(ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD)
+          supplied=0
+          for field in "${fields[@]}"; do
+            if [ -n "${!field}" ]; then
+              supplied=$((supplied + 1))
+            fi
+          done
+
+          if [ "$supplied" -eq 0 ]; then
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              echo "::error::Les quatre secrets Android sont obligatoires pour les versions stables."
+              exit 1
+            fi
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::APK de développement debug : les futures versions peuvent nécessiter une désinstallation."
+            exit 0
+          fi
+
+          if [ "$supplied" -ne 4 ]; then
+            echo "::error::Signature partielle : configurer les quatre secrets Android."
+            exit 1
+          fi
+
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+          # Un alias incorrect ne doit pas bloquer la compilation 3 minutes
+          # avant d'indiquer une erreur. On valide le keystore immédiatement.
+          if ! keytool -list \
+            -keystore android/app/upload-keystore.jks \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" >/dev/null 2>&1; then
+            echo "::error::Clé Android introuvable ou keystore non lisible. Vérifie l'alias exact avec 'keytool -list -keystore domolia-release.jks' dans Termux, puis mets à jour ANDROID_KEY_ALIAS."
+            exit 1
+          fi
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=upload-keystore.jks\n' \
+            "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_PASSWORD" "$ANDROID_KEY_ALIAS" > android/key.properties
+          python3 tool/enable_release_signing.py
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+
+      # Sur toutes les branches poussées, compiler un vrai APK "release".
+      # Sans clé durable, Flutter utilise ici la clé debug éphémère du runner.
+      - name: Compiler l'APK debug (pull requests)
+        if: github.event_name == 'pull_request'
+        run: flutter build apk --debug --build-number="${{ github.run_number }}"
+
+      - name: Compiler l'APK release (branches et tags)
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="0.1.0"
+          fi
+          flutter build apk --release \
+            --build-name="$version" \
+            --build-number="${GITHUB_RUN_NUMBER}"
+
+      - name: Préparer l'APK à télécharger
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            cp build/app/outputs/flutter-apk/app-release.apk dist/Domolia.apk
+          elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
+            cp build/app/outputs/flutter-apk/app-release.apk dist/Domolia-dev.apk
+          elif [[ "$GITHUB_REF" == refs/heads/* ]]; then
+            cp build/app/outputs/flutter-apk/app-release.apk dist/Domolia-preview.apk
+          else
+            cp build/app/outputs/flutter-apk/app-debug.apk dist/Domolia-debug.apk
+          fi
+
+      - name: Vérifier la signature Android permanente
+        if: steps.signing.outputs.configured == 'true'
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          apk="$(find dist -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          test -n "$apk"
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$sdk_root"
+          apksigner="$(find "$sdk_root/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$apksigner"
+
+          # Le certificat public de l'APK doit correspondre exactement à celui
+          # du keystore privé fourni via les secrets GitHub Actions.
+          signer_report="$("$apksigner" verify --print-certs "$apk")"
+          # Accepter d'éventuels espaces initiaux et le format hexadécimal
+          # (avec ou sans deux-points) des versions différentes d'apksigner.
+          actual="$(printf '%s\n' "$signer_report" |
+            sed -n 's/^.*certificate SHA-256 digest:[[:space:]]*//p' | head -n 1 |
+            tr '[:upper:]' '[:lower:]' | tr -d '[:space:]:' )"
+          expected="$(keytool -exportcert \
+            -keystore android/app/upload-keystore.jks \
+            -alias "$ANDROID_KEY_ALIAS" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" |
+            sha256sum | awk '{print $1}')"
+
+          # Les empreintes de certificat sont publiques. Elles permettent de
+          # diagnostiquer sans exposer les mots de passe ni le keystore.
+          echo "Empreinte de l'APK : ${actual:-non détectée}"
+          echo "Empreinte du keystore : $expected"
+          if [ -z "$actual" ]; then
+            echo "::error::Impossible de lire le SHA-256 du certificat depuis apksigner."
+            printf '%s\n' "$signer_report" | grep 'certificate SHA-256' || true
+            exit 1
+          fi
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::Le certificat de l'APK ne correspond pas à celui de la clé Android permanente."
+            exit 1
+          fi
+          echo "Signature Android permanente vérifiée."
+
+      - name: Conserver l'APK comme artifact GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: domolia-apk-${{ github.run_number }}
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  rolling-release:
+    name: Publier la préversion de branche
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+
+    steps:
+      - name: Récupérer les sources
+        uses: actions/checkout@v4
+
+      - name: Télécharger l'APK construit
+        uses: actions/download-artifact@v4
+        with:
+          name: domolia-apk-${{ github.run_number }}
+          path: dist
+
+      - name: Préparer le canal de publication
+        id: channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="${GITHUB_REF#refs/heads/}"
+          if [ "$branch" = "main" ]; then
+            tag="dev-latest"
+            asset="Domolia-dev.apk"
+            title="Domolia — dev-latest"
+          else
+            # Le hash stabilise le nom même si deux branches ont un slug similaire.
+            slug=$(printf '%s' "$branch" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g; s/^-+//; s/-+$//' | cut -c1-32)
+            digest=$(printf '%s' "$branch" | sha256sum | cut -c1-10)
+            tag="preview-${slug:-branch}-$digest"
+            asset="Domolia-preview.apk"
+            title="Domolia — branche $branch"
+          fi
+          test -s "dist/$asset"
+          {
+            echo "tag=$tag"
+            echo "asset=$asset"
+            echo "title=$title"
+            echo "branch=$branch"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### APK disponible sur GitHub Releases"
+            echo "Canal : **$tag**"
+            echo "[Télécharger l'APK](https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/$asset)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Créer ou actualiser la GitHub Release de préversion
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SIGNED: ${{ needs.build.outputs.signed }}
+          TAG: ${{ steps.channel.outputs.tag }}
+          ASSET: ${{ steps.channel.outputs.asset }}
+          TITLE: ${{ steps.channel.outputs.title }}
+          BRANCH: ${{ steps.channel.outputs.branch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<EOF
+          ## Domolia — préversion de développement
+
+          **Branche :** \`$BRANCH\`
+          **Commit :** \`$GITHUB_SHA\`
+          **Build :** \`$GITHUB_RUN_NUMBER\`
+
+          [Télécharger l'APK](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$ASSET)
+
+          Cette préversion est actualisée après chaque compilation réussie de la branche.
+          EOF
+
+          if [ "$SIGNED" = "true" ]; then
+            printf '\n**Signature :** clé Android persistante. Mise à jour par-dessus une installation signée de la même clé possible avec un build plus récent.\n' >> release-notes.md
+          else
+            printf '\n**Signature :** clé de débogage éphémère. La prochaine installation peut demander une désinstallation avec perte des données locales.\n' >> release-notes.md
+          fi
+
+          # Les tags de canal sont mobiles. Seuls les tags v* déclenchent
+          # les builds officiels : ce push ne redémarre pas la pipeline.
+          git tag -f "$TAG" "$GITHUB_SHA"
+          git push --force origin "refs/tags/$TAG"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "dist/$ASSET" --clobber
+            gh release edit "$TAG" \
+              --title "$TITLE" \
+              --prerelease \
+              --latest=false \
+              --notes-file release-notes.md
+          else
+            gh release create "$TAG" "dist/$ASSET" \
+              --verify-tag \
+              --title "$TITLE" \
+              --prerelease \
+              --latest=false \
+              --notes-file release-notes.md
+          fi
+
+  stable-release:
+    name: Publier la version stable
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+
+    steps:
+      - name: Télécharger l'APK signé
+        uses: actions/download-artifact@v4
+        with:
+          name: domolia-apk-${{ github.run_number }}
+          path: dist
+
+      - name: Créer la GitHub Release stable
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Domolia.apk
+          generate_release_notes: true
