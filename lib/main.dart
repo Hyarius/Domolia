@@ -272,7 +272,7 @@ class _HomePageState extends State<HomePage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Bonjour, monde !',
+                          'Hello World !',
                           style: TextStyle(
                             color: DomoliaColors.goldLight,
                             fontSize: 22,

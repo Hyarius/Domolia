@@ -59,7 +59,7 @@ void main() {
   testWidgets('Accueil et identité vert-or',(tester) async {
     await tester.pumpWidget(DomoliaApp(updateController:updates));
     await tester.pumpAndSettle();
-    expect(find.text('Bonjour, monde !'),findsOneWidget);
+    expect(find.text('Hello World !'),findsOneWidget);
     expect(find.widgetWithText(FilledButton,'Mise à jour'),findsOneWidget);
     final theme=Theme.of(tester.element(find.byType(Scaffold)));
     expect(theme.colorScheme.primary,DomoliaColors.gold);
