@@ -47,10 +47,10 @@ document.write(manifest, encoding="utf-8", xml_declaration=True)
 xml = root / "res/xml"
 xml.mkdir(parents=True, exist_ok=True)
 (xml / "domolia_data_extraction_rules.xml").write_text(
-    '<data-extraction-rules>\\n'
-    '  <cloud-backup><exclude domain="root" path="." /></cloud-backup>\\n'
-    '  <device-transfer><exclude domain="root" path="." /></device-transfer>\\n'
-    '</data-extraction-rules>\\n', encoding="utf-8"
+    '<data-extraction-rules>\n'
+    '  <cloud-backup><exclude domain="root" path="." /></cloud-backup>\n'
+    '  <device-transfer><exclude domain="root" path="." /></device-transfer>\n'
+    '</data-extraction-rules>\n', encoding="utf-8"
 )
 (xml / "domolia_update_paths.xml").write_text(
     '<?xml version="1.0" encoding="utf-8"?>\n'

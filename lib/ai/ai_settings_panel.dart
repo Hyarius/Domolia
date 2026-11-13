@@ -204,7 +204,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               if (c.testReply != null) ...[
                 const SizedBox(height: 10),
                 Text(
-                  'Réponse du modèle : ' + c.testReply!,
+                  'Réponse du modèle : ${c.testReply!}',
                   key: const ValueKey('aiTestReply'),
                 ),
               ],

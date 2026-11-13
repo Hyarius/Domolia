@@ -132,3 +132,19 @@ Le dossier Android est toujours généré par Flutter. La commande `python3 tool
 ## Suite du projet
 
 Les prochaines étapes couvriront la connexion à OpenUncensored, le chat de jeu de rôle, la mémoire persistante, les PNJ et l'illustration des scènes.
+
+## Fournisseur IA — PR03
+
+Dans **Menu → Paramètres → Fournisseur IA**, renseigner votre clé OpenUncensored et choisir un modèle de chat.
+
+- URL par défaut : `https://api.openuncensored.com/v1`
+- Clé API : `ou-…`, saisie masquée et enregistrée dans le **stockage sécurisé Android**, jamais dans des préférences en texte clair.
+- **Charger les modèles** : consulte les modèles textuels disponibles sur le fournisseur. Un identifiant peut aussi être saisi manuellement.
+- **Tester la connexion** : envoie une courte requête de chat en français, **susceptible de consommer des crédits**.
+- Les paramètres sont conservés entre les démarrages. Une clé enregistrée ne s'affiche jamais ; le champ vide la conserve, le bouton « Supprimer la clé API » l'efface.
+
+Le client est compatible OpenAI via un contrat `AiChatProvider` réutilisable par PR04, sans dépendance du domaine RP au transport HTTP. Seules les URL HTTPS sont acceptées ; les redirections sont désactivées ; erreurs et délais sont présentés sans divulguer les requêtes ou la clé.
+
+Pour éviter la restauration de secrets chiffrés sans leur clé Android Keystore, la sauvegarde automatique Android et le transfert de données de l'application sont désactivés ; l'export volontaire des aventures est prévu en PR17.
+
+Voir [PR03](docs/rp/PR03.md) et la [documentation OpenUncensored](https://openuncensored.com/docs).
