@@ -6,6 +6,10 @@ import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'theme/domolia_theme.dart';
+import 'ai/ai_controller.dart';
+import 'ai/ai_provider.dart';
+import 'ai/ai_settings_panel.dart';
+import 'ai/ai_storage.dart';
 import 'updates/update_service.dart';
 import 'updates/update_io.dart';
 import 'updates/update_widgets.dart';
@@ -15,9 +19,10 @@ void main() {
 }
 
 class DomoliaApp extends StatelessWidget {
-  const DomoliaApp({super.key, this.updateController});
+  const DomoliaApp({super.key, this.updateController, this.aiController});
 
   final UpdateController? updateController;
+  final AiConnectionController? aiController;
 
   @override
   Widget build(BuildContext context) {
@@ -32,16 +37,17 @@ class DomoliaApp extends StatelessWidget {
         flutter_l10n.GlobalWidgetsLocalizations.delegate,
         cupertino_ui.GlobalCupertinoLocalizations.delegate,
       ],
-      home: HomePage(updates: updateController),
+      home: HomePage(updates: updateController, ai: aiController),
     );
   }
 }
 
-enum _Page { home, about, updates }
+enum _Page { home, about, updates, ai }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, this.updates});
+  const HomePage({super.key, this.updates, this.ai});
   final UpdateController? updates;
+  final AiConnectionController? ai;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -51,12 +57,19 @@ class _HomePageState extends State<HomePage> {
   _Page _page = _Page.home;
   late final UpdateController _updates;
   late final bool _ownsUpdates;
+  late final AiConnectionController _ai;
+  late final bool _ownsAi;
 
   @override
   void initState() {
     super.initState();
     _ownsUpdates = widget.updates == null;
     _updates = widget.updates ?? createProductionUpdateController();
+    _ownsAi = widget.ai == null;
+    _ai = widget.ai ?? AiConnectionController(
+      store: SecureAiConfigurationStore(),
+      provider: OpenAiCompatibleChatProvider(),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_updates.initialize());
     });
@@ -65,6 +78,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     if (_ownsUpdates) _updates.dispose();
+    if (_ownsAi) _ai.dispose();
     super.dispose();
   }
 
@@ -116,7 +130,11 @@ class _HomePageState extends State<HomePage> {
           UpdateProgressStrip(controller: _updates),
         Expanded(child: _page == _Page.home ? _buildHome()
           : _page == _Page.about ? _buildAbout()
-          : UpdateSettingsPanel(controller: _updates)),
+          : _page == _Page.ai ? AiSettingsPanel(
+              controller: _ai,
+              onBack: () => setState(() => _page = _Page.updates),
+            )
+          : _buildSettings()),
       ]),
     ),
     );
@@ -189,6 +207,11 @@ class _HomePageState extends State<HomePage> {
               onTap: () => _showPage(_Page.updates),
             ),
             ListTile(
+              leading: const Icon(Icons.smart_toy_outlined),
+              title: const Text('Fournisseur IA'),
+              onTap: () => _showPage(_Page.ai),
+            ),
+            ListTile(
               leading: const Icon(Icons.system_update_alt_rounded),
               title: const Text('Mise à jour'),
               iconColor: DomoliaColors.gold,
@@ -223,6 +246,17 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+
+  Widget _buildSettings() => Column(children: [
+    ListTile(
+      leading: const Icon(Icons.smart_toy_outlined, color: DomoliaColors.gold),
+      title: const Text('Fournisseur IA'),
+      subtitle: const Text('Configurer OpenUncensored et tester la connexion'),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => setState(() => _page = _Page.ai),
+    ),
+    Expanded(child: UpdateSettingsPanel(controller: _updates)),
+  ]);
 
   Widget _buildHome() {
     return SafeArea(
