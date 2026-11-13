@@ -71,6 +71,22 @@ Les prochaines installations peuvent alors mettre l'application à jour sans eff
 
 **Attention :** passer d'une ancienne installation debug à une installation release exige une désinstallation unique, faute de signature identique.
 
+### Vérifier les quatre secrets et la signature
+
+Sur Termux (avec GitHub CLI connecté), vérifier que les **noms** des quatre secrets sont présents :
+
+```bash
+gh secret list -R Hyarius/Domolia
+```
+
+GitHub ne permet pas de relire leurs valeurs. Un simple test de présence ne suffit donc pas à prouver que le keystore et ses mots de passe sont corrects.
+
+Pour une vraie vérification, pousser un commit sur une branche de travail. Le workflow `Android APK` exécute alors `Configurer la signature release`, `Compiler l'APK release (branches et tags)` et, si les secrets sont présents, `Vérifier la signature Android permanente`.
+
+La dernière étape lit le certificat public de l'APK avec `apksigner` et compare son empreinte SHA-256 au certificat de `domolia-release.jks` fourni via les secrets. Elle **échoue** si le certificat ne correspond pas, sans révéler les mots de passe ni la clé privée.
+
+[Voir les exécutions Actions](https://github.com/Hyarius/Domolia/actions/workflows/android-apk.yml).
+
 ### Publier une version stable
 
 Après configuration des secrets :

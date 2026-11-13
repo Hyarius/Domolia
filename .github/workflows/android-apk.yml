@@ -126,6 +126,38 @@ jobs:
             cp build/app/outputs/flutter-apk/app-debug.apk dist/Domolia-debug.apk
           fi
 
+      - name: Vérifier la signature Android permanente
+        if: steps.signing.outputs.configured == 'true'
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          apk="$(find dist -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          test -n "$apk"
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$sdk_root"
+          apksigner="$(find "$sdk_root/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$apksigner"
+
+          # Le certificat public de l'APK doit correspondre exactement à celui
+          # du keystore privé fourni via les secrets GitHub Actions.
+          actual="$("$apksigner" verify --print-certs "$apk" |
+            sed -n 's/^Signer #1 certificate SHA-256 digest: //p' |
+            head -n 1 | tr '[:upper:]' '[:lower:]' | tr -d ':')"
+          expected="$(keytool -exportcert \
+            -keystore android/app/upload-keystore.jks \
+            -alias "$ANDROID_KEY_ALIAS" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" |
+            sha256sum | awk '{print $1}')"
+
+          if [ -z "$actual" ] || [ "$actual" != "$expected" ]; then
+            echo "::error::Le certificat de l'APK ne correspond pas à la clé Android permanente."
+            exit 1
+          fi
+          echo "Signature Android vérifiée : certificat SHA-256 $actual"
+
       - name: Conserver l'APK comme artifact GitHub Actions
         uses: actions/upload-artifact@v4
         with:
