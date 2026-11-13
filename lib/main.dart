@@ -1,4 +1,4 @@
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_localizations/flutter_localizations.dart' as flutter_l10n;
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -21,8 +21,7 @@ class DomoliaApp extends StatelessWidget {
       supportedLocales: const [Locale('fr')],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
+        flutter_l10n.GlobalWidgetsLocalizations.delegate,
       ],
       home: const HomePage(),
     );
