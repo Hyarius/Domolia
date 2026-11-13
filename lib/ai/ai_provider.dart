@@ -94,10 +94,10 @@ class OpenAiCompatibleChatProvider implements AiChatProvider {
       throw const AiProviderException('Renseignez votre clé API avant de continuer.');
     }
     final base = validatedAiBaseUrl(configuration.baseUrl);
-    final endpoint = Uri.parse(base + '/' + path);
+    final endpoint = Uri.parse('$base/$path');
     final request = http.Request(payload == null ? 'GET' : 'POST', endpoint)
       ..followRedirects = false
-      ..headers['Authorization'] = 'Bearer ' + configuration.apiKey.trim()
+      ..headers['Authorization'] = 'Bearer ${configuration.apiKey.trim()}'
       ..headers['Accept'] = 'application/json';
     if (payload != null) {
       request.headers['Content-Type'] = 'application/json';
@@ -134,8 +134,9 @@ class OpenAiCompatibleChatProvider implements AiChatProvider {
         case 429:
           throw const AiProviderException('Limite de débit atteinte. Réessayez plus tard.');
         default:
-          throw const AiProviderException('Le fournisseur IA a retourné une erreur HTTP ' 
-              + ' ' + response.statusCode.toString() + '.');
+          throw AiProviderException(
+            'Le fournisseur IA a retourné une erreur HTTP ${response.statusCode}.',
+          );
       }
     }
     if (response.bodyBytes.length > 2 * 1024 * 1024) {
