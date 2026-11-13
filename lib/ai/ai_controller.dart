@@ -147,7 +147,7 @@ class AiConnectionController extends ChangeNotifier {
         maxTokens: 64,
       );
       testPassed = true;
-      testReply = reply.length > 320 ? reply.substring(0, 320) + '…' : reply;
+      testReply = reply.length > 320 ? '${reply.substring(0, 320)}…' : reply;
       message = 'Connexion réussie : réponse reçue du modèle.';
     } on AiProviderException catch (error) {
       testPassed = false;
