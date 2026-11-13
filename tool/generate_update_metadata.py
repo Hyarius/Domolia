@@ -46,13 +46,12 @@ for permission in ("android.permission.INTERNET", "android.permission.REQUEST_IN
 manifest = subprocess.check_output(
     [str(aapt), "dump", "xmltree", str(apk), "AndroidManifest.xml"], text=True
 )
-if "androidx.core.content.FileProvider" not in manifest or ".updates.fileprovider" not in manifest:
-    raise SystemExit("FileProvider absent from compiled APK")
-paths_xml = subprocess.check_output(
-    [str(aapt), "dump", "xmltree", str(apk), "res/xml/domolia_update_paths.xml"], text=True
-)
-if "files-path" not in paths_xml or "updates/" not in paths_xml:
-    raise SystemExit("FileProvider path absent from compiled APK")
+if ("androidx.core.content.FileProvider" not in manifest or
+        ".updates.fileprovider" not in manifest or
+        "android.support.FILE_PROVIDER_PATHS" not in manifest):
+    raise SystemExit("FileProvider or its XML metadata absent from compiled manifest")
+# AAPT2 may rename the resource file in the release APK; checking its source
+# filename with aapt dump xmltree would produce a false negative.
 
 digest = hashlib.sha256()
 with apk.open("rb") as stream:
