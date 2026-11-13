@@ -30,8 +30,9 @@ class UpdateProgressStrip extends StatelessWidget {
 }
 
 class UpdateSettingsPanel extends StatefulWidget {
-  const UpdateSettingsPanel({super.key,required this.controller});
+  const UpdateSettingsPanel({super.key,required this.controller,this.onConfigureAi});
   final UpdateController controller;
+  final VoidCallback? onConfigureAi;
   @override
   State<UpdateSettingsPanel> createState()=>_UpdateSettingsPanelState();
 }
@@ -121,6 +122,16 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
       if(downloading) TextButton.icon(
         onPressed:updater.cancelDownload,
         icon:const Icon(Icons.close),label:const Text('Annuler le téléchargement')),
+      if(widget.onConfigureAi!=null) ...[
+        const SizedBox(height:20),
+        const Divider(),
+        ListTile(
+          leading:const Icon(Icons.smart_toy_outlined,color:DomoliaColors.gold),
+          title:const Text('Fournisseur IA'),
+          subtitle:const Text('Configurer OpenUncensored et tester la connexion'),
+          onTap:widget.onConfigureAi,
+        ),
+      ],
     ]));
   }
 }

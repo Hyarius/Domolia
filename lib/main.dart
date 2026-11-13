@@ -143,7 +143,7 @@ class _HomePageState extends State<HomePage> {
   Widget _buildDrawer() {
     return Drawer(
       child: SafeArea(
-        child: Column(
+        child: ListView(
           children: [
             Container(
               width: double.infinity,
@@ -229,7 +229,6 @@ class _HomePageState extends State<HomePage> {
                 _openUrl(_allReleasesUrl);
               },
             ),
-            const Spacer(),
             const Padding(
               padding: EdgeInsets.all(24),
               child: Text(
@@ -247,16 +246,10 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildSettings() => Column(children: [
-    ListTile(
-      leading: const Icon(Icons.smart_toy_outlined, color: DomoliaColors.gold),
-      title: const Text('Fournisseur IA'),
-      subtitle: const Text('Configurer OpenUncensored et tester la connexion'),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () => setState(() => _page = _Page.ai),
-    ),
-    Expanded(child: UpdateSettingsPanel(controller: _updates)),
-  ]);
+  Widget _buildSettings() => UpdateSettingsPanel(
+    controller: _updates,
+    onConfigureAi: () => setState(() => _page = _Page.ai),
+  );
 
   Widget _buildHome() {
     return SafeArea(
