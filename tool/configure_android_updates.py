@@ -28,7 +28,7 @@ for permission in (
 
 provider = ET.SubElement(application, "provider", {
     "{" + android + "}name": "androidx.core.content.FileProvider",
-    "{" + android + "}authorities": "\${applicationId}.updates.fileprovider",
+    "{" + android + "}authorities": "${applicationId}.updates.fileprovider",
     "{" + android + "}exported": "false",
     "{" + android + "}grantUriPermissions": "true",
 })
@@ -51,3 +51,8 @@ activity = root / "kotlin/fr/domolia/domolia/MainActivity.kt"
 activity.parent.mkdir(parents=True, exist_ok=True)
 copyfile("tool/android/MainActivity.kt", activity)
 print("Domolia Android updater: Kotlin, permissions and FileProvider restored.")
+
+# FileProvider is not guaranteed to be a direct dependency of generated Gradle.
+gradle = Path("android/app/build.gradle.kts")
+with gradle.open("a", encoding="utf-8") as out:
+    out.write('\ndependencies { implementation("androidx.core:core:1.15.0") }\n')
