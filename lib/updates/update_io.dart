@@ -46,7 +46,7 @@ class GitHubReleaseSource implements ReleaseSource {
     if(metadata is! Map<String,dynamic>) throw const FormatException('Métadonnées invalides.');
     final apk=metadata['apkName'];
     if(apk is! String || !{'Domolia-dev.apk','Domolia-preview.apk','Domolia.apk'}.contains(apk)
-        || !names.contains(apk)) throw const FormatException('APK absent.');
+        || !names.contains(apk)) { throw const FormatException('APK absent.'); }
     return UpdateCandidate.parse(metadata,
       Uri.https('github.com','/$_repo/releases/download/$channel/$apk'));
   }

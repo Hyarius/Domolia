@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:domolia/updates/update_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const candidate = UpdateCandidate(
+final candidate = UpdateCandidate(
   channel: 'dev-latest',
   versionName: '0.1.0',
   versionCode: 12,

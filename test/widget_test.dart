@@ -81,7 +81,7 @@ void main() {
     expect(find.text('Vérifier maintenant'),findsOneWidget);
   });
   testWidgets('Progression visible et navigation non bloquée',(tester) async {
-    release.candidate=const UpdateCandidate(
+    release.candidate=UpdateCandidate(
       channel:'dev-latest',versionName:'0.1.0',versionCode:2,
       packageName:'fr.domolia.domolia',apkName:'Domolia-dev.apk',
       sha256:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',

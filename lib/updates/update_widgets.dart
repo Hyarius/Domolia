@@ -108,7 +108,7 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
         UpdatePhase.installationRequested => 'installation proposée',
         UpdatePhase.permissionRequired => 'autorisation Android requise',
         UpdatePhase.failed => 'erreur',
-      }}',
+      }}'),
       if(updater.message!=null) Padding(
         padding:const EdgeInsets.only(top:8),
         child:Text(updater.message!,style:const TextStyle(color:DomoliaColors.muted))),
