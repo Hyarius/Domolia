@@ -1,3 +1,4 @@
+import 'package:cupertino_ui/cupertino_ui.dart' as cupertino_ui;
 import 'package:flutter_localizations/flutter_localizations.dart' as flutter_l10n;
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -22,6 +23,7 @@ class DomoliaApp extends StatelessWidget {
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         flutter_l10n.GlobalWidgetsLocalizations.delegate,
+        cupertino_ui.GlobalCupertinoLocalizations.delegate,
       ],
       home: const HomePage(),
     );
