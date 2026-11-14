@@ -20,7 +20,7 @@ class AiExchangeRecorder {
       method: method,
       url: url,
       requestBody: requestBody,
-      secret: secret,
+      _secret: secret,
       accept: accept,
     );
     last = value;
