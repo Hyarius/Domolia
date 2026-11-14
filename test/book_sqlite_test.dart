@@ -57,6 +57,9 @@ void main() {
     expect(await second.findSession(session.id), isNull);
     expect((await second.listSessions(book.id)), isEmpty);
     expect((await second.findBook(book.id))!.title, 'Titre changé');
+    // A delayed timeline save is update-only and cannot recreate deletion.
+    await second.updateSession(session.copyWith(title: 'Late write'));
+    expect(await second.findSession(session.id), isNull);
     await second.putSession(session);
 
     await second.deleteBook(book.id);
