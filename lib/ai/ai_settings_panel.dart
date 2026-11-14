@@ -96,7 +96,9 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
     final name = await _askForName();
     if (name == null || !mounted) return;
     if (widget.controller.selectedKind == AiProviderKind.customAi &&
-        !await _save()) return;
+        !await _save()) {
+      return;
+    }
     if (await widget.controller.createProfile(name) && mounted) {
       _reloadFields();
     }
@@ -141,7 +143,9 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
     // Persist in-progress form edits before switching: no profile's key or
     // model should silently end up belonging to another profile.
     if (widget.controller.selectedKind == AiProviderKind.customAi &&
-        !await _save()) return;
+        !await _save()) {
+      return;
+    }
     if (await widget.controller.selectProfile(id) && mounted) {
       _reloadFields();
     }
