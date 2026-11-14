@@ -421,9 +421,11 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
       rethrow;
     } on TimeoutException {
       throw const AiProviderException('Délai de réponse du fournisseur dépassé.');
-    } catch (_) {
-      throw const AiProviderException(
-        'Connexion interrompue pendant la génération. Réessayez.',
+    } catch (error) {
+      // Keep transport errors private; only the exception's type is exposed
+      // here to diagnose unexpected stream lifecycle failures in CI.
+      throw AiProviderException(
+        'Connexion interrompue pendant la génération (${error.runtimeType}).',
       );
     }
   }

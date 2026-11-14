@@ -264,8 +264,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
                           : IconButton.filled(
                               key: const ValueKey('groupChatSend'),
                               tooltip: 'Envoyer le message',
-                              onPressed:
-                                  _input.text.trim().isEmpty ? null : _send,
+                              onPressed: _send,
                               icon: const Icon(Icons.arrow_upward_rounded),
                             ),
                     ),
