@@ -208,7 +208,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('The export menu offers conversation scopes and a combined raw AI trace',
+  testWidgets('The conversation menu keeps scoped exports and purge only',
       (tester) async {
     final controller = NarrativeChatController(
       provider: ScriptedProvider(), configuration: () => config,
@@ -224,7 +224,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('chatExportMenu')));
     await tester.pumpAndSettle();
     expect(find.text('Exporter la conversation'), findsOneWidget);
-    expect(find.text('Requête IA + réponse brute'), findsOneWidget);
+    expect(find.text('Requête IA + réponse brute'), findsNothing);
     await tester.tap(find.text('Exporter la conversation'));
     await tester.pumpAndSettle();
     expect(find.text('Toute la conversation'), findsOneWidget);
@@ -237,24 +237,31 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('Diagnostic menu exposes raw exchange after a completed request',
+  testWidgets('Long press exposes player edits and resumes from edited text',
       (tester) async {
-    final recorder = AiExchangeRecorder();
-    final exchange = recorder.begin(
-      provider: 'openai-compatible',
-      method: 'POST',
-      url: 'https://example.invalid/v1/chat/completions',
-      requestBody: '{"model":"test","messages":[]}',
-      secret: 'token', accept: 'text/event-stream',
-    );
-    exchange.statusCode = 200;
+    tester.view.physicalSize = const Size(420, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final scripted = ScriptedProvider()
+      ..response = line('narrator', 'Narrateur', 'Nouvelle réponse');
     final controller = NarrativeChatController(
-      provider: ScriptedProvider(), configuration: () => config,
-      diagnostics: recorder,
+      provider: scripted, configuration: () => config,
     );
     addTearDown(controller.dispose);
-    // This checks the menu's safety gate, not a live network request.
-    expect(recorder.last, isNotNull);
+    controller.restoreTimeline(const [
+      ChatEntry(id: 0, speaker: ChatSpeaker.player,
+          name: 'Vous', text: 'Ancienne action'),
+      ChatEntry(id: 1, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Ancienne réponse'),
+      ChatSceneChange(id: 2),
+      ChatEntry(id: 3, speaker: ChatSpeaker.player,
+          name: 'Vous', text: 'Action suivante'),
+      ChatEntry(id: 4, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Ancienne suite'),
+    ]);
     await tester.pumpWidget(MaterialApp(
       theme: DomoliaTheme.dark,
       home: Scaffold(body: GroupChatPage(
@@ -262,9 +269,142 @@ void main() {
       )),
     ));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('chatExportMenu')));
+
+    await tester.longPress(find.byKey(const ValueKey('chat-entry-0')));
     await tester.pumpAndSettle();
-    expect(find.text('Requête IA + réponse brute'), findsOneWidget);
+    expect(find.byKey(const ValueKey('chatActionEdit')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chatActionResume')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chatActionExport')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('chatActionEdit')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('chatEditMessageInput')),
+        'Action corrigée');
+    await tester.tap(find.text('Enregistrer'));
+    await tester.pumpAndSettle();
+    expect((controller.timeline.first as ChatEntry).text, 'Action corrigée');
+    expect(controller.timeline, hasLength(5));
+
+    await tester.longPress(find.byKey(const ValueKey('chat-entry-0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('chatActionResume')));
+    await tester.pumpAndSettle();
+    expect(find.text('Reprendre ici ?'), findsOneWidget);
+    await tester.tap(find.text('Continuer'));
+    await tester.pumpAndSettle();
+    expect(controller.timeline, hasLength(2));
+    expect((controller.timeline.first as ChatEntry).text, 'Action corrigée');
+    expect((controller.timeline.last as ChatEntry).text, 'Nouvelle réponse');
+  });
+
+  testWidgets('Long press on an AI bubble exports its own HTTP exchange',
+      (tester) async {
+    tester.view.physicalSize = const Size(420, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final controller = NarrativeChatController(
+      provider: ScriptedProvider(), configuration: () => config,
+    );
+    addTearDown(controller.dispose);
+    controller.restoreTimeline(const [
+      ChatEntry(id: 0, speaker: ChatSpeaker.player,
+          name: 'Vous', text: 'Première action'),
+      ChatEntry(id: 1, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Première réponse'),
+      ChatEntry(id: 2, speaker: ChatSpeaker.character,
+          name: 'Lina', text: 'Dans la même génération'),
+      ChatEntry(id: 3, speaker: ChatSpeaker.player,
+          name: 'Vous', text: 'Deuxième action'),
+      ChatEntry(id: 4, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Deuxième réponse'),
+    ]);
+    StoredAiDiagnostic diagnostic(int id, String model) =>
+        StoredAiDiagnostic(
+          id: 'trace-' + id.toString(),
+          sessionId: 'partie',
+          createdAtUtc: DateTime.utc(2026, 11, 14, 10, 0, id),
+          content: jsonEncode({
+            'format': 'domolia-ai-exchange-v1',
+            'request': {'body': {'model': model}},
+            'interpretation': {'events': [
+              {'id': id, 'type': 'message'},
+              if (id == 1) {'id': 2, 'type': 'message'},
+            ]},
+          }),
+        );
+    Map<String, dynamic>? exported;
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: Scaffold(body: GroupChatPage(
+        controller: controller,
+        onOpenSettings: () {},
+        onLoadDiagnostics: () async => [
+          diagnostic(4, 'second-model'),
+          diagnostic(1, 'first-model'),
+        ],
+        onExportDiagnostic: (name, data) async { exported = data; },
+      )),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.byKey(const ValueKey('chat-entry-2')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('chatActionRegenerate')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chatActionExport')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chatActionEdit')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('chatActionExport')));
+    await tester.pumpAndSettle();
+    expect((exported!['request'] as Map)['body']['model'], 'first-model');
+  });
+
+  testWidgets('Regenerate an AI bubble rewinds only to its own player turn',
+      (tester) async {
+    tester.view.physicalSize = const Size(420, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final scripted = ScriptedProvider()
+      ..response = line('character', 'Lina', 'Réponse remplacée');
+    final controller = NarrativeChatController(
+      provider: scripted, configuration: () => config,
+    );
+    addTearDown(controller.dispose);
+    controller.restoreTimeline(const [
+      ChatEntry(id: 0, speaker: ChatSpeaker.player,
+          name: 'Vous', text: 'Action initiale'),
+      ChatEntry(id: 1, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Première réponse'),
+      ChatEntry(id: 2, speaker: ChatSpeaker.player,
+          name: 'Vous', text: 'Action à rejouer'),
+      ChatEntry(id: 3, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Réponse à changer'),
+      ChatEntry(id: 4, speaker: ChatSpeaker.character,
+          name: 'Lina', text: 'Même tour'),
+    ]);
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: Scaffold(body: GroupChatPage(
+        controller: controller, onOpenSettings: () {},
+      )),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.byKey(const ValueKey('chat-entry-4')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('chatActionRegenerate')));
+    await tester.pumpAndSettle();
+    expect(find.text('Régénérer cette réponse ?'), findsOneWidget);
+    await tester.tap(find.text('Continuer'));
+    await tester.pumpAndSettle();
+    expect(controller.timeline, hasLength(4));
+    expect((controller.timeline[1] as ChatEntry).text, 'Première réponse');
+    expect((controller.timeline[2] as ChatEntry).text, 'Action à rejouer');
+    expect((controller.timeline[3] as ChatEntry).text, 'Réponse remplacée');
   });
 
   testWidgets('Purger les diagnostics confirme et préserve la conversation',
