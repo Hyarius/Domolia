@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:ui';
+
+import 'package:flutter/foundation.dart';
 
 import 'package:cupertino_ui/cupertino_ui.dart' as cupertino_ui;
 import 'package:flutter_localizations/flutter_localizations.dart' as flutter_l10n;
@@ -26,9 +29,31 @@ import 'ai/chatgpt_responses.dart';
 import 'updates/update_service.dart';
 import 'updates/update_io.dart';
 import 'updates/update_widgets.dart';
+import 'logging/app_logger.dart';
+import 'logging/app_logs_page.dart';
 
 void main() {
-  runApp(const DomoliaApp());
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    await AppLogger.initialize();
+    final flutterHandler = FlutterError.onError;
+    FlutterError.onError = (details) {
+      AppLogger.error('Exception Flutter', component: 'flutter',
+          error: details.exception, stackTrace: details.stack);
+      flutterHandler?.call(details);
+    };
+    final platformHandler = PlatformDispatcher.instance.onError;
+    PlatformDispatcher.instance.onError = (error, stackTrace) {
+      AppLogger.error('Exception non interceptée', component: 'platform',
+          error: error, stackTrace: stackTrace);
+      return platformHandler?.call(error, stackTrace) ?? false;
+    };
+    AppLogger.info('Démarrage de Domolia', component: 'app');
+    runApp(const DomoliaApp());
+  }, (error, stackTrace) {
+    AppLogger.error('Exception asynchrone non interceptée', component: 'zone',
+        error: error, stackTrace: stackTrace);
+  });
 }
 
 class DomoliaApp extends StatelessWidget {
@@ -71,7 +96,7 @@ class DomoliaApp extends StatelessWidget {
   }
 }
 
-enum _Page { home, books, book, chat, about, settings, updates, ai, diagnostics }
+enum _Page { home, books, book, chat, about, settings, updates, ai, diagnostics, logs }
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -356,6 +381,9 @@ class _HomePageState extends State<HomePage> {
               onBack: () => setState(() => _page = _Page.settings),
               onPrune: _books.pruneDiagnostics,
             )
+          : _page == _Page.logs ? AppLogsPage(
+              onBack: () => setState(() => _page = _Page.settings),
+            )
           : _buildSettings()),
       ]),
     ),
@@ -436,7 +464,7 @@ class _HomePageState extends State<HomePage> {
               title: const Text('Paramètres'),
               selected: _page == _Page.settings ||
                   _page == _Page.updates || _page == _Page.ai ||
-                  _page == _Page.diagnostics,
+                  _page == _Page.diagnostics || _page == _Page.logs,
               selectedColor: DomoliaColors.goldLight,
               selectedTileColor: DomoliaColors.raisedSurface,
               onTap: () => _showPage(_Page.settings),
@@ -494,6 +522,15 @@ class _HomePageState extends State<HomePage> {
           subtitle: const Text('Conservation locale des requêtes et réponses'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => setState(() => _page = _Page.diagnostics),
+        ),
+        const Divider(),
+        ListTile(
+          key: const ValueKey('settingsLogs'),
+          leading: const Icon(Icons.article_outlined, color: DomoliaColors.gold),
+          title: const Text('Logs'),
+          subtitle: const Text('Consulter, copier, exporter et effacer le journal'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => setState(() => _page = _Page.logs),
         ),
       ],
     ),
