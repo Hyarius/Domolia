@@ -12,6 +12,8 @@ class BookLibraryController extends ChangeNotifier {
   final BookStore store;
   final NarratorSettingsStore? legacyNarrator;
   final List<BookDefinition> _books = [];
+  // Prevent a queued chat autosave from resurrecting a deleted session.
+  final Set<String> _deletedSessions = {};
   bool initialized = false;
   bool legacyAvailable = false;
   String? error;
@@ -126,9 +128,20 @@ class BookLibraryController extends ChangeNotifier {
 
   Future<BookSession?> session(String id) => store.findSession(id);
 
-  Future<void> saveSession(BookSession session) => store.putSession(session);
+  Future<void> saveSession(BookSession session) async {
+    if (_deletedSessions.contains(session.id)) return;
+    await store.putSession(session);
+  }
 
-  Future<void> deleteSession(String id) => store.deleteSession(id);
+  Future<void> deleteSession(String id) async {
+    _deletedSessions.add(id);
+    try {
+      await store.deleteSession(id);
+    } catch (_) {
+      _deletedSessions.remove(id);
+      rethrow;
+    }
+  }
 
   Future<List<StoredAiDiagnostic>> diagnostics(String sessionId) =>
       store.listDiagnostics(sessionId);
