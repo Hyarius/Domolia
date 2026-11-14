@@ -2,6 +2,7 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../ai/ai_diagnostics.dart';
 import 'book_definition.dart';
 import 'book_session.dart';
 
@@ -18,6 +19,9 @@ abstract interface class BookStore {
   Future<BookSession?> findSession(String id);
   Future<void> putSession(BookSession session);
   Future<void> deleteSession(String id);
+  Future<void> putDiagnostic(StoredAiDiagnostic diagnostic, int retentionLimit);
+  Future<List<StoredAiDiagnostic>> listDiagnostics(String sessionId);
+  Future<void> pruneDiagnostics(int retentionLimit);
 }
 
 class SqliteBookStore implements BookStore {
@@ -28,6 +32,29 @@ class SqliteBookStore implements BookStore {
   final String? databasePath;
   Database? _db;
 
+  static Future<void> _createDiagnostics(Database db) async {
+    await db.execute(
+      'CREATE TABLE ai_diagnostics (id TEXT PRIMARY KEY, '
+      'session_id TEXT NOT NULL, created_at INTEGER NOT NULL, '
+      'payload_json TEXT NOT NULL, '
+      'FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE)',
+    );
+    await db.execute(
+      'CREATE INDEX ai_diagnostics_by_session '
+      'ON ai_diagnostics(session_id, created_at DESC)',
+    );
+  }
+
+  static Future<void> _pruneSession(
+      DatabaseExecutor db, String sessionId, int limit) async {
+    await db.rawDelete(
+      'DELETE FROM ai_diagnostics WHERE session_id = ? AND id NOT IN '
+      '(SELECT id FROM ai_diagnostics WHERE session_id = ? '
+      'ORDER BY created_at DESC, id DESC LIMIT ?)',
+      [sessionId, sessionId, limit],
+    );
+  }
+
   Future<Database> get database async {
     if (_db != null) return _db!;
     final location = databasePath ?? path.join(
@@ -36,7 +63,7 @@ class SqliteBookStore implements BookStore {
     return _db ??= await (_factoryOverride ?? databaseFactory).openDatabase(
       location,
       options: OpenDatabaseOptions(
-      version: 1,
+      version: 2,
       onConfigure: (db) async =>
           db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, version) async {
@@ -57,6 +84,10 @@ class SqliteBookStore implements BookStore {
         await db.execute(
           'CREATE INDEX sessions_by_book ON sessions(book_id, updated_at)',
         );
+        await _createDiagnostics(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) await _createDiagnostics(db);
       },
       ),
     );
@@ -147,6 +178,66 @@ class SqliteBookStore implements BookStore {
   @override
   Future<void> deleteSession(String id) async {
     await (await database).delete('sessions', where: 'id = ?', whereArgs: [id]);
+  }
+
+  @override
+  Future<void> putDiagnostic(
+      StoredAiDiagnostic diagnostic, int retentionLimit) async {
+    if (retentionLimit < 0 || retentionLimit > 50) {
+      throw RangeError.range(retentionLimit, 0, 50, 'retentionLimit');
+    }
+    final db = await database;
+    await db.transaction((txn) async {
+      if (retentionLimit > 0) {
+        await txn.insert('ai_diagnostics', {
+          'id': diagnostic.id,
+          'session_id': diagnostic.sessionId,
+          'created_at': diagnostic.createdAtUtc.microsecondsSinceEpoch,
+          'payload_json': diagnostic.content,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+      await _pruneSession(txn, diagnostic.sessionId, retentionLimit);
+    });
+  }
+
+  @override
+  Future<List<StoredAiDiagnostic>> listDiagnostics(String sessionId) async {
+    final rows = await (await database).query(
+      'ai_diagnostics',
+      where: 'session_id = ?',
+      whereArgs: [sessionId],
+      orderBy: 'created_at DESC, id DESC',
+    );
+    return [
+      for (final row in rows)
+        StoredAiDiagnostic(
+          id: row['id'] as String,
+          sessionId: row['session_id'] as String,
+          createdAtUtc: DateTime.fromMicrosecondsSinceEpoch(
+            row['created_at'] as int, isUtc: true),
+          content: row['payload_json'] as String,
+        ),
+    ];
+  }
+
+  @override
+  Future<void> pruneDiagnostics(int retentionLimit) async {
+    if (retentionLimit < 0 || retentionLimit > 50) {
+      throw RangeError.range(retentionLimit, 0, 50, 'retentionLimit');
+    }
+    final db = await database;
+    await db.transaction((txn) async {
+      if (retentionLimit == 0) {
+        await txn.delete('ai_diagnostics');
+      } else {
+        final sessions = await txn.rawQuery(
+          'SELECT DISTINCT session_id FROM ai_diagnostics',
+        );
+        for (final row in sessions) {
+          await _pruneSession(txn, row['session_id'] as String, retentionLimit);
+        }
+      }
+    });
   }
 
   Future<void> close() async {
