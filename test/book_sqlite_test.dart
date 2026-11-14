@@ -25,7 +25,7 @@ void main() {
       narrativeStyle: 'Style A', detailLevel: 4);
     await first.putBook(book);
     await first.bindProfile(book.id, 'local-profile-id');
-    const session = BookSession(
+    final session = BookSession(
       id: 'session-test', bookId: book.id, title: 'Première partie',
       timeline: [
         ChatEntry(id: 0, speaker: ChatSpeaker.narrator,

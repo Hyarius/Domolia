@@ -21,17 +21,16 @@ abstract interface class BookStore {
 }
 
 class SqliteBookStore implements BookStore {
-  SqliteBookStore({DatabaseFactory? factory, String? databasePath})
-      : _factory = factory ?? databaseFactory,
-        _databasePath = databasePath;
+  SqliteBookStore({DatabaseFactory? factory, this.databasePath})
+      : _factory = factory ?? databaseFactory;
 
   final DatabaseFactory _factory;
-  final String? _databasePath;
+  final String? databasePath;
   Database? _db;
 
   Future<Database> get database async {
     if (_db != null) return _db!;
-    final location = _databasePath ?? path.join(
+    final location = databasePath ?? path.join(
       (await getApplicationSupportDirectory()).path, 'domolia_books.sqlite',
     );
     return _db ??= await _factory.openDatabase(
