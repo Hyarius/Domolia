@@ -339,6 +339,18 @@ void main() {
     final book = await library.create('Livre à parties');
     final a = await library.newSession(book);
     final b = await library.newSession(book);
+    await library.saveDiagnostic(StoredAiDiagnostic(
+      id: 'diagnostic-a',
+      sessionId: a.id,
+      createdAtUtc: DateTime.utc(2026),
+      content: '{"format":"diagnostic"}',
+    ), 10);
+    await library.saveDiagnostic(StoredAiDiagnostic(
+      id: 'diagnostic-b',
+      sessionId: b.id,
+      createdAtUtc: DateTime.utc(2026),
+      content: '{"format":"diagnostic"}',
+    ), 10);
     final ai = AiConnectionController(
       store: _Profiles(const AiProfilesState(
         profiles: [_profile], selectedId: 'profile-1',
@@ -359,6 +371,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(ValueKey('bookSession-${a.id}')), findsOneWidget);
     expect(find.byKey(ValueKey('bookSession-${b.id}')), findsOneWidget);
+    await tester.tap(find.byKey(ValueKey('bookPurgeSession-${a.id}')));
+    await tester.pumpAndSettle();
+    expect(find.text('Purger les diagnostics ?'), findsOneWidget);
+    await tester.tap(find.text('Annuler'));
+    await tester.pumpAndSettle();
+    expect(await library.diagnostics(a.id), hasLength(1));
+
+    await tester.tap(find.byKey(ValueKey('bookPurgeSession-${a.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Purger'));
+    await tester.pumpAndSettle();
+    expect(await library.diagnostics(a.id), isEmpty);
+    expect(await library.diagnostics(b.id), hasLength(1));
+    expect(await library.session(a.id), isNotNull);
 
     await tester.tap(find.byKey(ValueKey('bookDeleteSession-${a.id}')));
     await tester.pumpAndSettle();
