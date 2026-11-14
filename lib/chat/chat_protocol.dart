@@ -98,7 +98,7 @@ class ChatLineDecoder {
     final speaker = speakerMatch.group(1)!;
     String name;
     try {
-      name = jsonDecode('"' + nameMatch.group(1)! + '"') as String;
+      name = jsonDecode('"${nameMatch.group(1)!}"') as String;
     } catch (_) {
       return null;
     }
@@ -127,7 +127,7 @@ class ChatLineDecoder {
         length >= 0 && length >= rawText.length - 8;
         length--) {
       try {
-        text = jsonDecode('"' + rawText.substring(0, length) + '"') as String;
+        text = jsonDecode('"${rawText.substring(0, length)}"') as String;
         break;
       } catch (_) {
         // Wait for the rest of an escaped JSON codepoint.
