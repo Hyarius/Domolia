@@ -441,7 +441,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
                             ),
                           ),
                           Text(
-                            'Vous · Narrateur · Personnages',
+                            'Vous et les personnages',
                             style: TextStyle(
                               fontSize: 12,
                               color: DomoliaColors.muted,
@@ -479,7 +479,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
                       ],
                     ),
                     IconButton(
-                      tooltip: 'Configurer le fournisseur IA',
+                      tooltip: 'Paramètres de la conversation',
                       onPressed: widget.onOpenSettings,
                       icon: const Icon(
                         Icons.tune_rounded,
@@ -787,6 +787,24 @@ class _ChatBubble extends StatelessWidget {
       ChatSpeaker.character => DomoliaColors.cream,
     };
 
+    if (entry.speaker == ChatSpeaker.narrator) {
+      // Narration is prose without a participant label, avatar, or bubble.
+      return GestureDetector(
+        onLongPress: onLongPress,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 22),
+          child: Text(entry.text,
+            key: const ValueKey('chatNarrationText'),
+            style: TextStyle(
+              color: DomoliaColors.cream,
+              fontSize: 15, height: 1.55,
+              fontStyle: entry.inProgress
+                  ? FontStyle.italic : FontStyle.normal,
+            ),
+          ),
+        ),
+      );
+    }
     return GestureDetector(
       onLongPress: onLongPress,
       child: Padding(
