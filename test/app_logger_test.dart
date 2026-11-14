@@ -134,6 +134,17 @@ void main() {
     }
     expect(snapshot, contains('[REDACTED]'));
   });
+
+  test('bearer tokens are fully redacted after an Authorization prefix', () async {
+    final logger = AppLogger(storage: MemoryAppLogStorage());
+    logger.log(AppLogLevel.warning,
+        'Authorization: Bearer privateBearerCredentialAlpha');
+    await logger.flush();
+    final saved = await logger.snapshot();
+    expect(saved, isNot(contains('privateBearerCredentialAlpha')));
+    expect(saved, contains('[REDACTED]'));
+  });
+
 }
 
 class _FailingReadStorage extends MemoryAppLogStorage {

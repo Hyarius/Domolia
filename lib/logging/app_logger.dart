@@ -143,7 +143,11 @@ class AppLogger {
   static String _clean(String input, {int limit = 1000}) {
     // Redact quoted values first; the free-form key=value rule alone misses
     // secrets in strings such as {"password":"value"}.
-    var safe = input.replaceAllMapped(
+    // Mask bearer credentials before key=value parsing so
+    // "Authorization: Bearer token" cannot leave the token behind.
+    var safe = input.replaceAll(
+      RegExp(r'Bearer\s+\S+', caseSensitive: false), 'Bearer [REDACTED]');
+    safe = safe.replaceAllMapped(
       RegExp(
         r'"(authorization|api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|cookie|credential)"\s*:\s*"(?:\\.|[^"\\])*"',
         caseSensitive: false,
