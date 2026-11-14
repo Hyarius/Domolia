@@ -10,6 +10,7 @@ import 'chat/chat_controller.dart';
 import 'chat/group_chat_page.dart';
 import 'chat/narrator_settings.dart';
 import 'books/book_definition.dart';
+import 'books/book_session.dart';
 import 'books/book_library_controller.dart';
 import 'books/book_library_page.dart';
 import 'books/book_editor_page.dart';
@@ -186,13 +187,10 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  Future<void> _openBookSession(BookDefinition book) async {
+  Future<void> _openBookSession(
+      BookDefinition book, BookSession session) async {
     try {
       await _ai.initialize();
-      final sessions = await _books.sessions(book.id);
-      final session = sessions.isEmpty
-          ? await _books.newSession(book)
-          : sessions.first;
       if (!mounted) return;
       if (_ownsChat) {
         _chat.dispose();

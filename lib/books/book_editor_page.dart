@@ -10,6 +10,7 @@ import '../theme/domolia_theme.dart';
 import 'book_definition.dart';
 import 'book_library_controller.dart';
 import 'book_library_page.dart';
+import 'book_session.dart';
 
 class BookEditorPage extends StatefulWidget {
   const BookEditorPage({
@@ -23,7 +24,7 @@ class BookEditorPage extends StatefulWidget {
   final BookDefinition book;
   final BookLibraryController library;
   final AiConnectionController ai;
-  final Future<void> Function(BookDefinition book) onPlay;
+  final Future<void> Function(BookDefinition book, BookSession session) onPlay;
 
   @override
   State<BookEditorPage> createState() => _BookEditorPageState();
@@ -156,7 +157,50 @@ class _BookEditorPageState extends State<BookEditorPage> {
   Future<void> _play() async {
     _saveDelay?.cancel();
     if (!await _save()) return;
-    await widget.onPlay(_book);
+    try {
+      final sessions = await widget.library.sessions(_book.id);
+      if (!mounted) return;
+      final selection = await showModalBottomSheet<String>(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) => SafeArea(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 440),
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(18),
+                  child: Text('Choisir une partie', style: TextStyle(
+                    fontSize: 20, color: DomoliaColors.goldLight)),
+                ),
+                ListTile(
+                  key: const ValueKey('bookNewSession'),
+                  leading: const Icon(Icons.add_circle_outline),
+                  title: const Text('Nouvelle partie indépendante'),
+                  onTap: () => Navigator.pop(context, 'new'),
+                ),
+                for (final session in sessions)
+                  ListTile(
+                    key: ValueKey('bookSession-${session.id}'),
+                    leading: const Icon(Icons.history),
+                    title: Text(session.title),
+                    subtitle: Text('${session.timeline.length} événements'),
+                    onTap: () => Navigator.pop(context, session.id),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+      if (selection == null || !mounted) return;
+      final selected = selection == 'new'
+          ? await widget.library.newSession(_book)
+          : sessions.firstWhere((session) => session.id == selection);
+      await widget.onPlay(_book, selected);
+    } catch (_) {
+      _show('Impossible de charger les parties de ce Livre.');
+    }
   }
 
   @override
