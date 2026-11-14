@@ -228,11 +228,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Vérifier maintenant'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.widgetWithText(ListTile, 'Toutes les versions'), 260,
+      find.byKey(const ValueKey('allVersionsLink')), 260,
     );
-    expect(find.widgetWithText(ListTile, 'Toutes les versions'), findsOneWidget);
+    expect(find.byKey(const ValueKey('allVersionsLink')), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('Retour aux paramètres'), -260,
+      find.text('Retour aux paramètres').last, -260,
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Retour aux paramètres'));
@@ -242,7 +242,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(AiSettingsPanel), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('Retour aux paramètres'), 260,
+      find.text('Retour aux paramètres').last, 260,
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Retour aux paramètres'));
