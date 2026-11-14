@@ -34,9 +34,9 @@ class AiExchange {
     required this.method,
     required this.url,
     required this.requestBody,
-    required String secret,
+    required this._secret,
     required this.accept,
-  }) : _secret = secret;
+  });
 
   static const maxRawResponseBytes = 1024 * 1024;
   final DateTime createdAtUtc = DateTime.now().toUtc();

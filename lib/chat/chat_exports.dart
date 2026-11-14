@@ -47,8 +47,8 @@ Map<String, dynamic> exportConversation(
   return {
     'format': 'domolia-conversation-v1',
     'exportedAtUtc': DateTime.now().toUtc().toIso8601String(),
-    if (bookTitle != null) 'bookTitle': bookTitle,
-    if (sessionTitle != null) 'sessionTitle': sessionTitle,
+    'bookTitle': ?bookTitle,
+    'sessionTitle': ?sessionTitle,
     'selection': {
       'scope': scope.name,
       if (scope != ChatExportScope.complete) 'count': count,
