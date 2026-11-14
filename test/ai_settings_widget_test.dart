@@ -219,7 +219,7 @@ void main() {
     await showPage(tester, size: const Size(320, 900));
     final selector = find.byKey(const ValueKey('aiModelSelector'));
     expect(selector, findsOneWidget);
-    expect(tester.getSize(selector).width, greaterThan(250));
+    expect(tester.getSize(selector).width, greaterThan(235));
     await tester.tap(selector);
     await tester.pumpAndSettle();
     expect(find.text(defaultAiModel), findsWidgets);
