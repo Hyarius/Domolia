@@ -190,6 +190,25 @@ Le même menu permet d'exporter la **dernière requête IA et sa réponse brute 
 
 Le menu latéral se limite à **Accueil**, **Livres**, **À propos** et **Paramètres**. La page **Paramètres** donne accès séparément à **Configurations IA** (profils et fournisseurs) et **Mises à jour** (canal, installation et lien **Toutes les versions**). Le menu ne contient plus d'entrées directes pour les fournisseurs IA et les releases. Les conversations sont supprimables depuis **Commencer ou reprendre une partie**, avec confirmation et effacement de l'historique local de la partie uniquement.
 
+### Exports et purge des diagnostics IA
+
+Dans une conversation, **Options de la conversation** permet d'exporter
+**toute la conversation**, les **X dernières scènes** ou les **X derniers
+messages**. Le même menu exporte un fichier JSON regroupant la **requête
+HTTP réellement envoyée** et la **réponse brute SSE/HTTP reçue**, avec
+les événements interprétés, les statistiques de tokens et les secrets
+masqués. L'utilisateur peut choisir parmi les échanges précédents de
+la partie.
+
+Le menu propose aussi **Purger les diagnostics**, sans toucher à
+l'historique narratif. La liste des parties permet de purger les
+diagnostics d'une partie sans l'ouvrir. **Paramètres → Diagnostics IA**
+règle la conservation des traces (**0, 5, 10, 20 ou 50** par partie ;
+10 par défaut). Les corps bruts sont plafonnés à 1 Mio chacun.
+Les suppressions locales ne retirent pas les fichiers déjà exportés.
+
+Voir [le format et la confidentialité des diagnostics](docs/books/diagnostics.md).
+
 ## Bibliothèque de Livres (refonte)
 
 Chaque Livre possède un titre, une couverture, un narrateur, un niveau de détail et des tags. Les parties sont enregistrées localement et les configurations IA restent séparées dans le stockage sécurisé. Un Livre peut être exporté/importé comme JSON portable, sans clés, compte, lien de profil ou historique de Partie. Format et limites : [docs/books/format.md](docs/books/format.md).
