@@ -231,7 +231,9 @@ void main() {
       find.widgetWithText(ListTile, 'Toutes les versions'), 260,
     );
     expect(find.widgetWithText(ListTile, 'Toutes les versions'), findsOneWidget);
-    await tester.ensureVisible(find.text('Retour aux paramètres'));
+    await tester.scrollUntilVisible(
+      find.text('Retour aux paramètres'), -260,
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Retour aux paramètres'));
     await tester.pumpAndSettle();
@@ -239,6 +241,10 @@ void main() {
     await tester.tap(find.widgetWithText(ListTile, 'Configurations IA'));
     await tester.pumpAndSettle();
     expect(find.byType(AiSettingsPanel), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Retour aux paramètres'), 260,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Retour aux paramètres'));
     await tester.pumpAndSettle();
     expect(find.widgetWithText(ListTile, 'Mises à jour'), findsOneWidget);

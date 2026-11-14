@@ -88,6 +88,15 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
         color:DomoliaColors.goldLight,fontSize:25,fontWeight:FontWeight.bold)),
       const SizedBox(height:20),
       Text('Version installée : ${version == null ? 'inconnue' : '${version.versionName} (build ${version.versionCode})'}'),
+      const SizedBox(height: 14),
+      FilledButton.icon(
+        onPressed:checking || downloading ? null : widget.onCheckManually ?? updater.checkNow,
+        icon:const Icon(Icons.refresh),
+        label:const Text('Vérifier maintenant'),
+      ),
+      if(downloading) TextButton.icon(
+        onPressed:updater.cancelDownload,
+        icon:const Icon(Icons.close),label:const Text('Annuler le téléchargement')),
       const SizedBox(height:18),
       SwitchListTile(
         title:const Text('Vérifier automatiquement au démarrage'),
@@ -129,15 +138,6 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
       if(updater.message!=null) Padding(
         padding:const EdgeInsets.only(top:8),
         child:Text(updater.message!,style:const TextStyle(color:DomoliaColors.muted))),
-      const SizedBox(height:18),
-      FilledButton.icon(
-        onPressed:checking || downloading ? null : widget.onCheckManually ?? updater.checkNow,
-        icon:const Icon(Icons.refresh),
-        label:const Text('Vérifier maintenant'),
-      ),
-      if(downloading) TextButton.icon(
-        onPressed:updater.cancelDownload,
-        icon:const Icon(Icons.close),label:const Text('Annuler le téléchargement')),
       if (widget.onViewAllVersions != null) ...[
         const SizedBox(height: 20),
         const Divider(),
