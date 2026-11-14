@@ -415,7 +415,7 @@ class NarrativeChatController extends ChangeNotifier {
       if (!_cancelled && error == null && _currentTurnCount == 0) {
         error = 'Le modèle n’a retourné aucun message exploitable.';
       }
-    } on AiProviderException catch (failure, stackTrace) {
+    } on AiProviderException catch (failure) {
       if (!_cancelled) error = failure.userMessage;
       AppLogger.warning('Fournisseur IA indisponible', component: 'chat',
         details: {'exceptionType': failure.runtimeType.toString()});

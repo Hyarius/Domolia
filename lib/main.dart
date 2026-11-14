@@ -662,7 +662,7 @@ class _HomePageState extends State<HomePage> {
                     Card(
                       color: DomoliaColors.surface,
                       child: ListTile(
-                        key: ValueKey('recentSession-' + session.id),
+                        key: ValueKey('recentSession-${session.id}'),
                         leading: const Icon(Icons.history_rounded,
                             color: DomoliaColors.gold),
                         title: Text(session.title),

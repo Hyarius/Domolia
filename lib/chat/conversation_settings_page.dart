@@ -71,7 +71,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     } catch (_) {
       _notify('Impossible de sauvegarder cette connexion.');
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) { setState(() => _saving = false); }
     }
   }
 
