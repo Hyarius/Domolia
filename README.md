@@ -162,3 +162,10 @@ L'écran **Conversation** s'ouvre depuis l'accueil ou le menu. Il ressemble à u
 Le moteur de dialogue demande aux modèles un format **une ligne JSON par prise de parole** et affiche progressivement le texte dans les bulles. Le joueur conserve l'exclusivité de ses actions et de ses paroles. L'utilisateur peut arrêter la génération, réessayer une erreur et régénérer la dernière réponse. Les conversations restent temporaires avant la PR05.
 
 **Important :** dans l'application, « Envoyer » contacte l'API configurée par l'utilisateur, y compris lorsqu'elle est payante. Les tests automatisés de la PR04 utilisent **uniquement des modèles et flux mockés localement**, jamais les API réelles (gratuites ou payantes). Aucun crédit externe n'est consommé pendant la CI.
+
+
+### Configurations IA nommées, indépendantes du fournisseur
+
+Domolia présente **une seule liste de configurations IA nommées**. Dans chaque configuration, « Type de fournisseur » propose `ChatGPT` ou `CustomAI`. Le choix change seulement les champs du profil : connexion OAuth de votre compte ChatGPT et modèles autorisés, ou configuration HTTPS + clé API personnalisée. Toutes les autres fonctions peuvent cibler la configuration par son nom et son identifiant stable, sans connaître son fournisseur.
+
+L'option ChatGPT demande séparément l'autorisation d'utiliser le forfait et ses limites ; l'application utilise alors l'API publique Responses avec un jeton OAuth chiffré sur l'appareil. Elle ne récupère ni l'historique ni la mémoire des conversations ChatGPT. Le retour du navigateur OAuth sur Android doit être validé sur téléphone avec un compte autorisé. Les tests automatisés sont **entièrement mockés**, sans aucun appel à des API payantes ni gratuites.
