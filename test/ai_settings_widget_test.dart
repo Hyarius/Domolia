@@ -218,6 +218,8 @@ void main() {
       (tester) async {
     await showPage(tester, size: const Size(320, 900));
     final selector = find.byKey(const ValueKey('aiModelSelector'));
+    await tester.drag(find.byType(ListView).first, const Offset(0, -480));
+    await tester.pumpAndSettle();
     expect(selector, findsOneWidget);
     expect(tester.getSize(selector).width, greaterThan(235));
     await tester.tap(selector);

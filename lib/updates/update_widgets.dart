@@ -34,10 +34,12 @@ class UpdateSettingsPanel extends StatefulWidget {
     super.key,
     required this.controller,
     this.onConfigureAi,
+    this.onConfigureNarrator,
     this.onCheckManually,
   });
   final UpdateController controller;
   final VoidCallback? onConfigureAi;
+  final VoidCallback? onConfigureNarrator;
   final VoidCallback? onCheckManually;
   @override
   State<UpdateSettingsPanel> createState()=>_UpdateSettingsPanelState();
@@ -128,6 +130,18 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
       if(downloading) TextButton.icon(
         onPressed:updater.cancelDownload,
         icon:const Icon(Icons.close),label:const Text('Annuler le téléchargement')),
+      if (widget.onConfigureNarrator != null) ...[
+        const SizedBox(height: 12),
+        ListTile(
+          leading: const Icon(
+            Icons.auto_stories_outlined,
+            color: DomoliaColors.gold,
+          ),
+          title: const Text('Narrateur'),
+          subtitle: const Text('Style et messages d’ouverture'),
+          onTap: widget.onConfigureNarrator,
+        ),
+      ],
       if(widget.onConfigureAi!=null) ...[
         const SizedBox(height:20),
         const Divider(),

@@ -154,3 +154,27 @@ Les vérifications **manuelles** des mises à jour affichent une fenêtre avec u
 ### Plusieurs connexions IA
 
 Dans « Fournisseur IA », le menu **Configuration API** en haut de page permet de conserver autant de comptes ou fournisseurs que nécessaire. **+** crée un profil nommé ; **⋮** le renomme ou le supprime. Le statut à droite concerne exclusivement le profil sélectionné : « Non testé », « En cours », « Connecté » ou « Invalide ». En cas d'échec, le chevron ouvre la raison détaillée, sans afficher la clé API. La liste des configurations et leurs secrets sont stockés de manière chiffrée et migrés automatiquement depuis l'ancien réglage unique, sans perdre sa clé.
+
+## Chat narratif en groupe — PR04
+
+L'écran **Conversation** s'ouvre depuis l'accueil ou le menu. Il ressemble à une discussion de groupe : chaque message est précédé de son **nom** et de son **avatar**, et possède sa bulle distincte. « Vous », « Narrateur » et chaque personnage peuvent s'exprimer dans leur propre bulle. Le narrateur n'est pas une sortie de texte spéciale : c'est un participant de la scène.
+
+Le moteur de dialogue demande aux modèles un format **une ligne JSON par prise de parole** et affiche progressivement le texte dans les bulles. Le joueur conserve l'exclusivité de ses actions et de ses paroles. L'utilisateur peut arrêter la génération, réessayer une erreur et régénérer la dernière réponse. Les conversations restent temporaires avant la PR05.
+
+**Important :** dans l'application, « Envoyer » contacte l'API configurée par l'utilisateur, y compris lorsqu'elle est payante. Les tests automatisés de la PR04 utilisent **uniquement des modèles et flux mockés localement**, jamais les API réelles (gratuites ou payantes). Aucun crédit externe n'est consommé pendant la CI.
+
+
+### Configurations IA nommées, indépendantes du fournisseur
+
+Domolia présente **une seule liste de configurations IA nommées**. Dans chaque configuration, « Type de fournisseur » propose `ChatGPT` ou `CustomAI`. Le choix change seulement les champs du profil : connexion OAuth de votre compte ChatGPT et modèles autorisés, ou configuration HTTPS + clé API personnalisée. Toutes les autres fonctions peuvent cibler la configuration par son nom et son identifiant stable, sans connaître son fournisseur.
+
+L'option ChatGPT demande séparément l'autorisation d'utiliser le forfait et ses limites ; l'application utilise alors l'API publique Responses avec un jeton OAuth chiffré sur l'appareil. Elle ne récupère ni l'historique ni la mémoire des conversations ChatGPT. Le retour du navigateur OAuth sur Android doit être validé sur téléphone avec un compte autorisé. Les tests automatisés sont **entièrement mockés**, sans aucun appel à des API payantes ni gratuites.
+
+### Configuration du narrateur (PR04)
+
+Le menu **Narrateur** (également accessible depuis **Paramètres**) permet de personnaliser :
+
+1. Le **style narratif** du jeu de rôle : instructions de narration transmises à l'IA.
+2. Les **premiers messages possibles**, à raison d'un message par ligne. Une ouverture est choisie automatiquement lorsque vous démarrez une nouvelle conversation, et s'affiche comme une bulle du narrateur.
+
+Les réglages sont sauvegardés localement et réutilisés au prochain lancement de l'application. Les instructions du protocole JSON demeurent fixes et non éditables ; elles sont combinées au style à chaque requête. Le premier message est inséré localement, **sans appel réseau ni consommation de crédits**. Les tests et la CI utilisent uniquement des fournisseurs simulés.
