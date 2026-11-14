@@ -68,47 +68,10 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
     if (await _save()) await widget.controller.testConnection();
   }
 
-  Future<String?> _askForName({String? initialName}) async {
-    final input = TextEditingController(text: initialName ?? '');
-    try {
-      return await showDialog<String>(
+  Future<String?> _askForName({String? initialName}) => showDialog<String>(
         context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text(initialName == null ? 'Nouvelle configuration API' : 'Renommer le profil'),
-          content: TextField(
-            key: const ValueKey('aiProfileNameField'),
-            controller: input,
-            autofocus: true,
-            maxLength: 60,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(labelText: 'Nom de la configuration'),
-            onSubmitted: (value) {
-              if (value.trim().isNotEmpty) Navigator.pop(dialogContext, value.trim());
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Annuler'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (input.text.trim().isNotEmpty) {
-                  Navigator.pop(dialogContext, input.text.trim());
-                }
-              },
-              child: const Text('Valider'),
-            ),
-          ],
-        ),
+        builder: (_) => _ProfileNameDialog(initialName: initialName),
       );
-    } finally {
-      // Dialog transition finishes after the route returns. Defer disposal
-      // to avoid tearing down a controller while its closing animation runs.
-      // The framework releases the TextField when the route is removed.
-      // Do not retain the controller as state.
-    }
-  }
 
   Future<void> _createProfile() async {
     if (widget.controller.busy) return;
@@ -494,6 +457,61 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
           ),
         );
       },
+    );
+  }
+}
+
+class _ProfileNameDialog extends StatefulWidget {
+  const _ProfileNameDialog({this.initialName});
+
+  final String? initialName;
+
+  @override
+  State<_ProfileNameDialog> createState() => _ProfileNameDialogState();
+}
+
+class _ProfileNameDialogState extends State<_ProfileNameDialog> {
+  late final TextEditingController _input =
+      TextEditingController(text: widget.initialName ?? '');
+
+  @override
+  void dispose() {
+    _input.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    final value = _input.text.trim();
+    if (value.isNotEmpty) Navigator.of(context).pop(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(
+        widget.initialName == null
+            ? 'Nouvelle configuration API'
+            : 'Renommer le profil',
+      ),
+      content: TextField(
+        key: const ValueKey('aiProfileNameField'),
+        controller: _input,
+        autofocus: true,
+        maxLength: 60,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(labelText: 'Nom de la configuration'),
+        onSubmitted: (_) => _confirm(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Annuler'),
+        ),
+        FilledButton(
+          onPressed: _confirm,
+          child: const Text('Valider'),
+        ),
+      ],
     );
   }
 }
