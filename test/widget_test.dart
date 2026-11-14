@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:domolia/main.dart';
+import 'package:domolia/ai/ai_settings_panel.dart';
 import 'package:domolia/theme/domolia_theme.dart';
 import 'package:domolia/updates/update_service.dart';
 import 'package:domolia/updates/update_widgets.dart';
@@ -193,6 +194,39 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('updateCheckDialog')), findsOneWidget);
     expect(find.textContaining('déjà à jour'), findsOneWidget);
+  });
+
+  testWidgets('Les réglages IA et les versions sont dans Paramètres',
+      (tester) async {
+    prefs.enabled = false;
+    await tester.pumpWidget(DomoliaApp(updateController: updates));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ListTile, 'Fournisseur IA'), findsNothing);
+    expect(find.widgetWithText(ListTile, 'Mise à jour'), findsNothing);
+    expect(find.widgetWithText(ListTile, 'Toutes les versions'), findsNothing);
+
+    await tester.tap(find.widgetWithText(ListTile, 'Paramètres'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ListTile, 'Configurations IA'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Mises à jour'), findsOneWidget);
+    expect(find.text('Toutes les versions'), findsNothing);
+
+    await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
+    await tester.pumpAndSettle();
+    expect(find.text('Vérifier maintenant'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Toutes les versions'), findsOneWidget);
+    await tester.tap(find.text('Retour aux paramètres'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(ListTile, 'Configurations IA'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AiSettingsPanel), findsOneWidget);
+    await tester.tap(find.text('Retour aux paramètres'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ListTile, 'Mises à jour'), findsOneWidget);
   });
 
 }

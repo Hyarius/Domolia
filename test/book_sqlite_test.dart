@@ -51,6 +51,13 @@ void main() {
     expect(await second.profileIdForBook(book.id), 'local-profile-id');
     expect(await second.findSession(session.id), isNotNull);
 
+    // Removing a single conversation must persist without deleting the book.
+    await second.deleteSession(session.id);
+    expect(await second.findSession(session.id), isNull);
+    expect((await second.listSessions(book.id)), isEmpty);
+    expect((await second.findBook(book.id))!.title, 'Titre changé');
+    await second.putSession(session);
+
     await second.deleteBook(book.id);
     expect(await second.findSession(session.id), isNull);
     expect(await second.profileIdForBook(book.id), isNull);

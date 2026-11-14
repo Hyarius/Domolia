@@ -299,4 +299,55 @@ void main() {
       findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('Une partie peut être supprimée après confirmation, sans toucher aux autres',
+      (tester) async {
+    final store = _MemoryBooks();
+    final library = BookLibraryController(store: store);
+    addTearDown(library.dispose);
+    await library.initialize();
+    final book = await library.create('Livre à parties');
+    final a = await library.newSession(book);
+    final b = await library.newSession(book);
+    final ai = AiConnectionController(
+      store: _Profiles(const AiProfilesState(
+        profiles: [_profile], selectedId: 'profile-1',
+      )), provider: _NoNetwork(),
+    );
+    addTearDown(ai.dispose);
+    var plays = 0;
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: BookEditorPage(
+        book: book, library: library, ai: ai,
+        onPlay: (_, _) async => plays++,
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('bookPlay')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('bookSession-${a.id}')), findsOneWidget);
+    expect(find.byKey(ValueKey('bookSession-${b.id}')), findsOneWidget);
+
+    await tester.tap(find.byKey(ValueKey('bookDeleteSession-${a.id}')));
+    await tester.pumpAndSettle();
+    expect(find.text('Supprimer cette partie ?'), findsOneWidget);
+    await tester.tap(find.text('Annuler'));
+    await tester.pumpAndSettle();
+    expect(await library.session(a.id), isNotNull);
+
+    await tester.tap(find.byKey(ValueKey('bookDeleteSession-${a.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Supprimer'));
+    await tester.pumpAndSettle();
+    expect(await library.session(a.id), isNull);
+    expect(await library.session(b.id), isNotNull);
+    expect(plays, 0);
+
+    await tester.tap(find.byKey(const ValueKey('bookPlay')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('bookSession-${a.id}')), findsNothing);
+    expect(find.byKey(ValueKey('bookSession-${b.id}')), findsOneWidget);
+  });
+
 }

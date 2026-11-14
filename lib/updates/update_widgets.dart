@@ -33,13 +33,13 @@ class UpdateSettingsPanel extends StatefulWidget {
   const UpdateSettingsPanel({
     super.key,
     required this.controller,
-    this.onConfigureAi,
-    this.onConfigureNarrator,
+    this.onBack,
+    this.onViewAllVersions,
     this.onCheckManually,
   });
   final UpdateController controller;
-  final VoidCallback? onConfigureAi;
-  final VoidCallback? onConfigureNarrator;
+  final VoidCallback? onBack;
+  final VoidCallback? onViewAllVersions;
   final VoidCallback? onCheckManually;
   @override
   State<UpdateSettingsPanel> createState()=>_UpdateSettingsPanelState();
@@ -76,6 +76,14 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
     final checking=updater.phase==UpdatePhase.checking;
     final downloading=updater.phase==UpdatePhase.downloading;
     return SafeArea(child: ListView(padding:const EdgeInsets.all(24),children:[
+      if (widget.onBack != null) ...[
+        TextButton.icon(
+          onPressed: widget.onBack,
+          icon: const Icon(Icons.arrow_back),
+          label: const Text('Retour aux paramètres'),
+        ),
+        const SizedBox(height: 12),
+      ],
       const Text('Mises à jour',style:TextStyle(
         color:DomoliaColors.goldLight,fontSize:25,fontWeight:FontWeight.bold)),
       const SizedBox(height:20),
@@ -130,26 +138,16 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
       if(downloading) TextButton.icon(
         onPressed:updater.cancelDownload,
         icon:const Icon(Icons.close),label:const Text('Annuler le téléchargement')),
-      if (widget.onConfigureNarrator != null) ...[
-        const SizedBox(height: 12),
-        ListTile(
-          leading: const Icon(
-            Icons.auto_stories_outlined,
-            color: DomoliaColors.gold,
-          ),
-          title: const Text('Narrateur'),
-          subtitle: const Text('Style et messages d’ouverture'),
-          onTap: widget.onConfigureNarrator,
-        ),
-      ],
-      if(widget.onConfigureAi!=null) ...[
-        const SizedBox(height:20),
+      if (widget.onViewAllVersions != null) ...[
+        const SizedBox(height: 20),
         const Divider(),
         ListTile(
-          leading:const Icon(Icons.smart_toy_outlined,color:DomoliaColors.gold),
-          title:const Text('Fournisseur IA'),
-          subtitle:const Text('Configurer OpenUncensored et tester la connexion'),
-          onTap:widget.onConfigureAi,
+          leading: const Icon(Icons.new_releases_outlined,
+              color: DomoliaColors.gold),
+          title: const Text('Toutes les versions'),
+          subtitle: const Text('Consulter les versions publiées sur GitHub'),
+          trailing: const Icon(Icons.open_in_new),
+          onTap: widget.onViewAllVersions,
         ),
       ],
     ]));

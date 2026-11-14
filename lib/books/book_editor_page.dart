@@ -187,12 +187,52 @@ class _BookEditorPageState extends State<BookEditorPage> {
                     title: Text(session.title),
                     subtitle: Text('${session.timeline.length} événements'),
                     onTap: () => Navigator.pop(context, session.id),
+                    trailing: IconButton(
+                      key: ValueKey('bookDeleteSession-${session.id}'),
+                      tooltip: 'Supprimer ${session.title}',
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (dialogContext) => AlertDialog(
+                            title: const Text('Supprimer cette partie ?'),
+                            content: Text(
+                              '« ${session.title} » et son historique seront '
+                              'supprimés définitivement.'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(dialogContext, false),
+                                child: const Text('Annuler'),
+                              ),
+                              FilledButton(
+                                onPressed: () => Navigator.pop(dialogContext, true),
+                                child: const Text('Supprimer'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed != true || !context.mounted) return;
+                        try {
+                          await widget.library.deleteSession(session.id);
+                          if (context.mounted) {
+                            Navigator.pop(context, 'deleted');
+                          }
+                        } catch (_) {
+                          _show('Impossible de supprimer cette partie.');
+                        }
+                      },
+                    ),
                   ),
               ],
             ),
           ),
         ),
       );
+      if (selection == 'deleted') {
+        // The chosen part is removed from storage, never opened.
+        // The next tap reloads the current list from SQLite.
+        return;
+      }
       if (selection == null || !mounted) return;
       final selected = selection == 'new'
           ? await widget.library.newSession(_book)

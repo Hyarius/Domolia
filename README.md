@@ -180,6 +180,10 @@ Le menu **Narrateur** (également accessible depuis **Paramètres**) permet de p
 Les réglages sont sauvegardés localement et réutilisés au prochain lancement de l'application. Les instructions du protocole JSON demeurent fixes et non éditables ; elles sont combinées au style à chaque requête. Le premier message est inséré localement, **sans appel réseau ni consommation de crédits**. Les tests et la CI utilisent uniquement des fournisseurs simulés.
 
 
+## Navigation de l'application
+
+Le menu latéral se limite à **Accueil**, **Livres**, **À propos** et **Paramètres**. La page **Paramètres** donne accès séparément à **Configurations IA** (profils et fournisseurs) et **Mises à jour** (canal, installation et lien **Toutes les versions**). Le menu ne contient plus d'entrées directes pour les fournisseurs IA et les releases. Les conversations sont supprimables depuis **Commencer ou reprendre une partie**, avec confirmation et effacement de l'historique local de la partie uniquement.
+
 ## Bibliothèque de Livres (refonte)
 
 Chaque Livre possède un titre, une couverture, un narrateur, un niveau de détail et des tags. Les parties sont enregistrées localement et les configurations IA restent séparées dans le stockage sécurisé. Un Livre peut être exporté/importé comme JSON portable, sans clés, compte, lien de profil ou historique de Partie. Format et limites : [docs/books/format.md](docs/books/format.md).

@@ -69,7 +69,7 @@ class DomoliaApp extends StatelessWidget {
   }
 }
 
-enum _Page { home, books, book, chat, about, updates, ai }
+enum _Page { home, books, book, chat, about, settings, updates, ai }
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -92,6 +92,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   _Page _page = _Page.home;
+  _Page _aiReturnPage = _Page.settings;
   late final UpdateController _updates;
   late final bool _ownsUpdates;
   late final AiConnectionController _ai;
@@ -236,7 +237,10 @@ class _HomePageState extends State<HomePage> {
 
   void _openAiSettings() {
     unawaited(_ai.initialize());
-    setState(() => _page = _Page.ai);
+    setState(() {
+      _aiReturnPage = _page == _Page.chat ? _Page.chat : _Page.settings;
+      _page = _Page.ai;
+    });
   }
 
   void _showPage(_Page page) {
@@ -289,9 +293,16 @@ class _HomePageState extends State<HomePage> {
               onOpenSettings: _openAiSettings,
             )
           : _page == _Page.about ? _buildAbout()
+          : _page == _Page.settings ? _buildSettings()
+          : _page == _Page.updates ? UpdateSettingsPanel(
+              controller: _updates,
+              onBack: () => setState(() => _page = _Page.settings),
+              onViewAllVersions: () => _openUrl(_allReleasesUrl),
+              onCheckManually: _checkForUpdates,
+            )
           : _page == _Page.ai ? AiSettingsPanel(
               controller: _ai,
-              onBack: () => setState(() => _page = _Page.updates),
+              onBack: () => setState(() => _page = _aiReturnPage),
             )
           : _buildSettings()),
       ]),
@@ -371,32 +382,11 @@ class _HomePageState extends State<HomePage> {
             ListTile(
               leading: const Icon(Icons.settings_outlined),
               title: const Text('Paramètres'),
-              selected: _page == _Page.updates,
-              onTap: () => _showPage(_Page.updates),
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.smart_toy_outlined),
-              title: const Text('Fournisseur IA'),
-              onTap: () => _showPage(_Page.ai),
-            ),
-            ListTile(
-              leading: const Icon(Icons.system_update_alt_rounded),
-              title: const Text('Mise à jour'),
-              iconColor: DomoliaColors.gold,
-              onTap: () {
-                Navigator.pop(context);
-                _checkForUpdates();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.new_releases_outlined),
-              title: const Text('Toutes les versions'),
-              iconColor: DomoliaColors.gold,
-              onTap: () {
-                Navigator.pop(context);
-                _openUrl(_allReleasesUrl);
-              },
+              selected: _page == _Page.settings ||
+                  _page == _Page.updates || _page == _Page.ai,
+              selectedColor: DomoliaColors.goldLight,
+              selectedTileColor: DomoliaColors.raisedSurface,
+              onTap: () => _showPage(_Page.settings),
             ),
             const Padding(
               padding: EdgeInsets.all(24),
@@ -415,11 +405,36 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildSettings() => UpdateSettingsPanel(
-    controller: _updates,
-    onConfigureAi: _openAiSettings,
-    onConfigureNarrator: null,
-    onCheckManually: _checkForUpdates,
+  Widget _buildSettings() => SafeArea(
+    child: ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const Text(
+          'Paramètres',
+          style: TextStyle(
+            color: DomoliaColors.goldLight,
+            fontSize: 25,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 20),
+        ListTile(
+          leading: const Icon(Icons.smart_toy_outlined, color: DomoliaColors.gold),
+          title: const Text('Configurations IA'),
+          subtitle: const Text('Profils, fournisseurs et modèles'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: _openAiSettings,
+        ),
+        const Divider(),
+        ListTile(
+          leading: const Icon(Icons.system_update_alt_rounded, color: DomoliaColors.gold),
+          title: const Text('Mises à jour'),
+          subtitle: const Text('Version installée, canal et préversions'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => setState(() => _page = _Page.updates),
+        ),
+      ],
+    ),
   );
 
   Widget _buildHome() {
@@ -501,12 +516,6 @@ class _HomePageState extends State<HomePage> {
                     onPressed: _checkForUpdates,
                     icon: const Icon(Icons.system_update_alt_rounded),
                     label: const Text('Mise à jour'),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () => _openUrl(_allReleasesUrl),
-                    icon: const Icon(Icons.new_releases_outlined),
-                    label: const Text('Toutes les versions'),
                   ),
                   const SizedBox(height: 22),
                   Text(
