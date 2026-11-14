@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:domolia/ai/ai_controller.dart';
+import 'package:domolia/ai/ai_diagnostics.dart';
 import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/books/book_definition.dart';
 import 'package:domolia/books/book_editor_page.dart';
@@ -34,6 +35,8 @@ class _MemoryBooks implements BookStore {
     definitions.remove(id);
     bindings.remove(id);
     savedSessions.removeWhere((key, item) => item.bookId == id);
+    savedDiagnostics.removeWhere((key, item) =>
+        !savedSessions.containsKey(item.sessionId));
   }
   @override
   Future<String?> profileIdForBook(String bookId) async => bindings[bookId];
@@ -53,6 +56,34 @@ class _MemoryBooks implements BookStore {
   @override
   Future<void> deleteSession(String id) async {
     savedSessions.remove(id);
+    savedDiagnostics.removeWhere((key, item) => item.sessionId == id);
+  }
+  final Map<String, StoredAiDiagnostic> savedDiagnostics = {};
+  @override
+  Future<void> putDiagnostic(
+      StoredAiDiagnostic diagnostic, int retentionLimit) async {
+    if (retentionLimit > 0) savedDiagnostics[diagnostic.id] = diagnostic;
+    final values = (await listDiagnostics(diagnostic.sessionId));
+    for (final old in values.skip(retentionLimit)) {
+      savedDiagnostics.remove(old.id);
+    }
+  }
+  @override
+  Future<List<StoredAiDiagnostic>> listDiagnostics(String sessionId) async =>
+      (savedDiagnostics.values.where((d) => d.sessionId == sessionId).toList()
+        ..sort((a, b) => b.createdAtUtc.compareTo(a.createdAtUtc)));
+  @override
+  Future<void> clearDiagnostics(String sessionId) async {
+    savedDiagnostics.removeWhere((key, value) => value.sessionId == sessionId);
+  }
+  @override
+  Future<void> pruneDiagnostics(int retentionLimit) async {
+    for (final session in savedSessions.values) {
+      final values = await listDiagnostics(session.id);
+      for (final old in values.skip(retentionLimit)) {
+        savedDiagnostics.remove(old.id);
+      }
+    }
   }
 }
 
