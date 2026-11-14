@@ -71,7 +71,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
       animation: chat,
       builder: (context, _) {
         final transcript = [
-          ...chat.messages,
+          ...chat.timeline,
           if (chat.preview != null) chat.preview!,
         ];
         return SafeArea(

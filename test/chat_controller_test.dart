@@ -197,7 +197,7 @@ void main() {
       ),
     );
     await noKey.send('Salut');
-    expect(noKey.error, contains('clé API'));
+    expect(noKey.error, contains('connexion IA'));
     expect(provider.requests, 0);
     noKey.dispose();
   });

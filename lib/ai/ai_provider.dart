@@ -366,9 +366,9 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
         final data = line.substring(5).trim();
         if (data == '[DONE]') {
           done = true;
-          break;
+          continue;
         }
-        if (data.isEmpty) continue;
+        if (data.isEmpty || done) continue;
         if (data.length > 131072) {
           throw const AiProviderException('Flux du fournisseur trop volumineux.');
         }

@@ -218,6 +218,7 @@ void main() {
       (tester) async {
     await showPage(tester, size: const Size(320, 900));
     final selector = find.byKey(const ValueKey('aiModelSelector'));
+    await tester.scrollUntilVisible(selector, 220);
     expect(selector, findsOneWidget);
     expect(tester.getSize(selector).width, greaterThan(235));
     await tester.tap(selector);

@@ -53,7 +53,7 @@ class PendingProvider implements AiChatProvider, AiStreamingChatProvider {
 void main() {
   testWidgets('Each speaker has a portrait, name and distinct chat bubble',
       (tester) async {
-    tester.view.physicalSize = const Size(420, 860);
+    tester.view.physicalSize = const Size(420, 1400);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
       tester.view.resetPhysicalSize();
@@ -149,6 +149,7 @@ void main() {
     await tester.enterText(find.byKey(const ValueKey('groupChatInput')), 'Salut');
     await tester.tap(find.byKey(const ValueKey('groupChatSend')));
     await tester.pump();
+    expect(controller.busy, true);
     expect(find.byKey(const ValueKey('groupChatStop')), findsOneWidget);
     provider.controller.add(AiStreamChunk(
       text: '{"speaker":"character","name":"Lina","text":"Bon',
