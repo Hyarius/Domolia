@@ -10,22 +10,30 @@ class BookSession {
     required this.bookId,
     required this.title,
     this.timeline = const [],
+    this.aiProfileId,
+    this.updatedAtUtc,
   });
 
   final String id;
   final String bookId;
   final String title;
   final List<ChatTimelineEvent> timeline;
+  /// Overrides the parent Book's default AI profile for this conversation.
+  final String? aiProfileId;
+  final DateTime? updatedAtUtc;
 
   static String freshId() =>
       'session-${DateTime.now().microsecondsSinceEpoch}-'
       '${Random.secure().nextInt(0x7fffffff)}';
 
-  BookSession copyWith({String? title, List<ChatTimelineEvent>? timeline}) => BookSession(
+  BookSession copyWith({String? title, List<ChatTimelineEvent>? timeline,
+      String? aiProfileId, bool clearAiProfile = false, DateTime? updatedAtUtc}) => BookSession(
         id: id,
         bookId: bookId,
         title: title ?? this.title,
         timeline: timeline ?? this.timeline,
+        aiProfileId: clearAiProfile ? null : aiProfileId ?? this.aiProfileId,
+        updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
       );
 
   String encodeTimeline() => jsonEncode([

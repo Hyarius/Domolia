@@ -3,6 +3,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../ai/ai_diagnostics.dart';
+import '../logging/app_logger.dart';
 import 'book_definition.dart';
 import 'book_session.dart';
 
@@ -63,10 +64,11 @@ class SqliteBookStore implements BookStore {
     final location = databasePath ?? path.join(
       (await getApplicationSupportDirectory()).path, 'domolia_books.sqlite',
     );
+    AppLogger.debug('Ouverture du stockage SQLite', component: 'books');
     return _db ??= await (_factoryOverride ?? databaseFactory).openDatabase(
       location,
       options: OpenDatabaseOptions(
-      version: 2,
+      version: 3,
       onConfigure: (db) async =>
           db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, version) async {
@@ -81,7 +83,7 @@ class SqliteBookStore implements BookStore {
         await db.execute(
           'CREATE TABLE sessions (id TEXT PRIMARY KEY, book_id TEXT NOT NULL, '
           'title TEXT NOT NULL, timeline_json TEXT NOT NULL, '
-          'updated_at INTEGER NOT NULL, '
+          'updated_at INTEGER NOT NULL, profile_id TEXT, '
           'FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE)',
         );
         await db.execute(
@@ -91,6 +93,9 @@ class SqliteBookStore implements BookStore {
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await _createDiagnostics(db);
+        if (oldVersion < 3) {
+          await db.execute('ALTER TABLE sessions ADD COLUMN profile_id TEXT');
+        }
       },
       ),
     );
@@ -157,6 +162,9 @@ class SqliteBookStore implements BookStore {
     bookId: row['book_id'] as String,
     title: row['title'] as String,
     timeline: BookSession.decodeTimeline(row['timeline_json'] as String),
+    aiProfileId: row['profile_id'] as String?,
+    updatedAtUtc: DateTime.fromMicrosecondsSinceEpoch(
+        row['updated_at'] as int, isUtc: true),
   );
 
   @override
@@ -175,6 +183,7 @@ class SqliteBookStore implements BookStore {
       'title': session.title,
       'timeline_json': session.encodeTimeline(),
       'updated_at': DateTime.now().microsecondsSinceEpoch,
+      'profile_id': session.aiProfileId,
     };
     // REPLACE deletes the existing SQLite row and cascades into diagnostics.
     // An in-place update preserves every retained AI exchange for this part.
