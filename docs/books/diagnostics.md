@@ -87,3 +87,37 @@ La base SQLite migre de la version 1 vers la version 2 sans effacer
 les Livres ou leurs parties. Chaque diagnostic reste rattaché à une seule
 partie par une clé étrangère ; la suppression de cette partie le supprime
 également.
+
+## Navigation et paramètres des Parties
+
+- **Accueil → Parties récentes** : liste verticale consultable par défilement,
+  classée par date de modification décroissante, tous Livres confondus.
+  Chaque Partie permet de reprendre directement la conversation sauvegardée.
+- **Conversation → Paramètres de la conversation** : sélectionner uniquement
+  un **profil IA déjà configuré**, ou utiliser le profil par défaut du Livre.
+  La création et l'édition des profils demeurent dans **Paramètres →
+  Configurations IA** ; la sélection de la Partie n'affecte pas les autres
+  Parties ni le profil global. Le bouton d'export du transcript se trouve
+  sur cette même page.
+- Dans le fil de conversation, les réponses du narrateur sont du **texte seul**
+  sans titre « Narrateur » ni avatar. Les identités de personnages et du joueur
+  restent affichées normalement.
+
+## Journal applicatif local
+
+**Paramètres → Logs** permet de consulter les événements, filtrer par sévérité,
+rechercher, copier, exporter un fichier JSONL et effacer le journal. Ce stockage
+est **distinct** des diagnostics IA et du contenu des Livres et Parties.
+Les événements comprennent un horodatage UTC, un niveau TRACE à ERROR, un
+composant et un message opérationnel. Les fichiers sont limités en taille et
+conservés par rotation, afin de ne pas croître sans limite. Les exceptions sont
+enregistrées par type et les éléments sensibles reconnaissables sont expurgés.
+Ne jamais écrire volontairement de clés, jetons, prompts ou corps HTTP bruts
+dans ces logs ; si vous les exportez, relisez-les avant tout partage.
+
+En cas de problème avec une couverture, le chargeur accepte les octets renvoyés
+par le sélecteur Android ou un chemin vers son fichier temporaire. La signature
+du fichier est vérifiée (PNG, JPEG ou WebP), puis sa taille (1 Mio au maximum).
+Le journal indique l'étape d'échec sans inclure l'image elle-même.
+Une validation sur appareil Android réel reste indispensable pour tester les
+différents fournisseurs de documents du téléphone.

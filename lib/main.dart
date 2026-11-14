@@ -589,8 +589,8 @@ class _HomePageState extends State<HomePage> {
                   Center(
                     child: Image.asset(
                       'assets/images/domolia_emblem.png',
-                      width: 170,
-                      height: 170,
+                      width: 108,
+                      height: 108,
                       semanticLabel: 'Bouclier doré Domolia',
                     ),
                   ),
@@ -618,31 +618,6 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(height: 25),
                   const _GoldSeparator(),
                   const SizedBox(height: 25),
-                  const _DomoliaPanel(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Hello World !',
-                          style: TextStyle(
-                            color: DomoliaColors.goldLight,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        SizedBox(height: 10),
-                        Text(
-                          'Votre aventure commence ici. '
-                          'Cette première version présente l’identité de '
-                          'Domolia et son système de mises à jour.',
-                          style: TextStyle(
-                            color: DomoliaColors.cream,
-                            height: 1.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                   const SizedBox(height: 24),
                   FilledButton.icon(
                     onPressed: _openBooks,
@@ -678,6 +653,32 @@ class _HomePageState extends State<HomePage> {
                         },
                       ),
                     ),
+                  const SizedBox(height: 22),
+                  const _DomoliaPanel(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Hello World !',
+                          style: TextStyle(
+                            color: DomoliaColors.goldLight,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SizedBox(height: 10),
+                        Text(
+                          'Votre aventure commence ici. '
+                          'Cette première version présente l’identité de '
+                          'Domolia et son système de mises à jour.',
+                          style: TextStyle(
+                            color: DomoliaColors.cream,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   FilledButton.icon(
                     onPressed: _checkForUpdates,
