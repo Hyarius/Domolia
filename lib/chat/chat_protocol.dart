@@ -2,40 +2,58 @@ import 'dart:convert';
 
 enum ChatSpeaker { player, narrator, character }
 
-class ChatEntry {
+sealed class ChatTimelineEvent {
+  const ChatTimelineEvent(this.id);
+  final int id;
+}
+
+class ChatEntry extends ChatTimelineEvent {
   const ChatEntry({
-    required this.id,
+    required int id,
     required this.speaker,
     required this.name,
     required this.text,
     this.inProgress = false,
-  });
-  final int id;
+  }) : super(id);
   final ChatSpeaker speaker;
   final String name;
   final String text;
   final bool inProgress;
 }
 
-class ChatLine {
+/// A titleless scene boundary, not a message or an avatar.
+class ChatSceneChange extends ChatTimelineEvent {
+  const ChatSceneChange({required int id}) : super(id);
+}
+
+sealed class ChatOutputEvent {
+  const ChatOutputEvent();
+}
+
+class ChatSceneChangeOutput extends ChatOutputEvent {
+  const ChatSceneChangeOutput();
+}
+
+class ChatLine extends ChatOutputEvent {
   const ChatLine({required this.speaker, required this.name, required this.text});
   final ChatSpeaker speaker;
   final String name;
   final String text;
 }
 
-/// One JSON object per line; the narrator is an ordinary speaker.
+/// NDJSON: a message or exactly {"type":"scene_change"}.
+/// The narrator is an ordinary speaker. Old untyped messages remain valid.
 /// No generated line can impersonate the player.
 class ChatLineDecoder {
   String _pending = '';
   int _parsed = 0;
 
-  List<ChatLine> add(String fragment) {
+  List<ChatOutputEvent> add(String fragment) {
     _pending += fragment;
     if (_pending.length > 131072) {
       throw const FormatException('Réponse structurée trop longue.');
     }
-    final lines = <ChatLine>[];
+    final lines = <ChatOutputEvent>[];
     while (true) {
       final end = _pending.indexOf('\n');
       if (end < 0) break;
@@ -46,13 +64,13 @@ class ChatLineDecoder {
     return lines;
   }
 
-  List<ChatLine> finish() {
+  List<ChatOutputEvent> finish() {
     final last = _pending.trim();
     _pending = '';
     return last.isEmpty ? const [] : [_parse(last)];
   }
 
-  ChatLine _parse(String line) {
+  ChatOutputEvent _parse(String line) {
     if (line.length > 8192 || _parsed >= 20) {
       throw const FormatException('Nombre ou taille de messages IA excessifs.');
     }
@@ -62,7 +80,19 @@ class ChatLineDecoder {
     } catch (_) {
       throw const FormatException('Le modèle n’a pas respecté le format des messages.');
     }
-    if (decoded is! Map<String, dynamic> ||
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('Événement IA structuré invalide.');
+    }
+    if (decoded['type'] == 'scene_change') {
+      if (decoded.length != 1) {
+        throw const FormatException(
+          'Un changement de scène ne contient ni titre ni métadonnées.',
+        );
+      }
+      _parsed++;
+      return const ChatSceneChangeOutput();
+    }
+    if ((decoded['type'] != null && decoded['type'] != 'message') ||
         decoded['speaker'] is! String ||
         decoded['name'] is! String ||
         decoded['text'] is! String) {
@@ -88,8 +118,13 @@ class ChatLineDecoder {
     throw const FormatException('L’IA ne peut pas parler à la place du joueur.');
   }
 
+  /// A partial scene boundary must not appear as a character bubble.
+  bool get isPendingSceneChange =>
+      RegExp(r'"type"\s*:\s*"scene_change"').hasMatch(_pending);
+
   /// Show the in-progress text, never JSON punctuation or control fields.
   ChatLine? get preview {
+    if (isPendingSceneChange) return null;
     final speakerMatch =
         RegExp(r'"speaker"\s*:\s*"(narrator|character)"').firstMatch(_pending);
     final nameMatch =
