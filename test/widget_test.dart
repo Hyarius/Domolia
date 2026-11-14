@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:domolia/main.dart';
 import 'package:domolia/ai/ai_settings_panel.dart';
+import 'package:domolia/ai/ai_controller.dart';
+import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/theme/domolia_theme.dart';
 import 'package:domolia/updates/update_service.dart';
 import 'package:domolia/updates/update_widgets.dart';
@@ -49,6 +51,27 @@ class _Prefs implements UpdatePreferences {
   Future<void> setChannel(String c) async {}
   @override
   Future<void> setAutomatic(bool e) async {enabled=e;}
+}
+
+class _MemoryAiProfiles implements AiProfileStore {
+  AiProfilesState? state;
+
+  @override
+  Future<AiProfilesState?> read() async => state;
+
+  @override
+  Future<void> write(AiProfilesState value) async { state = value; }
+}
+
+class _NeverCallAi implements AiChatProvider {
+  @override
+  Future<List<AiModel>> listModels(AiConfiguration configuration) async =>
+      throw StateError('Aucun appel réseau dans le test de navigation');
+
+  @override
+  Future<String> complete(AiConfiguration configuration, {
+    required List<AiMessage> messages, int maxTokens = 1200,
+  }) async => throw StateError('Aucun appel réseau dans le test de navigation');
 }
 
 void main() {
@@ -209,7 +232,16 @@ void main() {
   testWidgets('Les réglages IA et les versions sont dans Paramètres',
       (tester) async {
     prefs.enabled = false;
-    await tester.pumpWidget(DomoliaApp(updateController: updates));
+    // Inject a deterministic, local AI profile store. Secure storage plugins
+    // are unavailable in Flutter widget tests and leave a pending spinner.
+    final ai = AiConnectionController(
+      store: _MemoryAiProfiles(), provider: _NeverCallAi(),
+    );
+    addTearDown(ai.dispose);
+    await ai.initialize();
+    await tester.pumpWidget(DomoliaApp(
+      updateController: updates, aiController: ai,
+    ));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.menu));
