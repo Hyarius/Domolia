@@ -127,6 +127,8 @@ class BookLibraryController extends ChangeNotifier {
 
   Future<void> saveSession(BookSession session) => store.putSession(session);
 
+  Future<void> deleteSession(String id) => store.deleteSession(id);
+
   @override
   void dispose() {
     _closed = true;

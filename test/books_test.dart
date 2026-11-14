@@ -50,6 +50,10 @@ class _MemoryBooks implements BookStore {
   Future<void> putSession(BookSession session) async {
     savedSessions[session.id] = session;
   }
+  @override
+  Future<void> deleteSession(String id) async {
+    savedSessions.remove(id);
+  }
 }
 
 class _Legacy implements NarratorSettingsStore {

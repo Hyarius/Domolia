@@ -17,6 +17,7 @@ abstract interface class BookStore {
   Future<List<BookSession>> listSessions(String bookId);
   Future<BookSession?> findSession(String id);
   Future<void> putSession(BookSession session);
+  Future<void> deleteSession(String id);
 }
 
 class SqliteBookStore implements BookStore {
@@ -133,6 +134,11 @@ class SqliteBookStore implements BookStore {
       'timeline_json': session.encodeTimeline(),
       'updated_at': DateTime.now().microsecondsSinceEpoch,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  @override
+  Future<void> deleteSession(String id) async {
+    await (await database).delete('sessions', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> close() async {

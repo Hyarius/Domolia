@@ -21,10 +21,10 @@ class BookSession {
       'session-${DateTime.now().microsecondsSinceEpoch}-'
       '${Random.secure().nextInt(0x7fffffff)}';
 
-  BookSession copyWith({List<ChatTimelineEvent>? timeline}) => BookSession(
+  BookSession copyWith({String? title, List<ChatTimelineEvent>? timeline}) => BookSession(
         id: id,
         bookId: bookId,
-        title: title,
+        title: title ?? this.title,
         timeline: timeline ?? this.timeline,
       );
 
