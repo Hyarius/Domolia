@@ -176,12 +176,14 @@ class SqliteBookStore implements BookStore {
     };
     // REPLACE deletes the existing SQLite row and cascades into diagnostics.
     // An in-place update preserves every retained AI exchange for this part.
-    final updated = await db.update(
-      'sessions', values, where: 'id = ?', whereArgs: [session.id],
-    );
-    if (updated == 0) {
-      await db.insert('sessions', {'id': session.id, ...values});
-    }
+    await db.transaction((txn) async {
+      final updated = await txn.update(
+        'sessions', values, where: 'id = ?', whereArgs: [session.id],
+      );
+      if (updated == 0) {
+        await txn.insert('sessions', {'id': session.id, ...values});
+      }
+    });
   }
 
   @override
