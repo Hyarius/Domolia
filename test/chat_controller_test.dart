@@ -41,6 +41,7 @@ class FakeStreamingProvider implements AiChatProvider, AiStreamingChatProvider {
 
 class SimpleProvider implements AiChatProvider {
   String text = '';
+  List<AiMessage>? lastContext;
   @override
   Future<List<AiModel>> listModels(AiConfiguration config) async => [];
   @override
@@ -48,7 +49,10 @@ class SimpleProvider implements AiChatProvider {
     AiConfiguration config, {
     required List<AiMessage> messages,
     int maxTokens = 1200,
-  }) async => text;
+  }) async {
+    lastContext = messages;
+    return text;
+  }
 }
 
 const credentials = AiConfiguration(
@@ -361,13 +365,12 @@ void main() {
     expect((current.timeline.first as ChatEntry).text, 'Je ferme la porte.');
     expect((current.timeline.last as ChatEntry).text, 'La nouvelle histoire.');
     expect(current.timeline.last.id, greaterThan(5));
-    // A regenerated request must never contain the discarded future.
-    final second = SimpleProvider()..text =
-        line('narrator', 'Narrateur', 'La suite.');
-    // Verify the last generated context directly via a capturing provider
-    // in the next independent test.
+    // The request uses the edited text, never the discarded future.
+    expect(scripted.lastContext!.last.role, 'user');
+    expect(scripted.lastContext!.last.content, 'Je ferme la porte.');
+    expect(scripted.lastContext!.map((e) => e.content).join('\n'),
+        isNot(contains('La suite à supprimer.')));
     expect(current.error, isNull);
-    expect(second.text, contains('La suite.'));
   });
 
   test('Regenerating any AI bubble replays the entire originating turn',
