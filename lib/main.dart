@@ -97,6 +97,15 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  void _checkForUpdates() {
+    // Manual checks always have a visible result; startup auto-checks do not.
+    unawaited(_updates.checkNow());
+    showDialog<void>(
+      context: context,
+      builder: (_) => UpdateCheckDialog(controller: _updates),
+    );
+  }
+
   void _showPage(_Page page) {
     Navigator.pop(context); // Ferme le menu latéral.
     setState(() => _page = page);
@@ -119,7 +128,7 @@ class _HomePageState extends State<HomePage> {
         actions: [
           IconButton(
             tooltip: 'Mise à jour',
-            onPressed: () => unawaited(_updates.checkNow()),
+            onPressed: _checkForUpdates,
             icon: const Icon(Icons.system_update_alt_rounded),
           ),
         ],
@@ -217,7 +226,7 @@ class _HomePageState extends State<HomePage> {
               iconColor: DomoliaColors.gold,
               onTap: () {
                 Navigator.pop(context);
-                unawaited(_updates.checkNow());
+                _checkForUpdates();
               },
             ),
             ListTile(
@@ -249,6 +258,7 @@ class _HomePageState extends State<HomePage> {
   Widget _buildSettings() => UpdateSettingsPanel(
     controller: _updates,
     onConfigureAi: () => setState(() => _page = _Page.ai),
+    onCheckManually: _checkForUpdates,
   );
 
   Widget _buildHome() {
@@ -321,7 +331,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 24),
                   FilledButton.icon(
-                    onPressed: () => unawaited(_updates.checkNow()),
+                    onPressed: _checkForUpdates,
                     icon: const Icon(Icons.system_update_alt_rounded),
                     label: const Text('Mise à jour'),
                   ),
