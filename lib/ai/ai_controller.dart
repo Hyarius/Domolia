@@ -1,16 +1,30 @@
 import 'package:flutter/foundation.dart';
 
 import 'ai_provider.dart';
+import 'chatgpt_auth.dart';
 
 enum AiConnectionStatus { untested, testing, connected, invalid }
+
+class AiConnectionBinding {
+  const AiConnectionBinding({required this.provider, required this.configuration});
+  final AiChatProvider provider;
+  final AiConfiguration configuration;
+}
 
 /// Keeps per-profile connection status only for the running session.
 /// A green state never claims continued connectivity after app restart.
 class AiConnectionController extends ChangeNotifier {
-  AiConnectionController({required this.store, required this.provider});
+  AiConnectionController({
+    required this.store,
+    required this.provider,
+    this.chatGpt,
+    this.chatGptProvider,
+  });
 
   final AiProfileStore store;
   final AiChatProvider provider;
+  final ChatGptAccountService? chatGpt;
+  final AiChatProvider? chatGptProvider;
 
   List<AiProfile> _profiles = const [];
   String _selectedId = '';
@@ -30,6 +44,7 @@ class AiConnectionController extends ChangeNotifier {
   String get selectedProfileId => _selectedId;
   AiProfile get selectedProfile =>
       _profiles.firstWhere((entry) => entry.id == _selectedId);
+  AiProviderKind get selectedKind => selectedProfile.kind;
   String get baseUrl => selectedProfile.baseUrl;
   String get model => selectedProfile.model;
   bool get hasKey => selectedProfile.apiKey.isNotEmpty;
@@ -156,6 +171,147 @@ class AiConnectionController extends ChangeNotifier {
     }
   }
 
+
+  /// The stable named profile is the routing handle, independent of backend.
+  Future<AiConnectionBinding> connectionForProfile(String id) async {
+    final profile = _profiles.firstWhere(
+      (item) => item.id == id,
+      orElse: () => throw const AiProviderException('Profil IA introuvable.'),
+    );
+    if (profile.kind == AiProviderKind.customAi) {
+      return AiConnectionBinding(
+        provider: provider,
+        configuration: profile.configuration,
+      );
+    }
+    if (chatGpt == null || chatGptProvider == null) {
+      throw const AiProviderException('Connexion ChatGPT indisponible.');
+    }
+    final token = await chatGpt!.accessToken(id);
+    return AiConnectionBinding(
+      provider: chatGptProvider!,
+      configuration: AiConfiguration(
+        baseUrl: 'https://api.openai.com/v1',
+        model: profile.model,
+        apiKey: token,
+      ),
+    );
+  }
+
+  Future<AiConnectionBinding> get activeConnection =>
+      connectionForProfile(_selectedId);
+
+  Future<bool> setProviderKind(AiProviderKind kind) async {
+    if (_closed || busy || selectedKind == kind) return false;
+    busy = true;
+    _notify();
+    try {
+      final next = [
+        for (final item in _profiles)
+          item.id == _selectedId ? item.copyWith(kind: kind) : item,
+      ];
+      await store.write(AiProfilesState(profiles: next, selectedId: _selectedId));
+      _profiles = next;
+      _invalidate(_selectedId);
+      message = null;
+      return true;
+    } catch (_) {
+      message = 'Impossible de modifier le fournisseur de ce profil.';
+      return false;
+    } finally {
+      busy = false;
+      _notify();
+    }
+  }
+
+  Future<void> connectChatGpt() async {
+    if (_closed || busy || selectedKind != AiProviderKind.chatGpt) return;
+    final id = _selectedId;
+    busy = true;
+    message = null;
+    _statuses[id] = AiConnectionStatus.testing;
+    _errors.remove(id);
+    _notify();
+    try {
+      if (chatGpt == null) {
+        throw const AiProviderException('Connexion ChatGPT indisponible.');
+      }
+      final session = await chatGpt!.signIn(id);
+      if (!session.planEnabled) {
+        throw const AiProviderException(
+          'Compte connecté, mais l’utilisation de votre forfait n’est pas autorisée.',
+        );
+      }
+      final fetched = await chatGpt!.listModels(id);
+      _catalogues[id] = fetched;
+      if (fetched.isNotEmpty &&
+          !fetched.any((model) => model.id == selectedProfile.model)) {
+        final next = [
+          for (final profile in _profiles)
+            profile.id == id
+                ? profile.copyWith(model: fetched.first.id)
+                : profile,
+        ];
+        await store.write(AiProfilesState(profiles: next, selectedId: id));
+        _profiles = next;
+      }
+      _statuses[id] = AiConnectionStatus.connected;
+      message = 'Compte ChatGPT connecté : ${session.email}.';
+    } on AiProviderException catch (failure) {
+      _statuses[id] = AiConnectionStatus.invalid;
+      _errors[id] = failure.userMessage;
+    } catch (_) {
+      _statuses[id] = AiConnectionStatus.invalid;
+      _errors[id] = 'Connexion ChatGPT impossible. Réessayez.';
+    } finally {
+      busy = false;
+      _notify();
+    }
+  }
+
+  Future<ChatGptSession?> get chatGptSession async =>
+      chatGpt?.session(_selectedId);
+
+  Future<void> disconnectChatGpt() async {
+    if (_closed || busy || selectedKind != AiProviderKind.chatGpt) return;
+    busy = true;
+    _notify();
+    try {
+      await chatGpt?.disconnect(_selectedId);
+      _invalidate(_selectedId);
+      message = 'Compte ChatGPT déconnecté.';
+    } on AiProviderException catch (failure) {
+      _invalidate(_selectedId);
+      message = failure.userMessage;
+    } catch (_) {
+      _invalidate(_selectedId);
+      message = 'Révocation distante non confirmée. Vérifiez ChatGPT.';
+    } finally {
+      busy = false;
+      _notify();
+    }
+  }
+
+  Future<bool> selectChatGptModel(String id) async {
+    if (_closed || busy || selectedKind != AiProviderKind.chatGpt) return false;
+    try {
+      final value = validatedAiModel(id);
+      final next = [
+        for (final profile in _profiles)
+          profile.id == _selectedId ? profile.copyWith(model: value) : profile,
+      ];
+      await store.write(AiProfilesState(profiles: next, selectedId: _selectedId));
+      _profiles = next;
+      _invalidate(_selectedId);
+      return true;
+    } catch (_) {
+      message = 'Impossible de sélectionner le modèle ChatGPT.';
+      return false;
+    } finally {
+      _notify();
+    }
+  }
+
   Future<bool> renameProfile(String input) async {
     if (_closed || busy) return false;
     final name = _validName(input);
@@ -189,6 +345,13 @@ class AiConnectionController extends ChangeNotifier {
       final next = _profiles.where((entry) => entry.id != removedId).toList();
       final nextId = next.first.id;
       await store.write(AiProfilesState(profiles: next, selectedId: nextId));
+      if (chatGpt != null) {
+        try {
+          await chatGpt!.delete(removedId);
+        } catch (_) {
+          // Local credentials are cleared by the account service.
+        }
+      }
       _profiles = next;
       _selectedId = nextId;
       // The deleted key is removed from the encrypted persisted snapshot.
@@ -220,6 +383,11 @@ class AiConnectionController extends ChangeNotifier {
     message = null;
     _notify();
     try {
+      if (selectedKind != AiProviderKind.customAi) {
+        throw const AiProviderException(
+          'Les paramètres ChatGPT sont gérés par la connexion au compte.',
+        );
+      }
       final normalizedUrl = validatedAiBaseUrl(url);
       final normalizedModel = validatedAiModel(selectedModel);
       final current = selectedProfile;
@@ -282,6 +450,16 @@ class AiConnectionController extends ChangeNotifier {
     message = null;
     _notify();
     try {
+      if (selectedKind == AiProviderKind.chatGpt) {
+        if (chatGpt == null) {
+          throw const AiProviderException('Connexion ChatGPT indisponible.');
+        }
+        final list = await chatGpt!.listModels(_selectedId);
+        _catalogues[_selectedId] = list;
+        message = list.isEmpty ? 'Aucun modèle ChatGPT disponible.'
+            : 'Catalogue ChatGPT chargé.';
+        return;
+      }
       final configuration = selectedProfile.configuration;
       if (configuration.apiKey.isEmpty) {
         throw const AiProviderException(
@@ -313,12 +491,12 @@ class AiConnectionController extends ChangeNotifier {
     _statuses[id] = AiConnectionStatus.testing;
     _notify();
     try {
-      final configuration = selectedProfile.configuration;
-      if (configuration.apiKey.isEmpty) {
+      final binding = await connectionForProfile(id);
+      if (binding.configuration.apiKey.isEmpty) {
         throw const AiProviderException('Enregistrez une clé API avant de tester.');
       }
-      final reply = await provider.complete(
-        configuration,
+      final reply = await binding.provider.complete(
+        binding.configuration,
         messages: const [
           AiMessage(
             role: 'user',
