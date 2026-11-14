@@ -285,6 +285,8 @@ void main() {
     expect(find.byKey(const ValueKey('bookOpenings')), findsOneWidget);
     await tester.tap(find.text('Livre').last);
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('bookNsfw')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('bookNsfw')));
     await tester.pumpAndSettle();
     expect(library.byId(book.id)!.nsfw, true);
