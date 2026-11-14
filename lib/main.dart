@@ -12,6 +12,8 @@ import 'ai/ai_controller.dart';
 import 'ai/ai_provider.dart';
 import 'ai/ai_settings_panel.dart';
 import 'ai/ai_storage.dart';
+import 'ai/chatgpt_auth.dart';
+import 'ai/chatgpt_responses.dart';
 import 'updates/update_service.dart';
 import 'updates/update_io.dart';
 import 'updates/update_widgets.dart';
@@ -84,6 +86,8 @@ class _HomePageState extends State<HomePage> {
     _ai = widget.ai ?? AiConnectionController(
       store: SecureAiProfileStore(),
       provider: OpenAiCompatibleChatProvider(),
+      chatGpt: ChatGptAuthService(store: SecureChatGptSessionStore()),
+      chatGptProvider: ChatGptResponsesProvider(),
     );
     _ownsChat = widget.chat == null;
     _chat = widget.chat ?? NarrativeChatController(
@@ -91,6 +95,14 @@ class _HomePageState extends State<HomePage> {
       configuration: () => _ai.initialized && _ai.profiles.isNotEmpty
           ? _ai.selectedProfile.configuration
           : null,
+      resolveConnection: () async {
+        await _ai.initialize();
+        final binding = await _ai.activeConnection;
+        return NarrativeAiEndpoint(
+          provider: binding.provider,
+          configuration: binding.configuration,
+        );
+      },
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_updates.initialize());
