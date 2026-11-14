@@ -31,7 +31,7 @@ L'application est exécutée sur le téléphone avec des données locales (SQLit
 
 - **[PR01 — Socle Android, identité et distribution](PR01.md)** — fusionnée : Domolia s'installe sur Android avec son thème vert/or et un canal GitHub de préversions utilisables.
 - **[PR02 — Mise à jour Android depuis l'application](PR02.md)** — fusionnée : L'utilisateur découvre une nouvelle préversion, la télécharge dans Domolia et peut lancer son installation sans visiter GitHub manuellement.
-- **[PR03 — Connexion sécurisée à OpenUncensored](PR03.md)** : Depuis les paramètres, l'utilisateur configure sa clé OpenUncensored, sélectionne un modèle et vérifie que la connexion fonctionne.
+- **[PR03 — Connexion sécurisée à OpenUncensored](PR03.md)** — fusionnée : Depuis les paramètres, l'utilisateur configure sa clé OpenUncensored, sélectionne un modèle et vérifie que la connexion fonctionne.
 - **[PR04 — Premier chat narratif utilisable](PR04.md)** : L'utilisateur peut écrire des actions et recevoir une narration en français, progressivement, depuis son téléphone.
 - **[PR05 — Aventures et conversations persistantes](PR05.md)** : Les aventures peuvent être créées, nommées, rouvertes et poursuivies après fermeture de Domolia.
 - **[PR06 — Narrateur RP, liberté du joueur et préférences](PR06.md)** : Le chat devient un véritable jeu de rôle narratif en français : aventures, exploration, quotidien et relations, sans voler les décisions du personnage joueur.

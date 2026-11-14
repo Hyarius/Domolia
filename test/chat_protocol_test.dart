@@ -44,7 +44,7 @@ void main() {
     });
     parser.add(raw.substring(0, raw.length - 3));
     expect(parser.preview!.text, contains('Bonjour'));
-    final parsed = parser.add(raw.substring(raw.length - 3) + '\n');
+    final parsed = parser.add('${raw.substring(raw.length - 3)}\n');
     expect(parsed.single.text, 'Elle dit : "Bonjour".');
   });
 
@@ -67,7 +67,7 @@ void main() {
   ]) {
     test('Invalid / player-spoofing model output rejected', () {
       final parser = ChatLineDecoder();
-      expect(() => parser.add(raw + '\n'), throwsFormatException);
+      expect(() => parser.add('$raw\n'), throwsFormatException);
     });
   }
 
@@ -76,8 +76,8 @@ void main() {
     final line = jsonEncode({
       'speaker': 'narrator', 'name': 'Narrateur', 'text': 'Une phrase.',
     });
-    expect(parser.add(List.filled(20, line).join('\n') + '\n'), hasLength(20));
-    expect(() => parser.add(line + '\n'), throwsFormatException);
+    expect(parser.add('${List.filled(20, line).join('\n')}\n'), hasLength(20));
+    expect(() => parser.add('$line\n'), throwsFormatException);
   });
 
   test('Long model stream rejected', () {

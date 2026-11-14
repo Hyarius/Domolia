@@ -154,3 +154,11 @@ Les vérifications **manuelles** des mises à jour affichent une fenêtre avec u
 ### Plusieurs connexions IA
 
 Dans « Fournisseur IA », le menu **Configuration API** en haut de page permet de conserver autant de comptes ou fournisseurs que nécessaire. **+** crée un profil nommé ; **⋮** le renomme ou le supprime. Le statut à droite concerne exclusivement le profil sélectionné : « Non testé », « En cours », « Connecté » ou « Invalide ». En cas d'échec, le chevron ouvre la raison détaillée, sans afficher la clé API. La liste des configurations et leurs secrets sont stockés de manière chiffrée et migrés automatiquement depuis l'ancien réglage unique, sans perdre sa clé.
+
+## Chat narratif en groupe — PR04
+
+L'écran **Conversation** s'ouvre depuis l'accueil ou le menu. Il ressemble à une discussion de groupe : chaque message est précédé de son **nom** et de son **avatar**, et possède sa bulle distincte. « Vous », « Narrateur » et chaque personnage peuvent s'exprimer dans leur propre bulle. Le narrateur n'est pas une sortie de texte spéciale : c'est un participant de la scène.
+
+Le moteur de dialogue demande aux modèles un format **une ligne JSON par prise de parole** et affiche progressivement le texte dans les bulles. Le joueur conserve l'exclusivité de ses actions et de ses paroles. L'utilisateur peut arrêter la génération, réessayer une erreur et régénérer la dernière réponse. Les conversations restent temporaires avant la PR05.
+
+**Important :** dans l'application, « Envoyer » contacte l'API configurée par l'utilisateur, y compris lorsqu'elle est payante. Les tests automatisés de la PR04 utilisent **uniquement des modèles et flux mockés localement**, jamais les API réelles (gratuites ou payantes). Aucun crédit externe n'est consommé pendant la CI.

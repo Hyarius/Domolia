@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/chat/chat_controller.dart';
-import 'package:domolia/chat/chat_protocol.dart';
 import 'package:domolia/chat/group_chat_page.dart';
 import 'package:domolia/theme/domolia_theme.dart';
 import 'package:flutter_test/flutter_test.dart';
