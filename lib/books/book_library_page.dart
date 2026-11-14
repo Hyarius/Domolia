@@ -241,16 +241,22 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                                       IconButton(
                                         tooltip: 'Ouvrir ${book.title}',
                                         onPressed: () => widget.onOpen(book),
+                                        constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
+                                        padding: EdgeInsets.zero,
                                         icon: const Icon(Icons.tune_rounded),
                                       ),
                                       IconButton(
                                         tooltip: 'Exporter ${book.title}',
                                         onPressed: () => _export(book),
+                                        constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
+                                        padding: EdgeInsets.zero,
                                         icon: const Icon(Icons.file_download_outlined),
                                       ),
                                       IconButton(
                                         tooltip: 'Supprimer ${book.title}',
                                         onPressed: () => _delete(book),
+                                        constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
+                                        padding: EdgeInsets.zero,
                                         icon: const Icon(Icons.delete_outline),
                                       ),
                                     ],

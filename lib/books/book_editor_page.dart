@@ -85,7 +85,7 @@ class _BookEditorPageState extends State<BookEditorPage> {
             .where((line) => line.isNotEmpty).toList(),
       );
       await widget.library.save(updated);
-      _book = updated;
+      if (mounted) setState(() => _book = updated);
       return true;
     } on FormatException catch (error) {
       _show(error.message);

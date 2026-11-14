@@ -22,9 +22,9 @@ abstract interface class BookStore {
 
 class SqliteBookStore implements BookStore {
   SqliteBookStore({DatabaseFactory? factory, this.databasePath})
-      : _factory = factory ?? databaseFactory;
+      : _factoryOverride = factory;
 
-  final DatabaseFactory _factory;
+  final DatabaseFactory? _factoryOverride;
   final String? databasePath;
   Database? _db;
 
@@ -33,7 +33,7 @@ class SqliteBookStore implements BookStore {
     final location = databasePath ?? path.join(
       (await getApplicationSupportDirectory()).path, 'domolia_books.sqlite',
     );
-    return _db ??= await _factory.openDatabase(
+    return _db ??= await (_factoryOverride ?? databaseFactory).openDatabase(
       location,
       options: OpenDatabaseOptions(
       version: 1,

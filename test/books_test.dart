@@ -287,7 +287,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('bookNsfw')));
     await tester.pumpAndSettle();
+    expect(library.byId(book.id)!.nsfw, true);
     await tester.tap(find.text('Système'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byKey(const ValueKey('bookTab-2')),
+        const Offset(0, -500));
     await tester.pumpAndSettle();
     expect(find.textContaining('ne prend pas en charge le mode NSFW'),
       findsOneWidget);
