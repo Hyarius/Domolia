@@ -214,6 +214,18 @@ void main() {
     expect(find.byKey(const ValueKey('aiStatusErrorDialog')), findsNothing);
   });
 
+  testWidgets('Long model identifier wraps in the small phone menu',
+      (tester) async {
+    await showPage(tester, size: const Size(320, 900));
+    final selector = find.byKey(const ValueKey('aiModelSelector'));
+    expect(selector, findsOneWidget);
+    expect(tester.getSize(selector).width, greaterThan(250));
+    await tester.tap(selector);
+    await tester.pumpAndSettle();
+    expect(find.text(defaultAiModel), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Phone layout gives profile and status the full readable width',
       (tester) async {
     await showPage(tester, size: const Size(320, 900));
