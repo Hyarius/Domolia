@@ -537,11 +537,12 @@ class _GroupChatPageState extends State<GroupChatPage> {
                               key: ValueKey('chat-scene-${entry.id}'),
                             );
                           }
+                          final bubble = entry as ChatEntry;
                           return _ChatBubble(
-                            key: ValueKey('chat-entry-${entry.id}'),
-                            entry: entry,
-                            onLongPress: entry.inProgress
-                                 ? null : () => _showMessageActions(entry),
+                            key: ValueKey('chat-entry-${bubble.id}'),
+                            entry: bubble,
+                            onLongPress: bubble.inProgress
+                                ? null : () => _showMessageActions(bubble),
                           );
                         },
                       ),
