@@ -171,4 +171,15 @@ class StoredAiDiagnostic {
     final response = data['response'];
     return response is Map<String, dynamic> ? response['statusCode'] as int? : null;
   }
+
+  /// An AI request can produce multiple chat bubbles; each keeps its own
+  /// event ID in the interpreted events of the exact captured HTTP exchange.
+  bool containsMessage(int messageId) {
+    final interpretation = data['interpretation'];
+    if (interpretation is! Map<String, dynamic>) return false;
+    final events = interpretation['events'];
+    if (events is! List) return false;
+    return events.any((event) => event is Map &&
+        event['type'] == 'message' && event['id'] == messageId);
+  }
 }
