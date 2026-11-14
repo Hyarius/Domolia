@@ -8,6 +8,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'theme/domolia_theme.dart';
 import 'chat/chat_controller.dart';
 import 'chat/group_chat_page.dart';
+import 'chat/narrator_settings.dart';
+import 'chat/narrator_settings_page.dart';
 import 'ai/ai_controller.dart';
 import 'ai/ai_provider.dart';
 import 'ai/ai_settings_panel.dart';
@@ -28,11 +30,13 @@ class DomoliaApp extends StatelessWidget {
     this.updateController,
     this.aiController,
     this.chatController,
+    this.narratorSettingsController,
   });
 
   final UpdateController? updateController;
   final AiConnectionController? aiController;
   final NarrativeChatController? chatController;
+  final NarratorSettingsController? narratorSettingsController;
 
   @override
   Widget build(BuildContext context) {
@@ -51,18 +55,26 @@ class DomoliaApp extends StatelessWidget {
         updates: updateController,
         ai: aiController,
         chat: chatController,
+        narratorSettings: narratorSettingsController,
       ),
     );
   }
 }
 
-enum _Page { home, chat, about, updates, ai }
+enum _Page { home, chat, narrator, about, updates, ai }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, this.updates, this.ai, this.chat});
+  const HomePage({
+    super.key,
+    this.updates,
+    this.ai,
+    this.chat,
+    this.narratorSettings,
+  });
   final UpdateController? updates;
   final AiConnectionController? ai;
   final NarrativeChatController? chat;
+  final NarratorSettingsController? narratorSettings;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -76,6 +88,8 @@ class _HomePageState extends State<HomePage> {
   late final bool _ownsAi;
   late final NarrativeChatController _chat;
   late final bool _ownsChat;
+  late final NarratorSettingsController _narratorSettings;
+  late final bool _ownsNarratorSettings;
 
   @override
   void initState() {
@@ -89,9 +103,14 @@ class _HomePageState extends State<HomePage> {
       chatGpt: ChatGptAuthService(store: SecureChatGptSessionStore()),
       chatGptProvider: ChatGptResponsesProvider(),
     );
+    _ownsNarratorSettings = widget.narratorSettings == null;
+    _narratorSettings = widget.narratorSettings ?? NarratorSettingsController(
+      store: LocalNarratorSettingsStore(),
+    );
     _ownsChat = widget.chat == null;
     _chat = widget.chat ?? NarrativeChatController(
       provider: _ai.provider,
+      narratorProvider: () => _narratorSettings.narrator,
       configuration: () => _ai.initialized && _ai.profiles.isNotEmpty
           ? _ai.selectedProfile.configuration
           : null,
@@ -113,6 +132,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     if (_ownsUpdates) _updates.dispose();
     if (_ownsChat) _chat.dispose();
+    if (_ownsNarratorSettings) _narratorSettings.dispose();
     if (_ownsAi) _ai.dispose();
     super.dispose();
   }
@@ -144,6 +164,19 @@ class _HomePageState extends State<HomePage> {
   void _openChat() {
     unawaited(_ai.initialize());
     setState(() => _page = _Page.chat);
+    unawaited(_prepareChat());
+  }
+
+  Future<void> _prepareChat() async {
+    await _narratorSettings.initialize();
+    if (!mounted) return;
+    _chat.beginConversation();
+    setState(() {});
+  }
+
+  void _openNarratorSettings() {
+    unawaited(_narratorSettings.initialize());
+    setState(() => _page = _Page.narrator);
   }
 
   void _openAiSettings() {
@@ -183,9 +216,14 @@ class _HomePageState extends State<HomePage> {
         if (_updates.phase == UpdatePhase.downloading)
           UpdateProgressStrip(controller: _updates),
         Expanded(child: _page == _Page.home ? _buildHome()
-          : _page == _Page.chat ? GroupChatPage(
-              controller: _chat,
-              onOpenSettings: _openAiSettings,
+          : _page == _Page.chat ?
+              _narratorSettings.initialized ? GroupChatPage(
+                controller: _chat,
+                onOpenSettings: _openAiSettings,
+              ) : const Center(child: CircularProgressIndicator())
+          : _page == _Page.narrator ? NarratorSettingsPage(
+              controller: _narratorSettings,
+              onBack: () => setState(() => _page = _Page.updates),
             )
           : _page == _Page.about ? _buildAbout()
           : _page == _Page.ai ? AiSettingsPanel(
@@ -276,6 +314,17 @@ class _HomePageState extends State<HomePage> {
               onTap: () => _showPage(_Page.updates),
             ),
             ListTile(
+              leading: const Icon(Icons.auto_stories_outlined),
+              title: const Text('Narrateur'),
+              selected: _page == _Page.narrator,
+              selectedColor: DomoliaColors.goldLight,
+              selectedTileColor: DomoliaColors.raisedSurface,
+              onTap: () {
+                Navigator.pop(context);
+                _openNarratorSettings();
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.smart_toy_outlined),
               title: const Text('Fournisseur IA'),
               onTap: () => _showPage(_Page.ai),
@@ -317,7 +366,8 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildSettings() => UpdateSettingsPanel(
     controller: _updates,
-    onConfigureAi: () => setState(() => _page = _Page.ai),
+    onConfigureAi: _openAiSettings,
+    onConfigureNarrator: _openNarratorSettings,
     onCheckManually: _checkForUpdates,
   );
 
