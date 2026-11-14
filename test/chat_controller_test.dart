@@ -80,7 +80,7 @@ void main() {
   });
 
   test('Streaming progressively reveals speaker-specific bubbles', () async {
-    provider.pipe = StreamController<AiStreamChunk>();
+    provider.pipe = StreamController<AiStreamChunk>.broadcast();
     final pending = chat.send('Je frappe à la porte.');
     expect(chat.busy, true);
     expect(chat.messages, hasLength(1));
@@ -117,7 +117,7 @@ void main() {
   });
 
   test('Stop cancels the stream without removing player action', () async {
-    provider.pipe = StreamController<AiStreamChunk>();
+    provider.pipe = StreamController<AiStreamChunk>.broadcast();
     final pending = chat.send('Je cours.');
     await Future<void>.delayed(Duration.zero);
     chat.stop();
@@ -130,7 +130,7 @@ void main() {
   });
 
   test('Retry after an invalid response never duplicates player message', () async {
-    provider.pipe = StreamController<AiStreamChunk>();
+    provider.pipe = StreamController<AiStreamChunk>.broadcast();
     final first = chat.send('Où suis-je ?');
     provider.pipe!.add(const AiStreamChunk(text: 'Je suis du texte sans JSON\n'));
     await provider.pipe!.close();
@@ -138,7 +138,7 @@ void main() {
     expect(chat.error, isNotNull);
     expect(chat.messages, hasLength(1));
 
-    provider.pipe = StreamController<AiStreamChunk>();
+    provider.pipe = StreamController<AiStreamChunk>.broadcast();
     final retry = chat.retry();
     provider.pipe!.add(AiStreamChunk(
       text: line('narrator', 'Narrateur', 'Tu es dans une auberge.'),
@@ -152,7 +152,7 @@ void main() {
   });
 
   test('Regenerate replaces AI replies, preserving previous player input', () async {
-    provider.pipe = StreamController<AiStreamChunk>();
+    provider.pipe = StreamController<AiStreamChunk>.broadcast();
     final first = chat.send('Je regarde autour de moi.');
     provider.pipe!.add(AiStreamChunk(
       text: line('narrator', 'Narrateur', 'La forêt est sombre.'),
@@ -161,7 +161,7 @@ void main() {
     await first;
     expect(chat.messages.last.text, 'La forêt est sombre.');
 
-    provider.pipe = StreamController<AiStreamChunk>();
+    provider.pipe = StreamController<AiStreamChunk>.broadcast();
     final second = chat.regenerate();
     provider.pipe!.add(AiStreamChunk(
       text: line('character', 'Lina', 'Une lueur se rapproche.'),
@@ -178,7 +178,7 @@ void main() {
     expect(chat.error, contains('Clé API refusée'));
     expect(chat.messages, hasLength(1));
     provider.returnError = false;
-    provider.pipe = StreamController<AiStreamChunk>();
+    provider.pipe = StreamController<AiStreamChunk>.broadcast();
     final next = chat.retry();
     provider.pipe!.add(AiStreamChunk(
       text: line('narrator', 'Narrateur', 'Bonjour !'),
@@ -203,7 +203,7 @@ void main() {
   });
 
   test('Empty model stream reports an error', () async {
-    provider.pipe = StreamController<AiStreamChunk>();
+    provider.pipe = StreamController<AiStreamChunk>.broadcast();
     final run = chat.send('Je suis ici');
     await provider.pipe!.close();
     await run;
@@ -264,7 +264,7 @@ void main() {
   });
 
   test('Scene boundary is included in follow-up model context', () async {
-    provider.pipe = StreamController<AiStreamChunk>();
+    provider.pipe = StreamController<AiStreamChunk>.broadcast();
     final first = chat.send('Je quitte la forêt.');
     provider.pipe!.add(AiStreamChunk(text:
         '{"type":"scene_change"}\n'
@@ -276,7 +276,7 @@ void main() {
     expect(chat.currentSceneMessages.map((event) => event.text),
         ['Une maison apparaît.']);
 
-    provider.pipe = StreamController<AiStreamChunk>();
+    provider.pipe = StreamController<AiStreamChunk>.broadcast();
     final second = chat.send('J’entre dans la maison.');
     final context = provider.lastContext!;
     expect(context.map((event) => event.content),
@@ -292,7 +292,7 @@ void main() {
 
   test('Regenerate removes scene dividers generated in the previous turn',
       () async {
-    provider.pipe = StreamController<AiStreamChunk>();
+    provider.pipe = StreamController<AiStreamChunk>.broadcast();
     final first = chat.send('Nous partons.');
     provider.pipe!.add(const AiStreamChunk(text:
         '{"type":"scene_change"}\n'
@@ -302,7 +302,7 @@ void main() {
     await first;
     expect(chat.timeline.whereType<ChatSceneChange>(), hasLength(1));
 
-    provider.pipe = StreamController<AiStreamChunk>();
+    provider.pipe = StreamController<AiStreamChunk>.broadcast();
     final rerun = chat.regenerate();
     provider.pipe!.add(AiStreamChunk(
       text: line('narrator', 'Narrateur', 'Nous restons ici.'),
