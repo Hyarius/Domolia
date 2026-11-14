@@ -536,6 +536,8 @@ class _GroupChatPageState extends State<GroupChatPage> {
                           return _ChatBubble(
                             key: ValueKey('chat-entry-${entry.id}'),
                             entry: entry as ChatEntry,
+                             onLongPress: (entry as ChatEntry).inProgress
+                                 ? null : () => _showMessageActions(entry),
                           );
                         },
                       ),
@@ -569,18 +571,6 @@ class _GroupChatPageState extends State<GroupChatPage> {
                           child: const Text('Réessayer'),
                         ),
                     ],
-                  ),
-                ),
-              if (!chat.busy &&
-                  chat.error == null &&
-                  chat.messages.any((m) => m.speaker != ChatSpeaker.player))
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    key: const ValueKey('chatRegenerate'),
-                    onPressed: chat.regenerate,
-                    icon: const Icon(Icons.refresh_rounded, size: 18),
-                    label: const Text('Régénérer'),
                   ),
                 ),
               if (chat.modelUsed != null)
@@ -745,8 +735,9 @@ class _SceneDivider extends StatelessWidget {
 }
 
 class _ChatBubble extends StatelessWidget {
-  const _ChatBubble({super.key, required this.entry});
+  const _ChatBubble({super.key, required this.entry, this.onLongPress});
   final ChatEntry entry;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -757,7 +748,9 @@ class _ChatBubble extends StatelessWidget {
       ChatSpeaker.character => DomoliaColors.cream,
     };
 
-    return Padding(
+    return GestureDetector(
+      onLongPress: onLongPress,
+      child: Padding(
       padding: const EdgeInsets.only(bottom: 18),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -822,6 +815,7 @@ class _ChatBubble extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }
