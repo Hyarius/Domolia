@@ -30,8 +30,15 @@ class UpdateProgressStrip extends StatelessWidget {
 }
 
 class UpdateSettingsPanel extends StatefulWidget {
-  const UpdateSettingsPanel({super.key,required this.controller});
+  const UpdateSettingsPanel({
+    super.key,
+    required this.controller,
+    this.onConfigureAi,
+    this.onCheckManually,
+  });
   final UpdateController controller;
+  final VoidCallback? onConfigureAi;
+  final VoidCallback? onCheckManually;
   @override
   State<UpdateSettingsPanel> createState()=>_UpdateSettingsPanelState();
 }
@@ -114,13 +121,96 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
         child:Text(updater.message!,style:const TextStyle(color:DomoliaColors.muted))),
       const SizedBox(height:18),
       FilledButton.icon(
-        onPressed:checking || downloading ? null : updater.checkNow,
+        onPressed:checking || downloading ? null : widget.onCheckManually ?? updater.checkNow,
         icon:const Icon(Icons.refresh),
         label:const Text('Vérifier maintenant'),
       ),
       if(downloading) TextButton.icon(
         onPressed:updater.cancelDownload,
         icon:const Icon(Icons.close),label:const Text('Annuler le téléchargement')),
+      if(widget.onConfigureAi!=null) ...[
+        const SizedBox(height:20),
+        const Divider(),
+        ListTile(
+          leading:const Icon(Icons.smart_toy_outlined,color:DomoliaColors.gold),
+          title:const Text('Fournisseur IA'),
+          subtitle:const Text('Configurer OpenUncensored et tester la connexion'),
+          onTap:widget.onConfigureAi,
+        ),
+      ],
     ]));
+  }
+}
+
+/// Feedback is shown only for user-initiated checks, never for the startup check.
+class UpdateCheckDialog extends StatelessWidget {
+  const UpdateCheckDialog({super.key, required this.controller});
+
+  final UpdateController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final phase = controller.phase;
+        final pending = phase == UpdatePhase.checking ||
+            phase == UpdatePhase.downloading ||
+            phase == UpdatePhase.idle;
+        final status = switch (phase) {
+          UpdatePhase.idle || UpdatePhase.checking =>
+            'Recherche de mises à jour sur ${controller.channel}…',
+          UpdatePhase.upToDate =>
+            'Domolia est déjà à jour sur le canal ${controller.channel}.',
+          UpdatePhase.downloading =>
+            'Une nouvelle version est disponible. Téléchargement en cours…',
+          UpdatePhase.cancelled => 'Le téléchargement a été annulé.',
+          UpdatePhase.installationRequested =>
+            controller.message ?? 'Installation Android proposée.',
+          UpdatePhase.permissionRequired =>
+            controller.message ?? 'Autorisation Android nécessaire.',
+          UpdatePhase.failed =>
+            controller.message ?? 'Impossible de vérifier les mises à jour.',
+        };
+        return AlertDialog(
+          key: const ValueKey('updateCheckDialog'),
+          title: const Text('Mise à jour de Domolia'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(status, key: const ValueKey('updateCheckStatus')),
+              if (pending) ...[
+                const SizedBox(height: 18),
+                LinearProgressIndicator(
+                  value: phase == UpdatePhase.downloading
+                      ? controller.progress
+                      : null,
+                  color: DomoliaColors.gold,
+                ),
+              ],
+              if (controller.installed != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Version installée : build ${controller.installed!.versionCode}',
+                  style: const TextStyle(color: DomoliaColors.muted),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            if (phase == UpdatePhase.downloading)
+              TextButton(
+                onPressed: controller.cancelDownload,
+                child: const Text('Annuler'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Fermer'),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

@@ -16,6 +16,12 @@ application = manifest_root.find("application")
 if application is None:
     raise SystemExit("Missing Flutter <application>.")
 
+# Keystore keys cannot be moved to another phone. Never restore encrypted
+# preferences without their original keys (including device-to-device copy).
+application.set("{" + android + "}allowBackup", "false")
+application.set("{" + android + "}fullBackupContent", "false")
+application.set("{" + android + "}dataExtractionRules", "@xml/domolia_data_extraction_rules")
+
 for permission in (
     "android.permission.INTERNET",
     "android.permission.REQUEST_INSTALL_PACKAGES",
@@ -40,6 +46,12 @@ document.write(manifest, encoding="utf-8", xml_declaration=True)
 
 xml = root / "res/xml"
 xml.mkdir(parents=True, exist_ok=True)
+(xml / "domolia_data_extraction_rules.xml").write_text(
+    '<data-extraction-rules>\n'
+    '  <cloud-backup><exclude domain="root" path="." /></cloud-backup>\n'
+    '  <device-transfer><exclude domain="root" path="." /></device-transfer>\n'
+    '</data-extraction-rules>\n', encoding="utf-8"
+)
 (xml / "domolia_update_paths.xml").write_text(
     '<?xml version="1.0" encoding="utf-8"?>\n'
     '<paths xmlns:android="http://schemas.android.com/apk/res/android">\n'

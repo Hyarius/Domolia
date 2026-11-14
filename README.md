@@ -132,3 +132,25 @@ Le dossier Android est toujours généré par Flutter. La commande `python3 tool
 ## Suite du projet
 
 Les prochaines étapes couvriront la connexion à OpenUncensored, le chat de jeu de rôle, la mémoire persistante, les PNJ et l'illustration des scènes.
+
+## Fournisseur IA — PR03
+
+Dans **Menu → Paramètres → Fournisseur IA**, renseigner votre clé OpenUncensored et choisir un modèle de chat.
+
+- URL par défaut : `https://api.openuncensored.com/v1`
+- Clé API : `ou-…`, saisie masquée et enregistrée dans le **stockage sécurisé Android**, jamais dans des préférences en texte clair.
+- **Modèle de chat** : choix uniquement dans le menu déroulant, qui affiche aussi le modèle déjà enregistré. **Charger les modèles** récupère la liste disponible.
+- **Tester la connexion** : envoie une courte requête de chat en français, **susceptible de consommer des crédits**.
+- Les paramètres sont conservés entre les démarrages. Une clé enregistrée ne s'affiche jamais ; le champ vide la conserve, le bouton « Supprimer la clé API » l'efface.
+
+Le client est compatible OpenAI via un contrat `AiChatProvider` réutilisable par PR04, sans dépendance du domaine RP au transport HTTP. Seules les URL HTTPS sont acceptées ; les redirections sont désactivées ; erreurs et délais sont présentés sans divulguer les requêtes ou la clé.
+
+Pour éviter la restauration de secrets chiffrés sans leur clé Android Keystore, la sauvegarde automatique Android et le transfert de données de l'application sont désactivés ; l'export volontaire des aventures est prévu en PR17.
+
+Voir [PR03](docs/rp/PR03.md) et la [documentation OpenUncensored](https://openuncensored.com/docs).
+
+Les vérifications **manuelles** des mises à jour affichent une fenêtre avec un retour explicite : recherche, « déjà à jour », téléchargement, installation Android ou erreur. La vérification automatique au démarrage reste discrète si aucune nouvelle version n'est disponible.
+
+### Plusieurs connexions IA
+
+Dans « Fournisseur IA », le menu **Configuration API** en haut de page permet de conserver autant de comptes ou fournisseurs que nécessaire. **+** crée un profil nommé ; **⋮** le renomme ou le supprime. Le statut à droite concerne exclusivement le profil sélectionné : « Non testé », « En cours », « Connecté » ou « Invalide ». En cas d'échec, le chevron ouvre la raison détaillée, sans afficher la clé API. La liste des configurations et leurs secrets sont stockés de manière chiffrée et migrés automatiquement depuis l'ancien réglage unique, sans perdre sa clé.
