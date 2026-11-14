@@ -150,3 +150,7 @@ Pour éviter la restauration de secrets chiffrés sans leur clé Android Keystor
 Voir [PR03](docs/rp/PR03.md) et la [documentation OpenUncensored](https://openuncensored.com/docs).
 
 Les vérifications **manuelles** des mises à jour affichent une fenêtre avec un retour explicite : recherche, « déjà à jour », téléchargement, installation Android ou erreur. La vérification automatique au démarrage reste discrète si aucune nouvelle version n'est disponible.
+
+### Plusieurs connexions IA
+
+Dans « Fournisseur IA », le menu **Configuration API** en haut de page permet de conserver autant de comptes ou fournisseurs que nécessaire. **+** crée un profil nommé ; **⋮** le renomme ou le supprime. Le statut à droite concerne exclusivement le profil sélectionné : « Non testé », « En cours », « Connecté » ou « Invalide ». En cas d'échec, le chevron ouvre la raison détaillée, sans afficher la clé API. La liste des configurations et leurs secrets sont stockés de manière chiffrée et migrés automatiquement depuis l'ancien réglage unique, sans perdre sa clé.
