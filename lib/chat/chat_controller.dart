@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
@@ -19,12 +20,40 @@ class NarrativeChatController extends ChangeNotifier {
     required this.configuration,
     this.resolveConnection,
     this.narrator = const Narrator(),
-  });
+    this.narratorProvider,
+    int Function(int count)? selectOpeningIndex,
+  }) : _selectOpeningIndex = selectOpeningIndex ?? Random.secure().nextInt;
 
   final AiChatProvider provider;
   final AiConfiguration? Function() configuration;
   final Future<NarrativeAiEndpoint> Function()? resolveConnection;
   final Narrator narrator;
+  /// Reads the latest saved narrator settings for each new model request.
+  final Narrator Function()? narratorProvider;
+  final int Function(int count) _selectOpeningIndex;
+  bool _started = false;
+
+  /// Adds one local narrator bubble at the beginning of the conversation.
+  /// Calling this after navigating away and back is always a no-op.
+  void beginConversation() {
+    if (_closed || _started || _timeline.isNotEmpty) return;
+    _started = true;
+    final candidates = (narratorProvider?.call() ?? narrator).openingMessages
+        .where((message) => message.trim().isNotEmpty)
+        .toList(growable: false);
+    if (candidates.isEmpty) return;
+    final index = _selectOpeningIndex(candidates.length);
+    if (index < 0 || index >= candidates.length) {
+      throw RangeError.range(index, 0, candidates.length - 1, 'openingIndex');
+    }
+    _timeline.add(ChatEntry(
+      id: _nextId++,
+      speaker: ChatSpeaker.narrator,
+      name: 'Narrateur',
+      text: candidates[index].trim(),
+    ));
+    _notify();
+  }
 
   final List<ChatTimelineEvent> _timeline = [];
   List<ChatTimelineEvent> get timeline => List.unmodifiable(_timeline);
@@ -92,7 +121,10 @@ class NarrativeChatController extends ChangeNotifier {
         ? _timeline.sublist(_timeline.length - 35)
         : _timeline;
     return [
-      AiMessage(role: 'system', content: narrator.systemPrompt),
+      AiMessage(
+        role: 'system',
+        content: (narratorProvider?.call() ?? narrator).systemPrompt,
+      ),
       for (final event in recent)
         if (event is ChatSceneChange)
           const AiMessage(

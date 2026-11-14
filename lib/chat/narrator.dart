@@ -7,6 +7,7 @@ class Narrator {
   const Narrator({
     this.protocolPrompt = defaultNarratorProtocolPrompt,
     this.narrativePrompt = defaultNarratorNarrativePrompt,
+    this.openingMessages = defaultNarratorOpeningMessages,
   });
 
   /// Domolia's expected output contract (message and scene_change events).
@@ -14,6 +15,10 @@ class Narrator {
 
   /// Storytelling guidance; intentionally independent of the JSON contract.
   final String narrativePrompt;
+
+  /// Candidate first bubbles, selected locally when a new conversation starts.
+  /// They are dialogue history, never part of the JSON protocol prompt.
+  final List<String> openingMessages;
 
   /// One system message is sent to the model, with protocol instructions first.
   String get systemPrompt => [
@@ -54,3 +59,9 @@ lieu, de temps ou de séquence narrative, jamais pour une simple prise de parole
 Évite deux changements de scène consécutifs.
 Conserve des interventions naturelles et assez courtes pour un chat mobile.
 ''';
+
+/// A short, optional invitation. The narrator does not decide the player's acts.
+const defaultNarratorOpeningMessages = <String>[
+  'Une nouvelle histoire commence. Que souhaitez-vous faire ?',
+  'Le monde s’ouvre devant vous. Par quoi voulez-vous commencer ?',
+];
