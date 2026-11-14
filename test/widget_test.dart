@@ -121,6 +121,8 @@ void main() {
     await tester.pumpWidget(DomoliaApp(updateController: updates));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('updateCheckDialog')), findsNothing);
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Mise à jour'));
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Mise à jour'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('updateCheckDialog')), findsOneWidget);
@@ -173,7 +175,10 @@ void main() {
     await tester.tap(find.text('Vérifier maintenant'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('updateCheckDialog')), findsOneWidget);
-    expect(find.textContaining('Mise à jour impossible'), findsOneWidget);
+    final status = tester.widget<Text>(
+      find.byKey(const ValueKey('updateCheckStatus')),
+    );
+    expect(status.data, contains('Mise à jour impossible'));
     await tester.tap(find.text('Fermer'));
     await tester.pumpAndSettle();
   });
