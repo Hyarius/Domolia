@@ -142,6 +142,7 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
         const SizedBox(height: 20),
         const Divider(),
         ListTile(
+          key: const ValueKey('allVersionsLink'),
           leading: const Icon(Icons.new_releases_outlined,
               color: DomoliaColors.gold),
           title: const Text('Toutes les versions'),
