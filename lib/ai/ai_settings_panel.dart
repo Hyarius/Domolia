@@ -19,8 +19,8 @@ class AiSettingsPanel extends StatefulWidget {
 
 class _AiSettingsPanelState extends State<AiSettingsPanel> {
   final _base = TextEditingController();
-  String? _selectedModel;
   final _key = TextEditingController();
+  String? _selectedModel;
 
   @override
   void initState() {
@@ -30,10 +30,16 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
 
   Future<void> _load() async {
     await widget.controller.initialize();
-    if (!mounted) return;
+    if (mounted) _reloadFields();
+  }
+
+  void _reloadFields() {
+    final controller = widget.controller;
+    if (!controller.initialized || controller.profiles.isEmpty) return;
     setState(() {
-      _base.text = widget.controller.baseUrl;
-      _selectedModel = widget.controller.model;
+      _base.text = controller.baseUrl;
+      _selectedModel = controller.model;
+      _key.clear();
     });
   }
 
@@ -46,7 +52,9 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
 
   Future<bool> _save() async {
     final saved = await widget.controller.save(
-      _base.text, _selectedModel ?? widget.controller.model, _key.text,
+      _base.text,
+      _selectedModel ?? widget.controller.model,
+      _key.text,
     );
     if (saved && mounted) _key.clear();
     return saved;
@@ -60,17 +68,290 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
     if (await _save()) await widget.controller.testConnection();
   }
 
+  Future<String?> _askForName({String? initialName}) async {
+    final input = TextEditingController(text: initialName ?? '');
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(initialName == null ? 'Nouvelle configuration API' : 'Renommer le profil'),
+          content: TextField(
+            key: const ValueKey('aiProfileNameField'),
+            controller: input,
+            autofocus: true,
+            maxLength: 60,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(labelText: 'Nom de la configuration'),
+            onSubmitted: (value) {
+              if (value.trim().isNotEmpty) Navigator.pop(dialogContext, value.trim());
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (input.text.trim().isNotEmpty) {
+                  Navigator.pop(dialogContext, input.text.trim());
+                }
+              },
+              child: const Text('Valider'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      // Dialog transition finishes after the route returns. Defer disposal
+      // to avoid tearing down a controller while its closing animation runs.
+      // The framework releases the TextField when the route is removed.
+      // Do not retain the controller as state.
+    }
+  }
+
+  Future<void> _createProfile() async {
+    if (widget.controller.busy) return;
+    final name = await _askForName();
+    if (name == null || !mounted) return;
+    if (!await _save()) return;
+    if (await widget.controller.createProfile(name) && mounted) {
+      _reloadFields();
+    }
+  }
+
+  Future<void> _renameProfile() async {
+    final name = await _askForName(initialName: widget.controller.selectedProfile.name);
+    if (name != null && mounted) await widget.controller.renameProfile(name);
+  }
+
+  Future<void> _deleteProfile() async {
+    if (widget.controller.profiles.length < 2 || widget.controller.busy) return;
+    final name = widget.controller.selectedProfile.name;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Supprimer la configuration ?'),
+        content: Text(
+          'Le profil « $name » et sa clé API seront supprimés de ce téléphone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      if (await widget.controller.deleteProfile() && mounted) {
+        _reloadFields();
+      }
+    }
+  }
+
+  Future<void> _selectProfile(String id) async {
+    if (id == widget.controller.selectedProfileId) return;
+    // Persist in-progress form edits before switching: no profile's key or
+    // model should silently end up belonging to another profile.
+    if (!await _save()) return;
+    if (await widget.controller.selectProfile(id) && mounted) {
+      _reloadFields();
+    }
+  }
+
+  void _showStatusError() {
+    final reason = widget.controller.statusError ??
+        'Impossible de joindre le fournisseur. Vérifiez les paramètres.';
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('aiStatusErrorDialog'),
+        title: const Text('Échec de connexion'),
+        content: Text(reason, key: const ValueKey('aiStatusErrorReason')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Fermer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _profileAndStatus(AiConnectionController controller) {
+    final status = controller.status;
+    final (label, indicatorColor) = switch (status) {
+      AiConnectionStatus.untested => ('Non testé', DomoliaColors.muted),
+      AiConnectionStatus.testing => ('En cours', DomoliaColors.muted),
+      AiConnectionStatus.connected => ('Connecté', const Color(0xFF59D78F)),
+      AiConnectionStatus.invalid => ('Invalide', const Color(0xFFFF7777)),
+    };
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 6,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Configuration API',
+                  style: TextStyle(color: DomoliaColors.goldLight)),
+              const SizedBox(height: 8),
+              Container(
+                key: const ValueKey('aiProfilePicker'),
+                padding: const EdgeInsets.fromLTRB(8, 0, 0, 0),
+                decoration: BoxDecoration(
+                  color: DomoliaColors.raisedSurface,
+                  border: Border.all(color: DomoliaColors.border),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          key: const ValueKey('aiProfileSelector'),
+                          isExpanded: true,
+                          value: controller.selectedProfileId,
+                          items: [
+                            for (final profile in controller.profiles)
+                              DropdownMenuItem(
+                                value: profile.id,
+                                child: Text(
+                                  profile.name,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                          ],
+                          onChanged: controller.busy
+                              ? null
+                              : (id) {
+                                  if (id != null) _selectProfile(id);
+                                },
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      key: const ValueKey('aiAddProfile'),
+                      tooltip: 'Ajouter une configuration API',
+                      constraints: const BoxConstraints.tightFor(width: 36, height: 40),
+                      padding: EdgeInsets.zero,
+                      icon: const Icon(Icons.add, size: 22),
+                      onPressed: controller.busy ? null : _createProfile,
+                    ),
+                    PopupMenuButton<String>(
+                      key: const ValueKey('aiProfileActions'),
+                      tooltip: 'Gérer la configuration API',
+                      padding: EdgeInsets.zero,
+                      icon: const Icon(Icons.more_vert, size: 21),
+                      enabled: !controller.busy,
+                      onSelected: (action) {
+                        if (action == 'rename') _renameProfile();
+                        if (action == 'delete') _deleteProfile();
+                      },
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(
+                          value: 'rename',
+                          child: Text('Renommer'),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          enabled: controller.profiles.length > 1,
+                          child: const Text('Supprimer'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 4,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Connexion',
+                  style: TextStyle(color: DomoliaColors.goldLight)),
+              const SizedBox(height: 8),
+              Container(
+                key: const ValueKey('aiConnectionStatus'),
+                constraints: const BoxConstraints(minHeight: 50),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(
+                  color: indicatorColor.withValues(alpha: 0.10),
+                  border: Border.all(color: indicatorColor),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    if (status == AiConnectionStatus.testing)
+                      const SizedBox(
+                        height: 12,
+                        width: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: DomoliaColors.muted,
+                        ),
+                      )
+                    else
+                      Icon(Icons.circle, color: indicatorColor, size: 12),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        label,
+                        key: const ValueKey('aiConnectionStatusLabel'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: indicatorColor,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    if (status == AiConnectionStatus.invalid)
+                      IconButton(
+                        key: const ValueKey('aiStatusErrorButton'),
+                        tooltip: 'Voir la raison de l’échec',
+                        constraints: const BoxConstraints.tightFor(width: 26, height: 32),
+                        padding: EdgeInsets.zero,
+                        icon: Icon(Icons.chevron_right, size: 23, color: indicatorColor),
+                        onPressed: _showStatusError,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: widget.controller,
       builder: (context, _) {
         final c = widget.controller;
+        if (!c.initialized || c.profiles.isEmpty) {
+          return const Center(child: CircularProgressIndicator());
+        }
         final selectedModel = _selectedModel ?? c.model;
         final modelIds = <String>{
           if (selectedModel.isNotEmpty) selectedModel,
           for (final entry in c.models) entry.id,
         }.toList();
+
         return SafeArea(
           child: ListView(
             padding: const EdgeInsets.all(24),
@@ -89,12 +370,14 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               const Text(
-                'Connectez votre compte OpenUncensored. '
-                'La clé est chiffrée sur votre téléphone et ne figure pas dans les journaux.',
+                'Gérez plusieurs connexions IA. Chaque configuration conserve '
+                'ses propres identifiants sur votre téléphone.',
                 style: TextStyle(color: DomoliaColors.cream, height: 1.5),
               ),
+              const SizedBox(height: 22),
+              _profileAndStatus(c),
               const SizedBox(height: 24),
               TextField(
                 controller: _base,
@@ -127,7 +410,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               InputDecorator(
                 decoration: const InputDecoration(
                   labelText: 'Modèle de chat',
-                  helperText: 'Utilisez « Charger les modèles » pour actualiser la liste.',
+                  helperText: 'Charger les modèles actualise cette liste.',
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
@@ -142,9 +425,13 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                           child: Text(id, overflow: TextOverflow.ellipsis),
                         ),
                     ],
-                    onChanged: c.busy ? null : (value) {
-                      if (value != null) setState(() => _selectedModel = value);
-                    },
+                    onChanged: c.busy
+                        ? null
+                        : (value) {
+                            if (value != null) {
+                              setState(() => _selectedModel = value);
+                            }
+                          },
                   ),
                 ),
               ),
@@ -168,38 +455,36 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Le test envoie une courte requête au modèle et peut consommer des crédits.',
+                'Le test peut consommer des crédits du fournisseur IA.',
                 style: TextStyle(color: DomoliaColors.muted, fontSize: 12),
               ),
               if (c.hasKey) ...[
                 const SizedBox(height: 14),
                 TextButton.icon(
-                  onPressed: c.busy ? null : () async {
-                    await c.removeKey();
-                    if (mounted) _key.clear();
-                  },
+                  onPressed: c.busy
+                      ? null
+                      : () async {
+                          await c.removeKey();
+                          if (mounted) _key.clear();
+                        },
                   icon: const Icon(Icons.delete_outline),
                   label: const Text('Supprimer la clé API'),
                 ),
               ],
-              if (c.busy) ...[
-                const SizedBox(height: 20),
+              if (c.busy && c.status != AiConnectionStatus.testing) ...[
+                const SizedBox(height: 18),
                 const LinearProgressIndicator(color: DomoliaColors.gold),
               ],
               if (c.message != null) ...[
-                const SizedBox(height: 18),
+                const SizedBox(height: 16),
                 Text(
                   c.message!,
-                  key: const ValueKey('aiConnectionStatus'),
-                  style: TextStyle(
-                    color: c.testPassed == true
-                        ? DomoliaColors.goldLight
-                        : DomoliaColors.cream,
-                  ),
+                  key: const ValueKey('aiConnectionMessage'),
+                  style: const TextStyle(color: DomoliaColors.muted),
                 ),
               ],
               if (c.testReply != null) ...[
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 Text(
                   'Réponse du modèle : ${c.testReply!}',
                   key: const ValueKey('aiTestReply'),

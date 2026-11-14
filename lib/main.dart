@@ -67,7 +67,7 @@ class _HomePageState extends State<HomePage> {
     _updates = widget.updates ?? createProductionUpdateController();
     _ownsAi = widget.ai == null;
     _ai = widget.ai ?? AiConnectionController(
-      store: SecureAiConfigurationStore(),
+      store: SecureAiProfileStore(),
       provider: OpenAiCompatibleChatProvider(),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
