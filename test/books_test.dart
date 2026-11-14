@@ -272,7 +272,7 @@ void main() {
     addTearDown(ai.dispose);
     await tester.pumpWidget(MaterialApp(theme: DomoliaTheme.dark,
       home: BookEditorPage(book: book, library: library,
-        ai: ai, onPlay: (_) async {}),
+        ai: ai, onPlay: (_, session) async {}),
     ));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('bookTitle')), findsOneWidget);
