@@ -63,8 +63,10 @@ class BookCoverLoader {
         bytes[1] == 216 && bytes[2] == 255) {
       mime = 'image/jpeg';
     } else if (bytes.length >= 12 &&
-        ascii.decode(bytes.sublist(0, 4)) == 'RIFF' &&
-        ascii.decode(bytes.sublist(8, 12)) == 'WEBP') {
+        bytes[0] == 0x52 && bytes[1] == 0x49 &&
+        bytes[2] == 0x46 && bytes[3] == 0x46 &&
+        bytes[8] == 0x57 && bytes[9] == 0x45 &&
+        bytes[10] == 0x42 && bytes[11] == 0x50) {
       mime = 'image/webp';
     } else {
       AppLogger.warning('Signature de couverture inconnue', component: 'cover',
