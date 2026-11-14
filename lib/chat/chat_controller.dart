@@ -37,6 +37,14 @@ class NarrativeChatController extends ChangeNotifier {
   final void Function(AiExchange exchange)? onExchangeCaptured;
   AiExchange? lastExchange;
 
+  /// Hide purged traces from the current screen as well as from SQLite.
+  void forgetLastExchange() {
+    lastExchange = null;
+    diagnostics?.last = null;
+    _notify();
+  }
+
+
   /// Reads the latest saved narrator settings for each new model request.
   final Narrator Function()? narratorProvider;
   final int Function(int count) _selectOpeningIndex;
