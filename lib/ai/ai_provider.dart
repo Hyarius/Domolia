@@ -21,6 +21,8 @@ class AiConfiguration {
 }
 
 /// A named, locally stored connection. Each profile owns its API key.
+enum AiProviderKind { chatGpt, customAi }
+
 class AiProfile {
   const AiProfile({
     required this.id,
@@ -28,8 +30,10 @@ class AiProfile {
     required this.baseUrl,
     required this.model,
     required this.apiKey,
+    this.kind = AiProviderKind.customAi,
   });
 
+  final AiProviderKind kind;
   final String id;
   final String name;
   final String baseUrl;
@@ -43,11 +47,13 @@ class AiProfile {
       );
 
   AiProfile copyWith({
+    AiProviderKind? kind,
     String? name,
     String? baseUrl,
     String? model,
     String? apiKey,
   }) => AiProfile(
+        kind: kind ?? this.kind,
         id: id,
         name: name ?? this.name,
         baseUrl: baseUrl ?? this.baseUrl,

@@ -42,6 +42,7 @@ class SecureAiProfileStore implements AiProfileStore {
           baseUrl: value['baseUrl'] as String,
           model: value['model'] as String,
           apiKey: value['apiKey'] as String,
+        kind: AiProviderKind.customAi,
         ),
       ],
     );
@@ -78,6 +79,9 @@ class SecureAiProfileStore implements AiProfileStore {
         baseUrl: item['baseUrl'] as String,
         model: item['model'] as String,
         apiKey: item['apiKey'] as String,
+        kind: item['providerType'] == 'chatgpt'
+            ? AiProviderKind.chatGpt
+            : AiProviderKind.customAi,
       ));
     }
     final selectedId = data['selectedId'] as String;
@@ -104,6 +108,8 @@ class SecureAiProfileStore implements AiProfileStore {
             {
               'id': profile.id,
               'name': profile.name,
+              'providerType': profile.kind == AiProviderKind.chatGpt
+                  ? 'chatgpt' : 'customai',
               'baseUrl': profile.baseUrl,
               'model': profile.model,
               'apiKey': profile.apiKey,
