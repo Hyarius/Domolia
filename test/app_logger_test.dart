@@ -100,4 +100,27 @@ void main() {
     expect((await logger.entries()).single.message, 'Recovered');
   });
 
+  test('failed snapshot read returns safely and queue recovers', () async {
+    final storage = _FailingReadStorage();
+    final logger = AppLogger(storage: storage);
+    expect(await logger.snapshot(), isEmpty);
+    expect(logger.failedOperations, 1);
+    logger.log(AppLogLevel.info, 'after failure');
+    await logger.flush();
+    expect(storage.lines, hasLength(1));
+    expect(await logger.snapshot(), contains('after failure'));
+  });
+}
+
+class _FailingReadStorage extends MemoryAppLogStorage {
+  bool failNextRead = true;
+
+  @override
+  Future<List<String>> readLines() {
+    if (failNextRead) {
+      failNextRead = false;
+      throw StateError('temporary read failure');
+    }
+    return super.readLines();
+  }
 }

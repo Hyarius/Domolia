@@ -625,9 +625,9 @@ class _EmptyConversation extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Décrivez votre première action. Le narrateur et les '
-                'personnages apparaîtront chacun avec leur avatar '
-                'et leur propre bulle de dialogue.',
+                'Décrivez votre première action. La narration apparaît '
+                'sous forme de texte, tandis que les personnages disposent '
+                'de leurs propres bulles de dialogue.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: DomoliaColors.cream,

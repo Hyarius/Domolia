@@ -200,12 +200,11 @@ class AppLogger {
           error: error, stackTrace: stackTrace, details: details);
 
   Future<String> snapshot() async {
-    final result = Completer<String>();
+    var snapshot = '';
     await _enqueue(() async {
-      final lines = await storage.readLines();
-      result.complete(lines.join());
+      snapshot = (await storage.readLines()).join();
     });
-    return result.isCompleted ? result.future : '';
+    return snapshot;
   }
   Future<List<AppLogEntry>> entries() async {
     final result = <AppLogEntry>[];
