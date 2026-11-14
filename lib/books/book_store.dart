@@ -21,6 +21,7 @@ abstract interface class BookStore {
   Future<void> deleteSession(String id);
   Future<void> putDiagnostic(StoredAiDiagnostic diagnostic, int retentionLimit);
   Future<List<StoredAiDiagnostic>> listDiagnostics(String sessionId);
+  Future<void> clearDiagnostics(String sessionId);
   Future<void> pruneDiagnostics(int retentionLimit);
 }
 
@@ -226,6 +227,17 @@ class SqliteBookStore implements BookStore {
           content: row['payload_json'] as String,
         ),
     ];
+  }
+
+  @override
+  Future<void> clearDiagnostics(String sessionId) async {
+    final db = await database;
+    final removed = await db.delete(
+      'ai_diagnostics', where: 'session_id = ?', whereArgs: [sessionId],
+    );
+    // Purge explicitly requests a smaller footprint, not merely reusable
+    // SQLite free pages. VACUUM runs outside transactions.
+    if (removed > 0) await db.execute('VACUUM');
   }
 
   @override
