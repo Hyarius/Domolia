@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../theme/domolia_theme.dart';
 import 'ai_controller.dart';
+import 'ai_provider.dart';
 
 class AiSettingsPanel extends StatefulWidget {
   const AiSettingsPanel({
@@ -50,6 +51,17 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
     super.dispose();
   }
 
+  Future<void> _selectProviderKind(AiProviderKind kind) async {
+    final controller = widget.controller;
+    if (kind == controller.selectedKind) return;
+    if (controller.selectedKind == AiProviderKind.customAi && !await _save()) {
+      return;
+    }
+    if (await controller.setProviderKind(kind) && mounted) {
+      _reloadFields();
+    }
+  }
+
   Future<bool> _save() async {
     final saved = await widget.controller.save(
       _base.text,
@@ -61,11 +73,17 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
   }
 
   Future<void> _saveAndLoadModels() async {
-    if (await _save()) await widget.controller.loadModels();
+    if (widget.controller.selectedKind == AiProviderKind.chatGpt ||
+        await _save()) {
+      await widget.controller.loadModels();
+    }
   }
 
   Future<void> _saveAndTest() async {
-    if (await _save()) await widget.controller.testConnection();
+    if (widget.controller.selectedKind == AiProviderKind.chatGpt ||
+        await _save()) {
+      await widget.controller.testConnection();
+    }
   }
 
   Future<String?> _askForName({String? initialName}) => showDialog<String>(
@@ -77,7 +95,8 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
     if (widget.controller.busy) return;
     final name = await _askForName();
     if (name == null || !mounted) return;
-    if (!await _save()) return;
+    if (widget.controller.selectedKind == AiProviderKind.customAi &&
+        !await _save()) return;
     if (await widget.controller.createProfile(name) && mounted) {
       _reloadFields();
     }
@@ -121,7 +140,8 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
     if (id == widget.controller.selectedProfileId) return;
     // Persist in-progress form edits before switching: no profile's key or
     // model should silently end up belonging to another profile.
-    if (!await _save()) return;
+    if (widget.controller.selectedKind == AiProviderKind.customAi &&
+        !await _save()) return;
     if (await widget.controller.selectProfile(id) && mounted) {
       _reloadFields();
     }
@@ -282,6 +302,47 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
         ),
         const SizedBox(height: 17),
         const Text(
+          'Type de fournisseur',
+          style: TextStyle(
+            color: DomoliaColors.goldLight,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          key: const ValueKey('aiProviderKindPicker'),
+          constraints: const BoxConstraints(minHeight: 58),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: DomoliaColors.raisedSurface,
+            border: Border.all(color: DomoliaColors.border),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<AiProviderKind>(
+              key: const ValueKey('aiProviderKindSelector'),
+              value: controller.selectedKind,
+              isExpanded: true,
+              dropdownColor: DomoliaColors.raisedSurface,
+              items: const [
+                DropdownMenuItem(
+                  value: AiProviderKind.chatGpt,
+                  child: Text('ChatGPT'),
+                ),
+                DropdownMenuItem(
+                  value: AiProviderKind.customAi,
+                  child: Text('CustomAI'),
+                ),
+              ],
+              onChanged: controller.busy ? null : (kind) {
+                if (kind != null) _selectProviderKind(kind);
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 17),
+        const Text(
           'État de la connexion',
           style: TextStyle(
             color: DomoliaColors.goldLight,
@@ -387,6 +448,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               const SizedBox(height: 20),
               _profileAndStatus(c),
               const SizedBox(height: 20),
+              if (c.selectedKind == AiProviderKind.customAi) ...[
               TextField(
                 controller: _base,
                 enabled: !c.busy,
@@ -461,6 +523,9 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                         : (value) {
                             if (value != null) {
                               setState(() => _selectedModel = value);
+                              if (c.selectedKind == AiProviderKind.chatGpt) {
+                                c.selectChatGptModel(value);
+                              }
                             }
                           },
                   ),
@@ -500,6 +565,130 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                         },
                   icon: const Icon(Icons.delete_outline),
                   label: const Text('Supprimer la clé API'),
+                ),
+              ],
+              ] else ...[
+                const Text(
+                  'Connectez un compte ChatGPT à cette configuration nommée. '
+                  'Les identifiants OAuth restent protégés sur ce téléphone.',
+                  style: TextStyle(color: DomoliaColors.cream, height: 1.5),
+                ),
+                const SizedBox(height: 14),
+                FutureBuilder(
+                  future: c.chatGptSession,
+                  builder: (context, snapshot) {
+                    final session = snapshot.data;
+                    if (session == null) {
+                      return const Text(
+                        'Compte ChatGPT non connecté.',
+                        style: TextStyle(color: DomoliaColors.muted),
+                      );
+                    }
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          session.email.isEmpty
+                              ? 'Compte ChatGPT connecté.'
+                              : 'Compte : ${session.email}',
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          session.planEnabled
+                              ? 'Utilisation du forfait autorisée.'
+                              : 'Autorisation du forfait non accordée.',
+                          style: const TextStyle(color: DomoliaColors.muted),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 14),
+                FilledButton.icon(
+                  key: const ValueKey('chatGptConnect'),
+                  onPressed: c.busy ? null : c.connectChatGpt,
+                  icon: const Icon(Icons.login),
+                  label: const Text('Continuer avec ChatGPT'),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  key: const ValueKey('chatGptDisconnect'),
+                  onPressed: c.busy ? null : c.disconnectChatGpt,
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Déconnecter ChatGPT'),
+                ),
+                const SizedBox(height: 18),
+              InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Modèle de chat',
+                  helperText: 'Charger les modèles actualise cette liste.',
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    key: const ValueKey('aiModelSelector'),
+                    value: modelIds.contains(selectedModel) ? selectedModel : null,
+                    isExpanded: true,
+                    itemHeight: 72,
+                    menuMaxHeight: 360,
+                    dropdownColor: DomoliaColors.raisedSurface,
+                    borderRadius: BorderRadius.circular(12),
+                    hint: const Text('Charger les modèles'),
+                    selectedItemBuilder: (context) => [
+                      for (final id in modelIds)
+                        Tooltip(
+                          message: id,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              id,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                    ],
+                    items: [
+                      for (final id in modelIds)
+                        DropdownMenuItem(
+                          value: id,
+                          child: Text(
+                            id,
+                            maxLines: 2,
+                            softWrap: true,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: c.busy
+                        ? null
+                        : (value) {
+                            if (value != null) {
+                              setState(() => _selectedModel = value);
+                              if (c.selectedKind == AiProviderKind.chatGpt) {
+                                c.selectChatGptModel(value);
+                              }
+                            }
+                          },
+                  ),
+                ),
+              ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: c.busy ? null : _saveAndLoadModels,
+                  icon: const Icon(Icons.list_alt),
+                  label: const Text('Charger les modèles ChatGPT'),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: c.busy ? null : _saveAndTest,
+                  icon: const Icon(Icons.wifi_tethering),
+                  label: const Text('Tester ChatGPT'),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Les requêtes autorisées utilisent les limites de '
+                  'votre abonnement ChatGPT.',
+                  style: TextStyle(color: DomoliaColors.muted, fontSize: 12),
                 ),
               ],
               if (c.busy && c.status != AiConnectionStatus.testing) ...[
