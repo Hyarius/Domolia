@@ -54,6 +54,12 @@ class _MemoryBooks implements BookStore {
     savedSessions[session.id] = session;
   }
   @override
+  Future<void> updateSession(BookSession session) async {
+    if (savedSessions.containsKey(session.id)) {
+      savedSessions[session.id] = session;
+    }
+  }
+  @override
   Future<void> deleteSession(String id) async {
     savedSessions.remove(id);
     savedDiagnostics.removeWhere((key, item) => item.sessionId == id);
@@ -405,6 +411,19 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(ValueKey('bookSession-${a.id}')), findsNothing);
     expect(find.byKey(ValueKey('bookSession-${b.id}')), findsOneWidget);
+  });
+
+  test('Une écriture tardive ne recrée jamais une partie supprimée', () async {
+    final store = _MemoryBooks();
+    final library = BookLibraryController(store: store);
+    addTearDown(library.dispose);
+    await library.initialize();
+    final book = await library.create('Test de suppression');
+    final session = await library.newSession(book);
+    await library.deleteSession(session.id);
+    await library.saveSession(session.copyWith(title: 'Écriture tardive'));
+    expect(await library.session(session.id), isNull);
+    expect(await store.findBook(book.id), isNotNull);
   });
 
 }
