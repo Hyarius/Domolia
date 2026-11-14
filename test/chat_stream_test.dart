@@ -24,13 +24,14 @@ void main() {
       expect(body['max_tokens'], 1200);
       expect((body['stream_options'] as Map)['include_usage'], true);
       expect((body['messages'] as List).last['role'], 'user');
-      return http.Response(
+      return http.Response.bytes(utf8.encode(
         'data: {"choices":[{"delta":{"content":"Bonjour"}}]}\n\n'
         'data: {"choices":[{"delta":{"content":" à tous !"}}]}\n\n'
         'data: {"choices":[],"usage":{"prompt_tokens":23,"completion_tokens":8}}\n\n'
         'data: [DONE]\n\n',
+      ),
         200,
-        headers: {'content-type': 'text/event-stream'},
+        headers: {'content-type': 'text/event-stream; charset=utf-8'},
       );
     });
     final provider = OpenAiCompatibleChatProvider(client: client);

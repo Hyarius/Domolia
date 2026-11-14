@@ -158,7 +158,7 @@ void main() {
     expect(find.text('Bon'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('groupChatStop')));
     await tester.pump();
-    expect(find.byKey(const ValueKey('groupChatRetry')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chatRetry')), findsOneWidget);
     expect(find.byKey(const ValueKey('groupChatSend')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -199,7 +199,9 @@ void main() {
     final divider = tester.widget<Container>(
       find.byKey(const ValueKey('chatSceneDivider')),
     );
-    expect(divider.constraints, isNull);
+    expect(divider.constraints!.maxHeight, 2);
+    expect(tester.getSize(find.byKey(const ValueKey('chatSceneDivider'))).width,
+        greaterThan(300));
     expect(divider.decoration, isA<BoxDecoration>());
     expect(tester.takeException(), isNull);
   });
