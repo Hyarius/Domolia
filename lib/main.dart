@@ -106,6 +106,8 @@ class _HomePageState extends State<HomePage> {
   late final BookLibraryController _books;
   late final bool _ownsBooks;
   String? _selectedBookId;
+  String? _activeBookTitle;
+  String? _activeSessionTitle;
 
   @override
   void initState() {
@@ -230,7 +232,11 @@ class _HomePageState extends State<HomePage> {
       }
       _chat.restoreTimeline(session.timeline);
       _chat.beginConversation();
-      setState(() => _page = _Page.chat);
+      setState(() {
+        _activeBookTitle = book.title;
+        _activeSessionTitle = session.title;
+        _page = _Page.chat;
+      });
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -295,6 +301,8 @@ class _HomePageState extends State<HomePage> {
           : _page == _Page.chat ? GroupChatPage(
               controller: _chat,
               onOpenSettings: _openAiSettings,
+              bookTitle: _activeBookTitle,
+              sessionTitle: _activeSessionTitle,
             )
           : _page == _Page.about ? _buildAbout()
           : _page == _Page.settings ? _buildSettings()

@@ -1,18 +1,35 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../theme/domolia_theme.dart';
 import 'chat_controller.dart';
 import 'chat_protocol.dart';
+import 'chat_exports.dart';
+
+enum _ChatExportAction { conversation, requestAndResponse }
+
+class _TranscriptChoice {
+  const _TranscriptChoice(this.scope, this.count);
+  final ChatExportScope scope;
+  final int count;
+}
 
 class GroupChatPage extends StatefulWidget {
   const GroupChatPage({
     super.key,
     required this.controller,
     required this.onOpenSettings,
+    this.bookTitle,
+    this.sessionTitle,
   });
 
   final NarrativeChatController controller;
   final VoidCallback onOpenSettings;
+  final String? bookTitle;
+  final String? sessionTitle;
 
   @override
   State<GroupChatPage> createState() => _GroupChatPageState();
@@ -62,6 +79,135 @@ class _GroupChatPageState extends State<GroupChatPage> {
     _input.clear();
     setState(() {});
     widget.controller.send(value);
+  }
+
+  void _showExportMessage(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Future<void> _saveDiagnostic(String name, Map<String, dynamic> data) async {
+    try {
+      final content = Uint8List.fromList(
+        utf8.encode(const JsonEncoder.withIndent('  ').convert(data)),
+      );
+      final saved = await FilePicker.platform.saveFile(
+        dialogTitle: 'Exporter pour diagnostic',
+        fileName: name,
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        bytes: content,
+      );
+      if (saved != null) _showExportMessage('Export JSON enregistré.');
+    } catch (_) {
+      _showExportMessage('Impossible d’exporter le diagnostic JSON.');
+    }
+  }
+
+  Future<void> _exportConversation() async {
+    var scope = ChatExportScope.complete;
+    var invalid = false;
+    final number = TextEditingController(text: '3');
+    _TranscriptChoice? choice;
+    try {
+      choice = await showDialog<_TranscriptChoice>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Exporter la conversation'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<ChatExportScope>(
+                  key: const ValueKey('chatExportScope'),
+                  initialValue: scope,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Portée de l’export'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: ChatExportScope.complete,
+                      child: Text('Toute la conversation'),
+                    ),
+                    DropdownMenuItem(
+                      value: ChatExportScope.lastScenes,
+                      child: Text('X dernières scènes'),
+                    ),
+                    DropdownMenuItem(
+                      value: ChatExportScope.lastMessages,
+                      child: Text('X derniers messages'),
+                    ),
+                  ],
+                  onChanged: (selected) {
+                    if (selected != null) {
+                      setDialogState(() {
+                        scope = selected;
+                        invalid = false;
+                      });
+                    }
+                  },
+                ),
+                if (scope != ChatExportScope.complete) ...[
+                  const SizedBox(height: 14),
+                  TextField(
+                    key: const ValueKey('chatExportCount'),
+                    controller: number,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Nombre',
+                      errorText: invalid ? 'Entre 1 et 50 000' : null,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Annuler'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final count = scope == ChatExportScope.complete
+                      ? 1 : int.tryParse(number.text);
+                  if (count == null || count < 1 || count > 50000) {
+                    setDialogState(() => invalid = true);
+                    return;
+                  }
+                  Navigator.pop(dialogContext, _TranscriptChoice(scope, count));
+                },
+                child: const Text('Exporter'),
+              ),
+            ],
+          ),
+        ),
+      );
+    } finally {
+      number.dispose();
+    }
+    if (choice == null || !mounted) return;
+    final data = exportConversation(
+      widget.controller.timeline,
+      scope: choice.scope,
+      count: choice.count,
+      bookTitle: widget.bookTitle,
+      sessionTitle: widget.sessionTitle,
+    );
+    await _saveDiagnostic(
+      'domolia-conversation-${DateTime.now().millisecondsSinceEpoch}.json',
+      data,
+    );
+  }
+
+  Future<void> _exportExchange() async {
+    final exchange = widget.controller.lastExchange;
+    if (exchange == null) {
+      _showExportMessage('Aucune requête IA enregistrée dans cette conversation.');
+      return;
+    }
+    await _saveDiagnostic(
+      'domolia-requete-reponse-${DateTime.now().millisecondsSinceEpoch}.json',
+      exchange.toJson(),
+    );
   }
 
   @override
@@ -116,6 +262,30 @@ class _GroupChatPageState extends State<GroupChatPage> {
                           ),
                         ],
                       ),
+                    ),
+                    PopupMenuButton<_ChatExportAction>(
+                      key: const ValueKey('chatExportMenu'),
+                      tooltip: 'Exporter pour diagnostic',
+                      icon: const Icon(Icons.ios_share_outlined,
+                        color: DomoliaColors.goldLight),
+                      onSelected: (action) {
+                        if (action == _ChatExportAction.conversation) {
+                          _exportConversation();
+                        } else {
+                          _exportExchange();
+                        }
+                      },
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(
+                          value: _ChatExportAction.conversation,
+                          child: Text('Exporter la conversation'),
+                        ),
+                        PopupMenuItem(
+                          value: _ChatExportAction.requestAndResponse,
+                          enabled: !chat.busy && chat.lastExchange != null,
+                          child: const Text('Requête IA + réponse brute'),
+                        ),
+                      ],
                     ),
                     IconButton(
                       tooltip: 'Configurer le fournisseur IA',

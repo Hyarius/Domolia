@@ -180,6 +180,12 @@ Le menu **Narrateur** (également accessible depuis **Paramètres**) permet de p
 Les réglages sont sauvegardés localement et réutilisés au prochain lancement de l'application. Les instructions du protocole JSON demeurent fixes et non éditables ; elles sont combinées au style à chaque requête. Le premier message est inséré localement, **sans appel réseau ni consommation de crédits**. Les tests et la CI utilisent uniquement des fournisseurs simulés.
 
 
+## Diagnostics de conversations et requêtes IA
+
+Dans une conversation, le bouton **Exporter pour diagnostic** propose un fichier JSON pour **toute la conversation**, les **X dernières scènes** (délimitées par `scene_change`) ou les **X derniers messages**. Les événements gardent leur ordre, leurs identifiants, leurs auteurs et les changements de scène. L'export ne modifie pas la conversation.
+
+Le même menu permet d'exporter la **dernière requête IA et sa réponse brute dans un seul JSON** : méthode et URL HTTPS, en-têtes sans jeton, corps JSON exact envoyé par le transport, statut HTTP et réponse SSE brute reçue avant décodage narratif. Cette trace est conservée en mémoire pendant la conversation et n'est écrite sur disque que si l'utilisateur le demande. Le jeton d'authentification est supprimé de l'export ; **les textes de la conversation et les instructions système restent présents**, donc relire le JSON avant de le partager.
+
 ## Navigation de l'application
 
 Le menu latéral se limite à **Accueil**, **Livres**, **À propos** et **Paramètres**. La page **Paramètres** donne accès séparément à **Configurations IA** (profils et fournisseurs) et **Mises à jour** (canal, installation et lien **Toutes les versions**). Le menu ne contient plus d'entrées directes pour les fournisseurs IA et les releases. Les conversations sont supprimables depuis **Commencer ou reprendre une partie**, avec confirmation et effacement de l'historique local de la partie uniquement.
