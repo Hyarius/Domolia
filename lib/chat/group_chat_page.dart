@@ -139,7 +139,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
                         itemBuilder: (context, index) {
                           final entry = transcript[index];
                           return _ChatBubble(
-                            key: ValueKey('chat-entry-' + entry.id.toString()),
+                            key: ValueKey('chat-entry-${entry.id}'),
                             entry: entry,
                           );
                         },
@@ -195,7 +195,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
                     children: [
                       Expanded(
                         child: Text(
-                          'Modèle : ' + chat.modelUsed!,
+                          'Modèle : ${chat.modelUsed!}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -207,10 +207,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
                       if (chat.promptTokens != null ||
                           chat.completionTokens != null)
                         Text(
-                          'Tokens : ' +
-                              (chat.promptTokens?.toString() ?? '—') +
-                              ' / ' +
-                              (chat.completionTokens?.toString() ?? '—'),
+                          'Tokens : ${chat.promptTokens?.toString() ?? '—'} / ${chat.completionTokens?.toString() ?? '—'}',
                           style: const TextStyle(
                             color: DomoliaColors.muted,
                             fontSize: 11,
