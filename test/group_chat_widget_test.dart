@@ -323,7 +323,7 @@ void main() {
     ]);
     StoredAiDiagnostic diagnostic(int id, String model) =>
         StoredAiDiagnostic(
-          id: 'trace-' + id.toString(),
+          id: 'trace-$id',
           sessionId: 'partie',
           createdAtUtc: DateTime.utc(2026, 11, 14, 10, 0, id),
           content: jsonEncode({
