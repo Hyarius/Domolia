@@ -130,7 +130,7 @@ class BookLibraryController extends ChangeNotifier {
 
   Future<void> saveSession(BookSession session) async {
     if (_deletedSessions.contains(session.id)) return;
-    await store.putSession(session);
+    await store.updateSession(session);
   }
 
   Future<void> deleteSession(String id) async {
