@@ -25,14 +25,22 @@ indépendant, avec des chaînes correctement échappées.
 Conserve des réponses suffisamment courtes pour un chat sur téléphone.
 ''';
 
+class NarrativeAiEndpoint {
+  const NarrativeAiEndpoint({required this.provider, required this.configuration});
+  final AiChatProvider provider;
+  final AiConfiguration configuration;
+}
+
 class NarrativeChatController extends ChangeNotifier {
   NarrativeChatController({
     required this.provider,
     required this.configuration,
+    this.resolveConnection,
   });
 
   final AiChatProvider provider;
   final AiConfiguration? Function() configuration;
+  final Future<NarrativeAiEndpoint> Function()? resolveConnection;
 
   final List<ChatEntry> _messages = [];
   List<ChatEntry> get messages => List.unmodifiable(_messages);
@@ -116,33 +124,55 @@ class NarrativeChatController extends ChangeNotifier {
   }
 
   Future<void> _generate() async {
-    final config = configuration();
-    if (config == null || config.apiKey.isEmpty) {
-      error = 'Configurez une clé API dans « Fournisseur IA » pour discuter.';
-      preview = null;
-      _notify();
-      return;
-    }
     error = null;
     busy = true;
     _cancelled = false;
     _currentTurnCount = 0;
     promptTokens = null;
     completionTokens = null;
-    modelUsed = config.model;
     preview = ChatEntry(
       id: -1, speaker: ChatSpeaker.narrator, name: 'Narrateur',
       text: 'Rédaction en cours…', inProgress: true,
     );
     _notify();
 
+    NarrativeAiEndpoint? endpoint;
+    try {
+      if (resolveConnection != null) {
+        endpoint = await resolveConnection!();
+      } else {
+        final config = configuration();
+        if (config != null) {
+          endpoint = NarrativeAiEndpoint(
+            provider: provider,
+            configuration: config,
+          );
+        }
+      }
+    } on AiProviderException catch (failure) {
+      error = failure.userMessage;
+    } catch (_) {
+      error = 'Impossible de préparer la connexion IA.';
+    }
+    if (_closed || _cancelled) return;
+    if (endpoint == null || endpoint.configuration.apiKey.isEmpty) {
+      error ??= 'Configurez une connexion IA valide dans les paramètres.';
+      preview = null;
+      busy = false;
+      _notify();
+      return;
+    }
+    final selectedProvider = endpoint.provider;
+    final config = endpoint.configuration;
+    modelUsed = config.model;
+
     final decoder = ChatLineDecoder();
     final context = _buildContext();
     try {
-      if (provider is AiStreamingChatProvider) {
+      if (selectedProvider is AiStreamingChatProvider) {
         final complete = Completer<void>();
         _done = complete;
-        _subscription = (provider as AiStreamingChatProvider)
+        _subscription = (selectedProvider as AiStreamingChatProvider)
             .streamChat(config, messages: context, maxTokens: 1200)
             .listen(
           (chunk) {
@@ -204,7 +234,7 @@ class NarrativeChatController extends ChangeNotifier {
       } else {
         // A provider can implement only AiChatProvider.complete(). In that
         // case the same strict format is decoded after its single response.
-        final text = await provider.complete(
+        final text = await selectedProvider.complete(
           config, messages: context, maxTokens: 1200,
         );
         if (!_cancelled) {
