@@ -214,10 +214,42 @@ void main() {
     expect(find.byKey(const ValueKey('aiStatusErrorDialog')), findsNothing);
   });
 
-  testWidgets('Compact phone layout has no RenderFlex overflow', (tester) async {
-    await showPage(tester, size: const Size(360, 1760));
-    expect(find.byKey(const ValueKey('aiProfilePicker')), findsOneWidget);
-    expect(find.byKey(const ValueKey('aiConnectionStatus')), findsOneWidget);
+  testWidgets('Phone layout gives profile and status the full readable width',
+      (tester) async {
+    await showPage(tester, size: const Size(320, 900));
+    final profile = find.byKey(const ValueKey('aiProfilePicker'));
+    final status = find.byKey(const ValueKey('aiConnectionStatus'));
+    expect(profile, findsOneWidget);
+    expect(status, findsOneWidget);
+    // 320 logical px screen with 20 px padding on each side.
+    expect(tester.getSize(profile).width, greaterThanOrEqualTo(275));
+    expect(tester.getSize(status).width, greaterThanOrEqualTo(275));
+    expect(
+      (tester.getSize(profile).width - tester.getSize(status).width).abs(),
+      lessThan(1),
+    );
+    // No more 60/40 horizontal split between profile and connection.
+    expect(
+      tester.getTopLeft(status).dy,
+      greaterThan(tester.getBottomLeft(profile).dy),
+    );
+    expect(find.text('Ajouter un profil'), findsOneWidget);
+    expect(find.text('Gérer'), findsOneWidget);
+    expect(find.text('État de la connexion'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Profile dropdown has space for names even on small phones',
+      (tester) async {
+    await showPage(tester, size: const Size(360, 960));
+    const longName = 'OpenUncensored Compte Personnel et Secondaire';
+    expect(await controller.createProfile(longName), isTrue);
+    await tester.pumpAndSettle();
+    final picker = find.byKey(const ValueKey('aiProfileSelector'));
+    expect(tester.getSize(picker).width, greaterThan(280));
+    await tester.tap(picker);
+    await tester.pumpAndSettle();
+    expect(find.text(longName), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 }
