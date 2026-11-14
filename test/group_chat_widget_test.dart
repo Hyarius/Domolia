@@ -266,4 +266,46 @@ void main() {
     expect(find.text('Requête IA + réponse brute'), findsOneWidget);
   });
 
+  testWidgets('Purger les diagnostics confirme et préserve la conversation',
+      (tester) async {
+    final controller = NarrativeChatController(
+      provider: ScriptedProvider(), configuration: () => config,
+    );
+    addTearDown(controller.dispose);
+    controller.restoreTimeline(const [
+      ChatEntry(id: 0, speaker: ChatSpeaker.player,
+          name: 'Vous', text: 'Ceci doit rester.'),
+    ]);
+    var purges = 0;
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: Scaffold(body: GroupChatPage(
+        controller: controller,
+        onOpenSettings: () {},
+        onLoadDiagnostics: () async => [],
+        onPurgeDiagnostics: () async { purges++; },
+      )),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('chatExportMenu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Purger les diagnostics'));
+    await tester.pumpAndSettle();
+    expect(find.text('Purger les diagnostics ?'), findsOneWidget);
+    await tester.tap(find.text('Annuler'));
+    await tester.pumpAndSettle();
+    expect(purges, 0);
+
+    await tester.tap(find.byKey(const ValueKey('chatExportMenu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Purger les diagnostics'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Purger'));
+    await tester.pumpAndSettle();
+    expect(purges, 1);
+    expect(controller.timeline, hasLength(1));
+    expect((controller.timeline.single as ChatEntry).text,
+        'Ceci doit rester.');
+  });
+
 }
