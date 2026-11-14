@@ -33,7 +33,7 @@ class ScriptedProvider implements AiChatProvider {
 }
 
 class PendingProvider implements AiChatProvider, AiStreamingChatProvider {
-  final controller = StreamController<AiStreamChunk>();
+  final controller = StreamController<AiStreamChunk>.broadcast();
   @override
   Stream<AiStreamChunk> streamChat(
     AiConfiguration cfg, {
