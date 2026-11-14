@@ -245,51 +245,18 @@ class _GroupChatPageState extends State<GroupChatPage> {
   }
 
   Future<void> _editPlayerMessage(ChatEntry entry) async {
-    final input = TextEditingController(text: entry.text);
-    var invalid = false;
-    try {
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => StatefulBuilder(
-          builder: (context, update) => AlertDialog(
-            title: const Text('Éditer mon message'),
-            content: TextField(
-              key: const ValueKey('chatEditMessageInput'),
-              controller: input,
-              autofocus: true, minLines: 2, maxLines: 7, maxLength: 4000,
-              decoration: InputDecoration(
-                labelText: 'Votre message',
-                errorText: invalid
-                    ? 'Saisissez un texte (4 000 caractères max).' : null,
-              ),
-              onChanged: (_) => update(() => invalid = false),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Annuler'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  if (!widget.controller.editPlayerMessage(entry.id, input.text)) {
-                    update(() => invalid = true);
-                    return;
-                  }
-                  Navigator.pop(dialogContext);
-                  _showExportMessage(
-                    'Message modifié. Utilisez « Reprendre ici » '
-                    'pour recalculer la suite.',
-                  );
-                },
-                child: const Text('Enregistrer'),
-              ),
-            ],
-          ),
-        ),
-      );
-    } finally {
-      input.dispose();
+    final updated = await showDialog<String>(
+      context: context,
+      builder: (_) => _PlayerMessageEditor(initialText: entry.text),
+    );
+    if (updated == null || !mounted) return;
+    if (!widget.controller.editPlayerMessage(entry.id, updated)) {
+      _showExportMessage('Impossible de modifier ce message.');
+      return;
     }
+    _showExportMessage(
+      'Message modifié. Utilisez « Reprendre ici » pour recalculer la suite.',
+    );
   }
 
   Future<bool> _confirmRewind({
@@ -662,6 +629,73 @@ class _GroupChatPageState extends State<GroupChatPage> {
       },
     );
   }
+}
+
+/// The text field owns its controller for the full route transition.
+class _PlayerMessageEditor extends StatefulWidget {
+  const _PlayerMessageEditor({required this.initialText});
+
+  final String initialText;
+
+  @override
+  State<_PlayerMessageEditor> createState() => _PlayerMessageEditorState();
+}
+
+class _PlayerMessageEditorState extends State<_PlayerMessageEditor> {
+  late final TextEditingController _controller;
+  bool _invalid = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialText);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final value = _controller.text.trim();
+    if (value.isEmpty || value.length > 4000) {
+      setState(() => _invalid = true);
+      return;
+    }
+    Navigator.pop(context, value);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Éditer mon message'),
+    content: TextField(
+      key: const ValueKey('chatEditMessageInput'),
+      controller: _controller,
+      autofocus: true,
+      minLines: 2,
+      maxLines: 7,
+      maxLength: 4000,
+      decoration: InputDecoration(
+        labelText: 'Votre message',
+        errorText: _invalid
+            ? 'Saisissez un texte (4 000 caractères max).' : null,
+      ),
+      onChanged: (_) {
+        if (_invalid) setState(() => _invalid = false);
+      },
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Annuler'),
+      ),
+      FilledButton(
+        onPressed: _save,
+        child: const Text('Enregistrer'),
+      ),
+    ],
+  );
 }
 
 class _EmptyConversation extends StatelessWidget {
