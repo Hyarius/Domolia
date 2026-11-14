@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:ui';
+
+import 'package:flutter/foundation.dart';
 
 import 'package:cupertino_ui/cupertino_ui.dart' as cupertino_ui;
 import 'package:flutter_localizations/flutter_localizations.dart' as flutter_l10n;
@@ -8,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'theme/domolia_theme.dart';
 import 'chat/chat_controller.dart';
 import 'chat/group_chat_page.dart';
+import 'chat/conversation_settings_page.dart';
 import 'chat/narrator_settings.dart';
 import 'books/book_definition.dart';
 import 'books/book_session.dart';
@@ -26,9 +30,31 @@ import 'ai/chatgpt_responses.dart';
 import 'updates/update_service.dart';
 import 'updates/update_io.dart';
 import 'updates/update_widgets.dart';
+import 'logging/app_logger.dart';
+import 'logging/app_logs_page.dart';
 
 void main() {
-  runApp(const DomoliaApp());
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    await AppLogger.initialize();
+    final flutterHandler = FlutterError.onError;
+    FlutterError.onError = (details) {
+      AppLogger.error('Exception Flutter', component: 'flutter',
+          error: details.exception, stackTrace: details.stack);
+      flutterHandler?.call(details);
+    };
+    final platformHandler = PlatformDispatcher.instance.onError;
+    PlatformDispatcher.instance.onError = (error, stackTrace) {
+      AppLogger.error('Exception non interceptée', component: 'platform',
+          error: error, stackTrace: stackTrace);
+      return platformHandler?.call(error, stackTrace) ?? false;
+    };
+    AppLogger.info('Démarrage de Domolia', component: 'app');
+    runApp(const DomoliaApp());
+  }, (error, stackTrace) {
+    AppLogger.error('Exception asynchrone non interceptée', component: 'zone',
+        error: error, stackTrace: stackTrace);
+  });
 }
 
 class DomoliaApp extends StatelessWidget {
@@ -71,7 +97,7 @@ class DomoliaApp extends StatelessWidget {
   }
 }
 
-enum _Page { home, books, book, chat, about, settings, updates, ai, diagnostics }
+enum _Page { home, books, book, chat, about, settings, updates, ai, diagnostics, logs, conversationSettings }
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -111,6 +137,7 @@ class _HomePageState extends State<HomePage> {
   String? _activeSessionTitle;
   String? _activeSessionId;
   Future<void> Function()? _awaitSessionWrites;
+  List<BookSession> _recentSessions = const [];
 
   @override
   void initState() {
@@ -140,7 +167,10 @@ class _HomePageState extends State<HomePage> {
       diagnostics: _aiDiagnostics,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(_updates.initialize());
+      if (mounted) {
+        unawaited(_updates.initialize());
+        unawaited(_refreshRecent());
+      }
     });
   }
 
@@ -183,6 +213,21 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<void> _refreshRecent() async {
+    try {
+      final sessions = await _books.recentSessions();
+      if (mounted) setState(() => _recentSessions = sessions);
+    } catch (failure, stackTrace) {
+      AppLogger.error('Chargement des Parties récentes échoué',
+          component: 'books', error: failure, stackTrace: stackTrace);
+    }
+  }
+
+  void _openConversationSettings() {
+    if (_activeSessionId == null || _selectedBookId == null) return;
+    setState(() => _page = _Page.conversationSettings);
+  }
+
   void _openBooks() {
     unawaited(_books.initialize());
     setState(() => _page = _Page.books);
@@ -211,7 +256,7 @@ class _HomePageState extends State<HomePage> {
           narrator: book.narrator,
           diagnostics: _aiDiagnostics,
           resolveConnection: () async {
-            final id = await _books.profileFor(book.id);
+            final id = await _books.profileForSession(session.id, book.id);
             if (id == null || id.isEmpty) {
               throw const AiProviderException(
                 'Choisissez une configuration IA pour ce Livre.',
@@ -228,8 +273,9 @@ class _HomePageState extends State<HomePage> {
             // the latest conversation snapshot.
             writes = writes.then((_) => _books.saveSession(
               session.copyWith(timeline: events),
-            )).catchError((Object _) {
-              // The UI remains usable if local storage is temporarily unavailable.
+            )).catchError((Object failure, StackTrace stackTrace) {
+              AppLogger.error('Sauvegarde de Partie échouée',
+                component: 'books', error: failure, stackTrace: stackTrace);
             });
           },
           onExchangeCaptured: (exchange) {
@@ -247,8 +293,9 @@ class _HomePageState extends State<HomePage> {
                 ),
                 retention,
               );
-            }).catchError((Object _) {
-              // Diagnostics never prevent the story from continuing.
+            }).catchError((Object failure, StackTrace stackTrace) {
+              AppLogger.error('Persistance du diagnostic IA échouée',
+                component: 'diagnostics', error: failure, stackTrace: stackTrace);
             });
           },
         );
@@ -256,12 +303,15 @@ class _HomePageState extends State<HomePage> {
       _chat.restoreTimeline(session.timeline);
       _chat.beginConversation();
       setState(() {
+        _selectedBookId = book.id;
         _activeBookTitle = book.title;
         _activeSessionTitle = session.title;
         _activeSessionId = session.id;
         _page = _Page.chat;
       });
-    } catch (_) {
+    } catch (failure, stackTrace) {
+      AppLogger.error('Ouverture de Partie échouée', component: 'books',
+          error: failure, stackTrace: stackTrace);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Impossible d’ouvrir cette partie.')),
@@ -280,6 +330,7 @@ class _HomePageState extends State<HomePage> {
   void _showPage(_Page page) {
     Navigator.pop(context); // Ferme le menu latéral.
     if (page == _Page.books) unawaited(_books.initialize());
+    if (page == _Page.home) unawaited(_refreshRecent());
     setState(() => _page = page);
   }
 
@@ -324,7 +375,7 @@ class _HomePageState extends State<HomePage> {
                 )
           : _page == _Page.chat ? GroupChatPage(
               controller: _chat,
-              onOpenSettings: _openAiSettings,
+              onOpenSettings: _openConversationSettings,
               bookTitle: _activeBookTitle,
               sessionTitle: _activeSessionTitle,
               onLoadDiagnostics: () async {
@@ -340,6 +391,19 @@ class _HomePageState extends State<HomePage> {
                 await _books.clearDiagnostics(id);
               },
             )
+          : _page == _Page.conversationSettings &&
+                  _activeSessionId != null && _selectedBookId != null
+              ? ConversationSettingsPage(
+                  key: ValueKey(_activeSessionId),
+                  library: _books,
+                  ai: _ai,
+                  chat: _chat,
+                  bookId: _selectedBookId!,
+                  sessionId: _activeSessionId!,
+                  bookTitle: _activeBookTitle,
+                  sessionTitle: _activeSessionTitle,
+                  onBack: () => setState(() => _page = _Page.chat),
+                )
           : _page == _Page.about ? _buildAbout()
           : _page == _Page.settings ? _buildSettings()
           : _page == _Page.updates ? UpdateSettingsPanel(
@@ -355,6 +419,9 @@ class _HomePageState extends State<HomePage> {
           : _page == _Page.diagnostics ? AiDiagnosticsSettingsPage(
               onBack: () => setState(() => _page = _Page.settings),
               onPrune: _books.pruneDiagnostics,
+            )
+          : _page == _Page.logs ? AppLogsPage(
+              onBack: () => setState(() => _page = _Page.settings),
             )
           : _buildSettings()),
       ]),
@@ -417,7 +484,7 @@ class _HomePageState extends State<HomePage> {
               leading: const Icon(Icons.library_books_outlined),
               title: const Text('Livres'),
               selected: _page == _Page.books || _page == _Page.book ||
-                  _page == _Page.chat,
+                  _page == _Page.chat || _page == _Page.conversationSettings,
               selectedColor: DomoliaColors.goldLight,
               selectedTileColor: DomoliaColors.raisedSurface,
               onTap: () => _showPage(_Page.books),
@@ -436,7 +503,7 @@ class _HomePageState extends State<HomePage> {
               title: const Text('Paramètres'),
               selected: _page == _Page.settings ||
                   _page == _Page.updates || _page == _Page.ai ||
-                  _page == _Page.diagnostics,
+                  _page == _Page.diagnostics || _page == _Page.logs,
               selectedColor: DomoliaColors.goldLight,
               selectedTileColor: DomoliaColors.raisedSurface,
               onTap: () => _showPage(_Page.settings),
@@ -494,6 +561,15 @@ class _HomePageState extends State<HomePage> {
           subtitle: const Text('Conservation locale des requêtes et réponses'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => setState(() => _page = _Page.diagnostics),
+        ),
+        const Divider(),
+        ListTile(
+          key: const ValueKey('settingsLogs'),
+          leading: const Icon(Icons.article_outlined, color: DomoliaColors.gold),
+          title: const Text('Logs'),
+          subtitle: const Text('Consulter, copier, exporter et effacer le journal'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => setState(() => _page = _Page.logs),
         ),
       ],
     ),
@@ -573,6 +649,36 @@ class _HomePageState extends State<HomePage> {
                     icon: const Icon(Icons.library_books_outlined),
                     label: const Text('Ouvrir mes Livres'),
                   ),
+                  const SizedBox(height: 12),
+                  const SizedBox(height: 22),
+                  const Text('Parties récentes', style: TextStyle(
+                    fontSize: 20, color: DomoliaColors.goldLight,
+                    fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  if (_recentSessions.isEmpty)
+                    const Text('Aucune Partie récente.',
+                      style: TextStyle(color: DomoliaColors.muted)),
+                  for (final session in _recentSessions)
+                    Card(
+                      color: DomoliaColors.surface,
+                      child: ListTile(
+                        key: ValueKey('recentSession-' + session.id),
+                        leading: const Icon(Icons.history_rounded,
+                            color: DomoliaColors.gold),
+                        title: Text(session.title),
+                        subtitle: Text(
+                          (_books.byId(session.bookId)?.title ?? 'Livre inconnu') +
+                          ' · ' +
+                          (session.updatedAtUtc?.toLocal().toString() ?? '')),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          final book = _books.byId(session.bookId);
+                          if (book != null) {
+                            unawaited(_openBookSession(book, session));
+                          }
+                        },
+                      ),
+                    ),
                   const SizedBox(height: 12),
                   FilledButton.icon(
                     onPressed: _checkForUpdates,

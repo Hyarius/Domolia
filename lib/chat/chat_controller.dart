@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../ai/ai_provider.dart';
 import '../ai/ai_diagnostics.dart';
+import '../logging/app_logger.dart';
 import 'chat_protocol.dart';
 import 'narrator.dart';
 
@@ -317,6 +318,7 @@ class NarrativeChatController extends ChangeNotifier {
     final config = endpoint.configuration;
     modelUsed = config.model;
 
+    AppLogger.info('Début de génération IA', component: 'chat');
     final decoder = ChatLineDecoder();
     final context = _buildContext();
     final priorExchange = diagnostics?.last;
@@ -357,10 +359,19 @@ class NarrativeChatController extends ChangeNotifier {
                       );
               }
               _notify();
-            } catch (failure) {
+            } catch (failure, stackTrace) {
+              // The parser may have decoded a valid prefix in this same chunk.
+              _addLines(decoder.takeAcceptedBeforeError());
               error = failure is FormatException
                   ? failure.message
                   : 'Le format de la réponse IA est invalide.';
+              AppLogger.error('Décodage de génération IA rejeté',
+                component: 'chat', error: failure, stackTrace: stackTrace,
+                details: {
+                  'reason': failure is ChatProtocolException
+                      ? failure.problem.name : 'invalidOutput',
+                  'preservedEvents': _currentTurnCount,
+                });
               _subscription?.cancel();
               if (!complete.isCompleted) complete.complete();
             }
@@ -377,8 +388,12 @@ class NarrativeChatController extends ChangeNotifier {
             if (!_cancelled && error == null) {
               try {
                 _addLines(decoder.finish());
-              } on FormatException catch (failure) {
+              } on FormatException catch (failure, stackTrace) {
                 error = failure.message;
+                AppLogger.error('Dernière ligne IA rejetée',
+                  component: 'chat', error: failure, stackTrace: stackTrace,
+                  details: {'reason': failure is ChatProtocolException
+                      ? failure.problem.name : 'invalidOutput'});
               }
             }
             if (!complete.isCompleted) complete.complete();
@@ -400,13 +415,25 @@ class NarrativeChatController extends ChangeNotifier {
       if (!_cancelled && error == null && _currentTurnCount == 0) {
         error = 'Le modèle n’a retourné aucun message exploitable.';
       }
-    } on AiProviderException catch (failure) {
+    } on AiProviderException catch (failure, stackTrace) {
       if (!_cancelled) error = failure.userMessage;
-    } on FormatException catch (failure) {
+      AppLogger.warning('Fournisseur IA indisponible', component: 'chat',
+        details: {'exceptionType': failure.runtimeType.toString()});
+    } on FormatException catch (failure, stackTrace) {
+      _addLines(decoder.takeAcceptedBeforeError());
       if (!_cancelled) error = failure.message;
-    } catch (_) {
+      AppLogger.error('Protocole narratif rejeté', component: 'chat',
+        error: failure, stackTrace: stackTrace,
+        details: {'reason': failure is ChatProtocolException
+            ? failure.problem.name : 'invalidOutput'});
+    } catch (failure, stackTrace) {
       if (!_cancelled) error = 'Impossible de générer la réponse. Réessayez.';
+      AppLogger.error('Génération IA échouée', component: 'chat',
+          error: failure, stackTrace: stackTrace);
     } finally {
+      AppLogger.info(_cancelled ? 'Génération interrompue'
+          : error == null ? 'Génération terminée' : 'Génération terminée en erreur',
+          component: 'chat', details: {'acceptedMessages': _currentTurnCount});
       if (diagnostics?.last != null && diagnostics?.last != priorExchange) {
         final exchange = diagnostics!.last!;
         exchange.complete(
@@ -449,6 +476,7 @@ class NarrativeChatController extends ChangeNotifier {
   void stop() {
     if (!busy || _closed) return;
     _cancelled = true;
+    AppLogger.info('Génération interrompue par le joueur', component: 'chat');
     error = 'Génération interrompue.';
     preview = null;
     busy = false;

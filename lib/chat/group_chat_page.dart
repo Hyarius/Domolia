@@ -8,15 +8,8 @@ import '../ai/ai_diagnostics.dart';
 import '../theme/domolia_theme.dart';
 import 'chat_controller.dart';
 import 'chat_protocol.dart';
-import 'chat_exports.dart';
 
-enum _ChatExportAction { conversation, purgeDiagnostics }
-
-class _TranscriptChoice {
-  const _TranscriptChoice(this.scope, this.count);
-  final ChatExportScope scope;
-  final int count;
-}
+enum _ChatExportAction { purgeDiagnostics }
 
 class GroupChatPage extends StatefulWidget {
   const GroupChatPage({
@@ -116,97 +109,6 @@ class _GroupChatPageState extends State<GroupChatPage> {
       _showExportMessage('Impossible d’exporter le diagnostic JSON.');
     }
   }
-
-  Future<void> _exportConversation() async {
-    var scope = ChatExportScope.complete;
-    var invalid = false;
-    var number = '3';
-    final choice = await showDialog<_TranscriptChoice>(
-        context: context,
-        builder: (dialogContext) => StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            title: const Text('Exporter la conversation'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<ChatExportScope>(
-                  key: const ValueKey('chatExportScope'),
-                  initialValue: scope,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Portée de l’export'),
-                  items: const [
-                    DropdownMenuItem(
-                      value: ChatExportScope.complete,
-                      child: Text('Toute la conversation'),
-                    ),
-                    DropdownMenuItem(
-                      value: ChatExportScope.lastScenes,
-                      child: Text('X dernières scènes'),
-                    ),
-                    DropdownMenuItem(
-                      value: ChatExportScope.lastMessages,
-                      child: Text('X derniers messages'),
-                    ),
-                  ],
-                  onChanged: (selected) {
-                    if (selected != null) {
-                      setDialogState(() {
-                        scope = selected;
-                        invalid = false;
-                      });
-                    }
-                  },
-                ),
-                if (scope != ChatExportScope.complete) ...[
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    key: const ValueKey('chatExportCount'),
-                    initialValue: number,
-                    onChanged: (value) => number = value,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Nombre',
-                      errorText: invalid ? 'Entre 1 et 50 000' : null,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Annuler'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  final count = scope == ChatExportScope.complete
-                      ? 1 : int.tryParse(number);
-                  if (count == null || count < 1 || count > 50000) {
-                    setDialogState(() => invalid = true);
-                    return;
-                  }
-                  Navigator.pop(dialogContext, _TranscriptChoice(scope, count));
-                },
-                child: const Text('Exporter'),
-              ),
-            ],
-          ),
-        ),
-      );
-    if (choice == null || !mounted) return;
-    final data = exportConversation(
-      widget.controller.timeline,
-      scope: choice.scope,
-      count: choice.count,
-      bookTitle: widget.bookTitle,
-      sessionTitle: widget.sessionTitle,
-    );
-    await _saveDiagnostic(
-      'domolia-conversation-${DateTime.now().millisecondsSinceEpoch}.json',
-      data,
-    );
-  }
-
 
   /// Export only the exact HTTP request which produced the tapped bubble.
   Future<void> _exportAiMessage(ChatEntry entry) async {
@@ -441,7 +343,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
                             ),
                           ),
                           Text(
-                            'Vous · Narrateur · Personnages',
+                            'Vous et les personnages',
                             style: TextStyle(
                               fontSize: 12,
                               color: DomoliaColors.muted,
@@ -459,17 +361,11 @@ class _GroupChatPageState extends State<GroupChatPage> {
                         color: DomoliaColors.goldLight),
                       onSelected: (action) {
                         switch (action) {
-                          case _ChatExportAction.conversation:
-                            _exportConversation();
                           case _ChatExportAction.purgeDiagnostics:
                             _purgeDiagnostics();
                         }
                       },
                       itemBuilder: (_) => [
-                        const PopupMenuItem(
-                          value: _ChatExportAction.conversation,
-                          child: Text('Exporter la conversation'),
-                        ),
                         PopupMenuItem(
                           value: _ChatExportAction.purgeDiagnostics,
                           enabled: !chat.busy &&
@@ -479,7 +375,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
                       ],
                     ),
                     IconButton(
-                      tooltip: 'Configurer le fournisseur IA',
+                      tooltip: 'Paramètres de la conversation',
                       onPressed: widget.onOpenSettings,
                       icon: const Icon(
                         Icons.tune_rounded,
@@ -787,6 +683,24 @@ class _ChatBubble extends StatelessWidget {
       ChatSpeaker.character => DomoliaColors.cream,
     };
 
+    if (entry.speaker == ChatSpeaker.narrator) {
+      // Narration is prose without a participant label, avatar, or bubble.
+      return GestureDetector(
+        onLongPress: onLongPress,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 22),
+          child: Text(entry.text,
+            key: const ValueKey('chatNarrationText'),
+            style: TextStyle(
+              color: DomoliaColors.cream,
+              fontSize: 15, height: 1.55,
+              fontStyle: entry.inProgress
+                  ? FontStyle.italic : FontStyle.normal,
+            ),
+          ),
+        ),
+      );
+    }
     return GestureDetector(
       onLongPress: onLongPress,
       child: Padding(
