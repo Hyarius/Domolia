@@ -4,12 +4,13 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../ai/ai_diagnostics.dart';
 import '../theme/domolia_theme.dart';
 import 'chat_controller.dart';
 import 'chat_protocol.dart';
 import 'chat_exports.dart';
 
-enum _ChatExportAction { conversation, requestAndResponse }
+enum _ChatExportAction { conversation, requestAndResponse, purgeDiagnostics }
 
 class _TranscriptChoice {
   const _TranscriptChoice(this.scope, this.count);
@@ -24,12 +25,16 @@ class GroupChatPage extends StatefulWidget {
     required this.onOpenSettings,
     this.bookTitle,
     this.sessionTitle,
+    this.onLoadDiagnostics,
+    this.onPurgeDiagnostics,
   });
 
   final NarrativeChatController controller;
   final VoidCallback onOpenSettings;
   final String? bookTitle;
   final String? sessionTitle;
+  final Future<List<StoredAiDiagnostic>> Function()? onLoadDiagnostics;
+  final Future<void> Function()? onPurgeDiagnostics;
 
   @override
   State<GroupChatPage> createState() => _GroupChatPageState();
@@ -195,15 +200,100 @@ class _GroupChatPageState extends State<GroupChatPage> {
   }
 
   Future<void> _exportExchange() async {
-    final exchange = widget.controller.lastExchange;
-    if (exchange == null) {
-      _showExportMessage('Aucune requête IA enregistrée dans cette conversation.');
-      return;
+    try {
+      final saved = await (widget.onLoadDiagnostics?.call() ??
+          Future<List<StoredAiDiagnostic>>.value([]));
+      final choices = <StoredAiDiagnostic>[...saved];
+      final exchange = widget.controller.lastExchange;
+      if (exchange != null &&
+          !choices.any((d) => d.createdAtUtc == exchange.createdAtUtc)) {
+        choices.insert(0, StoredAiDiagnostic(
+          id: 'latest',
+          sessionId: '',
+          createdAtUtc: exchange.createdAtUtc,
+          content: exchange.exportJson(),
+        ));
+      }
+      if (choices.isEmpty) {
+        _showExportMessage('Aucune requête IA enregistrée dans cette conversation.');
+        return;
+      }
+      if (!mounted) return;
+      StoredAiDiagnostic? selected;
+      if (choices.length == 1) {
+        selected = choices.single;
+      } else {
+        selected = await showModalBottomSheet<StoredAiDiagnostic>(
+          context: context,
+          isScrollControlled: true,
+          builder: (sheetContext) => SafeArea(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 460),
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  const ListTile(
+                    title: Text('Choisir une requête IA'),
+                    subtitle: Text('Les échanges les plus récents apparaissent en premier.'),
+                  ),
+                  for (final item in choices)
+                    ListTile(
+                      key: ValueKey('aiTrace-${item.id}'),
+                      leading: const Icon(Icons.description_outlined),
+                      title: Text(item.model,
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: Text(
+                        '${item.createdAtUtc.toLocal()} · '
+                        'HTTP ${item.statusCode?.toString() ?? "—"}'),
+                      onTap: () => Navigator.pop(sheetContext, item),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+      if (selected == null) return;
+      await _saveDiagnostic(
+        'domolia-requete-reponse-${selected.createdAtUtc.microsecondsSinceEpoch}.json',
+        selected.data,
+      );
+    } catch (_) {
+      _showExportMessage('Impossible de lire les diagnostics IA enregistrés.');
     }
-    await _saveDiagnostic(
-      'domolia-requete-reponse-${DateTime.now().millisecondsSinceEpoch}.json',
-      exchange.toJson(),
+  }
+
+  Future<void> _purgeDiagnostics() async {
+    if (widget.controller.busy || widget.onPurgeDiagnostics == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Purger les diagnostics ?'),
+        content: const Text(
+          'Supprimer définitivement les requêtes et réponses IA '
+          'enregistrées pour cette partie ? Les messages et les scènes '
+          'de la conversation seront conservés.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Purger'),
+          ),
+        ],
+      ),
     );
+    if (confirmed != true || !mounted) return;
+    try {
+      await widget.onPurgeDiagnostics!();
+      widget.controller.forgetLastExchange();
+      _showExportMessage('Diagnostics de cette partie supprimés.');
+    } catch (_) {
+      _showExportMessage('Impossible de purger les diagnostics.');
+    }
   }
 
   @override
@@ -263,14 +353,17 @@ class _GroupChatPageState extends State<GroupChatPage> {
                     ),
                     PopupMenuButton<_ChatExportAction>(
                       key: const ValueKey('chatExportMenu'),
-                      tooltip: 'Exporter pour diagnostic',
+                      tooltip: 'Options de la conversation',
                       icon: const Icon(Icons.ios_share_outlined,
                         color: DomoliaColors.goldLight),
                       onSelected: (action) {
-                        if (action == _ChatExportAction.conversation) {
-                          _exportConversation();
-                        } else {
-                          _exportExchange();
+                        switch (action) {
+                          case _ChatExportAction.conversation:
+                            _exportConversation();
+                          case _ChatExportAction.requestAndResponse:
+                            _exportExchange();
+                          case _ChatExportAction.purgeDiagnostics:
+                            _purgeDiagnostics();
                         }
                       },
                       itemBuilder: (_) => [
@@ -280,8 +373,16 @@ class _GroupChatPageState extends State<GroupChatPage> {
                         ),
                         PopupMenuItem(
                           value: _ChatExportAction.requestAndResponse,
-                          enabled: !chat.busy && chat.lastExchange != null,
+                          enabled: !chat.busy &&
+                              (chat.lastExchange != null ||
+                                  widget.onLoadDiagnostics != null),
                           child: const Text('Requête IA + réponse brute'),
+                        ),
+                        PopupMenuItem(
+                          value: _ChatExportAction.purgeDiagnostics,
+                          enabled: !chat.busy &&
+                              widget.onPurgeDiagnostics != null,
+                          child: const Text('Purger les diagnostics'),
                         ),
                       ],
                     ),
