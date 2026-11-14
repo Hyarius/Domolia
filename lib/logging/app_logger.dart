@@ -68,13 +68,21 @@ class FileAppLogStorage implements AppLogStorage {
   Future<void> append(String line) async {
     await directory.create(recursive: true);
     final current = _file(0);
+    final lineBytes = utf8.encode(line).length;
+    if (lineBytes > maxFileBytes) {
+      throw StateError('Log entry exceeds configured file limit.');
+    }
     final size = await current.exists() ? await current.length() : 0;
-    if (size > 0 && size + utf8.encode(line).length > maxFileBytes) {
-      for (var i = maxFiles - 1; i >= 1; i--) {
-        final destination = _file(i);
-        if (await destination.exists()) await destination.delete();
-        final source = _file(i - 1);
-        if (await source.exists()) await source.rename(destination.path);
+    if (size > 0 && size + lineBytes > maxFileBytes) {
+      if (maxFiles == 1) {
+        await current.delete();
+      } else {
+        for (var i = maxFiles - 1; i >= 1; i--) {
+          final destination = _file(i);
+          if (await destination.exists()) await destination.delete();
+          final source = _file(i - 1);
+          if (await source.exists()) await source.rename(destination.path);
+        }
       }
     }
     await current.writeAsString(line, mode: FileMode.append, flush: true);

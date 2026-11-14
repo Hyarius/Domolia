@@ -69,4 +69,35 @@ void main() {
     expect(snapshot, isNot(contains('never include this exception body')));
     expect(snapshot, contains('[REDACTED]'));
   });
+
+  test('one rotating file remains within the byte cap', () async {
+    final directory = await Directory.systemTemp.createTemp('domolia-log-cap-');
+    addTearDown(() async { await directory.delete(recursive: true); });
+    final logger = AppLogger(storage: FileAppLogStorage(
+      directory, maxFiles: 1, maxFileBytes: 160));
+    for (var i = 0; i < 30; i++) {
+      logger.log(AppLogLevel.info, 'record-$i');
+    }
+    await logger.flush();
+    final snapshot = await logger.snapshot();
+    expect(snapshot, contains('record-29'));
+    expect(snapshot, isNot(contains('record-0')));
+    expect(await File('${directory.path}/domolia-0.jsonl').length(),
+      lessThanOrEqualTo(160));
+  });
+
+  test('oversized entries fail safely without breaking subsequent writes', () async {
+    final directory = await Directory.systemTemp.createTemp('domolia-log-size-');
+    addTearDown(() async { await directory.delete(recursive: true); });
+    final logger = AppLogger(storage: FileAppLogStorage(
+      directory, maxFiles: 2, maxFileBytes: 140));
+    logger.log(AppLogLevel.error, 'x' * 500);
+    await logger.flush();
+    expect(logger.failedOperations, 1);
+    expect(await logger.entries(), isEmpty);
+    logger.log(AppLogLevel.info, 'Recovered');
+    await logger.flush();
+    expect((await logger.entries()).single.message, 'Recovered');
+  });
+
 }
