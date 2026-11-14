@@ -16,6 +16,7 @@ import 'books/book_library_page.dart';
 import 'books/book_editor_page.dart';
 import 'books/book_store.dart';
 import 'ai/ai_controller.dart';
+import 'ai/ai_diagnostics.dart';
 import 'ai/ai_provider.dart';
 import 'ai/ai_settings_panel.dart';
 import 'ai/ai_storage.dart';
@@ -95,6 +96,7 @@ class _HomePageState extends State<HomePage> {
   _Page _aiReturnPage = _Page.settings;
   late final UpdateController _updates;
   late final bool _ownsUpdates;
+  final AiExchangeRecorder _aiDiagnostics = AiExchangeRecorder();
   late final AiConnectionController _ai;
   late final bool _ownsAi;
   late NarrativeChatController _chat;
@@ -113,9 +115,9 @@ class _HomePageState extends State<HomePage> {
     _ownsAi = widget.ai == null;
     _ai = widget.ai ?? AiConnectionController(
       store: SecureAiProfileStore(),
-      provider: OpenAiCompatibleChatProvider(),
+      provider: OpenAiCompatibleChatProvider(diagnostics: _aiDiagnostics),
       chatGpt: ChatGptAuthService(store: SecureChatGptSessionStore()),
-      chatGptProvider: ChatGptResponsesProvider(),
+      chatGptProvider: ChatGptResponsesProvider(diagnostics: _aiDiagnostics),
     );
     _ownsNarratorSettings = widget.narratorSettings == null;
     _narratorSettings = widget.narratorSettings ?? NarratorSettingsController(
@@ -130,6 +132,7 @@ class _HomePageState extends State<HomePage> {
     _chat = widget.chat ?? NarrativeChatController(
       provider: _ai.provider,
       configuration: () => null,
+      diagnostics: _aiDiagnostics,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_updates.initialize());
@@ -200,6 +203,7 @@ class _HomePageState extends State<HomePage> {
           provider: _ai.provider,
           configuration: () => null,
           narrator: book.narrator,
+          diagnostics: _aiDiagnostics,
           resolveConnection: () async {
             final id = await _books.profileFor(book.id);
             if (id == null || id.isEmpty) {

@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'ai_diagnostics.dart';
+
 const defaultAiBaseUrl = 'https://api.openuncensored.com/v1';
 const defaultAiModel = 'deepseek-v4.1-flash-1017-uncensored';
 
@@ -160,10 +162,11 @@ String validatedAiModel(String value) {
 }
 
 class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatProvider {
-  OpenAiCompatibleChatProvider({http.Client? client})
+  OpenAiCompatibleChatProvider({http.Client? client, this.diagnostics})
       : _client = client ?? http.Client();
 
   final http.Client _client;
+  final AiExchangeRecorder? diagnostics;
 
   Future<dynamic> _request(
     AiConfiguration configuration,
@@ -184,12 +187,22 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
       request.body = jsonEncode(payload);
     }
 
+    final exchange = payload == null ? null : diagnostics?.begin(
+      provider: 'openai-compatible',
+      method: request.method,
+      url: request.url.toString(),
+      requestBody: request.body,
+      secret: configuration.apiKey.trim(),
+      accept: request.headers['Accept'] ?? 'application/json',
+    );
     http.Response response;
     try {
       final streamed = await _client.send(request).timeout(const Duration(seconds: 25));
       response = await http.Response.fromStream(streamed).timeout(
         const Duration(seconds: 65),
       );
+      exchange?.statusCode = response.statusCode;
+      exchange?.addRawResponse(response.bodyBytes);
     } on TimeoutException {
       throw const AiProviderException('Le fournisseur IA ne répond pas à temps.');
     } catch (_) {
@@ -328,11 +341,20 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
         ],
       });
 
+    final exchange = diagnostics?.begin(
+      provider: 'openai-compatible',
+      method: request.method,
+      url: request.url.toString(),
+      requestBody: request.body,
+      secret: configuration.apiKey.trim(),
+      accept: request.headers['Accept'] ?? 'text/event-stream',
+    );
     http.StreamedResponse response;
     try {
       response = await _client.send(request).timeout(
         const Duration(seconds: 25),
       );
+      exchange?.statusCode = response.statusCode;
     } on TimeoutException {
       throw const AiProviderException('Le fournisseur IA ne répond pas à temps.');
     } catch (_) {
@@ -366,6 +388,10 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
     var receivedText = 0;
     try {
       await for (final line in response.stream
+          .map((bytes) {
+            exchange?.addRawResponse(bytes);
+            return bytes;
+          })
           .transform(utf8.decoder)
           .transform(const LineSplitter())
           .timeout(const Duration(seconds: 75))) {

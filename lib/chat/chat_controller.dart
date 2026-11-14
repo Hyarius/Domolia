@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../ai/ai_provider.dart';
+import '../ai/ai_diagnostics.dart';
 import 'chat_protocol.dart';
 import 'narrator.dart';
 
@@ -22,6 +23,7 @@ class NarrativeChatController extends ChangeNotifier {
     this.narrator = const Narrator(),
     this.narratorProvider,
     this.onTimelineChanged,
+    this.diagnostics,
     int Function(int count)? selectOpeningIndex,
   }) : _selectOpeningIndex = selectOpeningIndex ?? Random.secure().nextInt;
 
@@ -29,6 +31,9 @@ class NarrativeChatController extends ChangeNotifier {
   final AiConfiguration? Function() configuration;
   final Future<NarrativeAiEndpoint> Function()? resolveConnection;
   final Narrator narrator;
+  final AiExchangeRecorder? diagnostics;
+  AiExchange? lastExchange;
+
   /// Reads the latest saved narrator settings for each new model request.
   final Narrator Function()? narratorProvider;
   final int Function(int count) _selectOpeningIndex;
@@ -198,6 +203,7 @@ class NarrativeChatController extends ChangeNotifier {
   }
 
   Future<void> _generate() async {
+    lastExchange = null;
     error = null;
     busy = true;
     _cancelled = false;
@@ -242,6 +248,7 @@ class NarrativeChatController extends ChangeNotifier {
 
     final decoder = ChatLineDecoder();
     final context = _buildContext();
+    final priorExchange = diagnostics?.last;
     try {
       if (selectedProvider is AiStreamingChatProvider) {
         final complete = Completer<void>();
@@ -328,6 +335,9 @@ class NarrativeChatController extends ChangeNotifier {
     } catch (_) {
       if (!_cancelled) error = 'Impossible de générer la réponse. Réessayez.';
     } finally {
+      if (diagnostics?.last != priorExchange) {
+        lastExchange = diagnostics?.last;
+      }
       _subscription = null;
       _done = null;
       preview = null;
