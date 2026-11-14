@@ -187,40 +187,79 @@ class _BookEditorPageState extends State<BookEditorPage> {
                     title: Text(session.title),
                     subtitle: Text('${session.timeline.length} événements'),
                     onTap: () => Navigator.pop(context, session.id),
-                    trailing: IconButton(
-                      key: ValueKey('bookDeleteSession-${session.id}'),
-                      tooltip: 'Supprimer ${session.title}',
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () async {
-                        final confirmed = await showDialog<bool>(
-                          context: context,
-                          builder: (dialogContext) => AlertDialog(
-                            title: const Text('Supprimer cette partie ?'),
-                            content: Text(
-                              '« ${session.title} » et son historique seront '
-                              'supprimés définitivement.'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(dialogContext, false),
-                                child: const Text('Annuler'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          key: ValueKey('bookPurgeSession-${session.id}'),
+                          tooltip: 'Purger les diagnostics de ${session.title}',
+                          icon: const Icon(Icons.cleaning_services_outlined),
+                          onPressed: () async {
+                            final confirmed = await showDialog<bool>(
+                              context: context,
+                              builder: (dialogContext) => AlertDialog(
+                                title: const Text('Purger les diagnostics ?'),
+                                content: Text(
+                                  'Supprimer les traces IA de « ${session.title} » ? '
+                                  'Les messages et les scènes restent enregistrés.',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(dialogContext, false),
+                                    child: const Text('Annuler'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(dialogContext, true),
+                                    child: const Text('Purger'),
+                                  ),
+                                ],
                               ),
-                              FilledButton(
-                                onPressed: () => Navigator.pop(dialogContext, true),
-                                child: const Text('Supprimer'),
+                            );
+                            if (confirmed != true || !context.mounted) return;
+                            try {
+                              await widget.library.clearDiagnostics(session.id);
+                              _show('Diagnostics de cette partie purgés.');
+                            } catch (_) {
+                              _show('Impossible de purger les diagnostics.');
+                            }
+                          },
+                        ),
+                        IconButton(
+                          key: ValueKey('bookDeleteSession-${session.id}'),
+                          tooltip: 'Supprimer ${session.title}',
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () async {
+                            final confirmed = await showDialog<bool>(
+                              context: context,
+                              builder: (dialogContext) => AlertDialog(
+                                title: const Text('Supprimer cette partie ?'),
+                                content: Text(
+                                  '« ${session.title} » et son historique seront '
+                                  'supprimés définitivement.'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(dialogContext, false),
+                                    child: const Text('Annuler'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(dialogContext, true),
+                                    child: const Text('Supprimer'),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                        );
-                        if (confirmed != true || !context.mounted) return;
-                        try {
-                          await widget.library.deleteSession(session.id);
-                          if (context.mounted) {
-                            Navigator.pop(context, 'deleted');
-                          }
-                        } catch (_) {
-                          _show('Impossible de supprimer cette partie.');
-                        }
-                      },
+                            );
+                            if (confirmed != true || !context.mounted) return;
+                            try {
+                              await widget.library.deleteSession(session.id);
+                              if (context.mounted) {
+                                Navigator.pop(context, 'deleted');
+                              }
+                            } catch (_) {
+                              _show('Impossible de supprimer cette partie.');
+                            }
+                          },
+                        ),
+                      ],
                     ),
                   ),
               ],
