@@ -425,12 +425,35 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                     key: const ValueKey('aiModelSelector'),
                     value: modelIds.contains(selectedModel) ? selectedModel : null,
                     isExpanded: true,
+                    itemHeight: 72,
+                    menuMaxHeight: 360,
+                    dropdownColor: DomoliaColors.raisedSurface,
+                    borderRadius: BorderRadius.circular(12),
                     hint: const Text('Charger les modèles'),
+                    selectedItemBuilder: (context) => [
+                      for (final id in modelIds)
+                        Tooltip(
+                          message: id,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              id,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                    ],
                     items: [
                       for (final id in modelIds)
                         DropdownMenuItem(
                           value: id,
-                          child: Text(id, overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            id,
+                            maxLines: 2,
+                            softWrap: true,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                     ],
                     onChanged: c.busy
