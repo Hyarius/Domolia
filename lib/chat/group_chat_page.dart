@@ -10,7 +10,7 @@ import 'chat_controller.dart';
 import 'chat_protocol.dart';
 import 'chat_exports.dart';
 
-enum _ChatExportAction { conversation, requestAndResponse, purgeDiagnostics }
+enum _ChatExportAction { conversation, purgeDiagnostics }
 
 class _TranscriptChoice {
   const _TranscriptChoice(this.scope, this.count);
@@ -27,6 +27,7 @@ class GroupChatPage extends StatefulWidget {
     this.sessionTitle,
     this.onLoadDiagnostics,
     this.onPurgeDiagnostics,
+    this.onExportDiagnostic,
   });
 
   final NarrativeChatController controller;
@@ -35,6 +36,8 @@ class GroupChatPage extends StatefulWidget {
   final String? sessionTitle;
   final Future<List<StoredAiDiagnostic>> Function()? onLoadDiagnostics;
   final Future<void> Function()? onPurgeDiagnostics;
+  /// Test adapter; production uses Android's file picker.
+  final Future<void> Function(String, Map<String, dynamic>)? onExportDiagnostic;
 
   @override
   State<GroupChatPage> createState() => _GroupChatPageState();
@@ -93,6 +96,11 @@ class _GroupChatPageState extends State<GroupChatPage> {
 
   Future<void> _saveDiagnostic(String name, Map<String, dynamic> data) async {
     try {
+      if (widget.onExportDiagnostic != null) {
+        await widget.onExportDiagnostic!(name, data);
+        _showExportMessage('Export JSON enregistré.');
+        return;
+      }
       final content = Uint8List.fromList(
         utf8.encode(const JsonEncoder.withIndent('  ').convert(data)),
       );
@@ -199,68 +207,190 @@ class _GroupChatPageState extends State<GroupChatPage> {
     );
   }
 
-  Future<void> _exportExchange() async {
+
+  /// Export only the exact HTTP request which produced the tapped bubble.
+  Future<void> _exportAiMessage(ChatEntry entry) async {
     try {
-      final saved = await (widget.onLoadDiagnostics?.call() ??
-          Future<List<StoredAiDiagnostic>>.value([]));
-      final choices = <StoredAiDiagnostic>[...saved];
-      final exchange = widget.controller.lastExchange;
-      if (exchange != null &&
-          !choices.any((d) => d.createdAtUtc == exchange.createdAtUtc)) {
-        choices.insert(0, StoredAiDiagnostic(
-          id: 'latest',
-          sessionId: '',
-          createdAtUtc: exchange.createdAtUtc,
-          content: exchange.exportJson(),
+      final choices = <StoredAiDiagnostic>[];
+      final last = widget.controller.lastExchange;
+      if (last != null) {
+        choices.add(StoredAiDiagnostic(
+          id: 'latest', sessionId: '', createdAtUtc: last.createdAtUtc,
+          content: last.exportJson(),
         ));
       }
-      if (choices.isEmpty) {
-        _showExportMessage('Aucune requête IA enregistrée dans cette conversation.');
-        return;
+      if (widget.onLoadDiagnostics != null) {
+        choices.addAll(await widget.onLoadDiagnostics!());
       }
       if (!mounted) return;
       StoredAiDiagnostic? selected;
-      if (choices.length == 1) {
-        selected = choices.single;
-      } else {
-        selected = await showModalBottomSheet<StoredAiDiagnostic>(
-          context: context,
-          isScrollControlled: true,
-          builder: (sheetContext) => SafeArea(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 460),
-              child: ListView(
-                shrinkWrap: true,
-                children: [
-                  const ListTile(
-                    title: Text('Choisir une requête IA'),
-                    subtitle: Text('Les échanges les plus récents apparaissent en premier.'),
-                  ),
-                  for (final item in choices)
-                    ListTile(
-                      key: ValueKey('aiTrace-${item.id}'),
-                      leading: const Icon(Icons.description_outlined),
-                      title: Text(item.model,
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text(
-                        '${item.createdAtUtc.toLocal()} · '
-                        'HTTP ${item.statusCode?.toString() ?? "—"}'),
-                      onTap: () => Navigator.pop(sheetContext, item),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
+      for (final candidate in choices) {
+        if (candidate.containsMessage(entry.id)) {
+          selected = candidate;
+          break;
+        }
       }
-      if (selected == null) return;
+      if (selected == null) {
+        _showExportMessage('Aucun diagnostic conservé pour ce message IA '
+            '(conservation désactivée ou traces purgées).');
+        return;
+      }
       await _saveDiagnostic(
-        'domolia-requete-reponse-${selected.createdAtUtc.microsecondsSinceEpoch}.json',
+        'domolia-message-' + entry.id.toString() + '-requete-reponse.json',
         selected.data,
       );
     } catch (_) {
-      _showExportMessage('Impossible de lire les diagnostics IA enregistrés.');
+      _showExportMessage('Impossible de lire le diagnostic de ce message.');
     }
+  }
+
+  Future<void> _editPlayerMessage(ChatEntry entry) async {
+    final input = TextEditingController(text: entry.text);
+    var invalid = false;
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, update) => AlertDialog(
+            title: const Text('Éditer mon message'),
+            content: TextField(
+              key: const ValueKey('chatEditMessageInput'),
+              controller: input,
+              autofocus: true, minLines: 2, maxLines: 7, maxLength: 4000,
+              decoration: InputDecoration(
+                labelText: 'Votre message',
+                errorText: invalid
+                    ? 'Saisissez un texte (4 000 caractères max).' : null,
+              ),
+              onChanged: (_) => update(() => invalid = false),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Annuler'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (!widget.controller.editPlayerMessage(entry.id, input.text)) {
+                    update(() => invalid = true);
+                    return;
+                  }
+                  Navigator.pop(dialogContext);
+                  _showExportMessage(
+                    'Message modifié. Utilisez « Reprendre ici » '
+                    'pour recalculer la suite.',
+                  );
+                },
+                child: const Text('Enregistrer'),
+              ),
+            ],
+          ),
+        ),
+      );
+    } finally {
+      input.dispose();
+    }
+  }
+
+  Future<bool> _confirmRewind({
+    required String title, required String message,
+  }) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title), content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Continuer'),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
+  Future<void> _resumeAt(ChatEntry entry) async {
+    if (!await _confirmRewind(
+      title: 'Reprendre ici ?',
+      message: 'Tous les messages et changements de scène après ce message '
+          'seront supprimés. Une nouvelle réponse IA sera générée '
+          'à partir de votre texte actuel.',
+    )) return;
+    await widget.controller.resumeFromPlayerMessage(entry.id);
+  }
+
+  Future<void> _regenerateAt(ChatEntry entry) async {
+    if (!await _confirmRewind(
+      title: 'Régénérer cette réponse ?',
+      message: 'La réponse IA complète de ce tour (y compris les autres '
+          'bulles et changements de scène), ainsi que toute la suite, '
+          'sera remplacée par une nouvelle génération.',
+    )) return;
+    await widget.controller.regenerateFromAiMessage(entry.id);
+  }
+
+  Future<void> _showMessageActions(ChatEntry entry) async {
+    if (entry.inProgress || widget.controller.busy) return;
+    final isPlayer = entry.speaker == ChatSpeaker.player;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(isPlayer ? 'Mon message' : entry.name),
+              subtitle: Text(entry.text,
+                maxLines: 2, overflow: TextOverflow.ellipsis),
+            ),
+            if (isPlayer) ...[
+              ListTile(
+                key: const ValueKey('chatActionEdit'),
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Éditer'),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await _editPlayerMessage(entry);
+                },
+              ),
+              ListTile(
+                key: const ValueKey('chatActionResume'),
+                leading: const Icon(Icons.history_rounded),
+                title: const Text('Reprendre ici'),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await _resumeAt(entry);
+                },
+              ),
+            ] else ...[
+              ListTile(
+                key: const ValueKey('chatActionRegenerate'),
+                leading: const Icon(Icons.refresh_rounded),
+                title: const Text('Régénérer'),
+                enabled: widget.controller.canRegenerateFromAiMessage(entry.id),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await _regenerateAt(entry);
+                },
+              ),
+              ListTile(
+                key: const ValueKey('chatActionExport'),
+                leading: const Icon(Icons.file_download_outlined),
+                title: const Text('Exporter'),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await _exportAiMessage(entry);
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _purgeDiagnostics() async {
@@ -360,8 +490,6 @@ class _GroupChatPageState extends State<GroupChatPage> {
                         switch (action) {
                           case _ChatExportAction.conversation:
                             _exportConversation();
-                          case _ChatExportAction.requestAndResponse:
-                            _exportExchange();
                           case _ChatExportAction.purgeDiagnostics:
                             _purgeDiagnostics();
                         }
@@ -370,13 +498,6 @@ class _GroupChatPageState extends State<GroupChatPage> {
                         const PopupMenuItem(
                           value: _ChatExportAction.conversation,
                           child: Text('Exporter la conversation'),
-                        ),
-                        PopupMenuItem(
-                          value: _ChatExportAction.requestAndResponse,
-                          enabled: !chat.busy &&
-                              (chat.lastExchange != null ||
-                                  widget.onLoadDiagnostics != null),
-                          child: const Text('Requête IA + réponse brute'),
                         ),
                         PopupMenuItem(
                           value: _ChatExportAction.purgeDiagnostics,
