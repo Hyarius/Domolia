@@ -667,9 +667,8 @@ class _HomePageState extends State<HomePage> {
                             color: DomoliaColors.gold),
                         title: Text(session.title),
                         subtitle: Text(
-                          (_books.byId(session.bookId)?.title ?? 'Livre inconnu') +
-                          ' · ' +
-                          (session.updatedAtUtc?.toLocal().toString() ?? '')),
+                          '${_books.byId(session.bookId)?.title ?? 'Livre inconnu'} · '
+                          '${session.updatedAtUtc?.toLocal().toString() ?? ''}'),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () {
                           final book = _books.byId(session.bookId);

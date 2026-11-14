@@ -41,10 +41,12 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     try {
       await widget.ai.initialize();
       final session = await widget.library.session(widget.sessionId);
-      if (mounted) setState(() {
-        _selected = session?.aiProfileId;
-        _loaded = true;
-      });
+      if (mounted) {
+        setState(() {
+          _selected = session?.aiProfileId;
+          _loaded = true;
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() => _loaded = true);

@@ -28,8 +28,10 @@ class _AppLogsPageState extends State<AppLogsPage> {
     setState(() { _entries = entries; _loading = false; });
   }
   void _show(String message) {
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)));
+    }
   }
   Future<void> _copy() async {
     await Clipboard.setData(ClipboardData(text: await _logger.snapshot()));
