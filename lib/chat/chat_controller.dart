@@ -11,17 +11,21 @@ Tu es l'orchestrateur d'une conversation de jeu de rôle en français.
 Tu contrôles le narrateur, les personnages et le décor, mais jamais les
 paroles, pensées, choix ou actions du personnage joueur.
 Le joueur est le participant "Vous" et seul l'utilisateur le fait parler.
-Pour chaque prise de parole, retourne EXCLUSIVEMENT une ligne JSON valide,
+Pour chaque événement, retourne EXCLUSIVEMENT une ligne JSON valide,
 sans tableau, sans Markdown et sans texte autour :
-{"speaker":"narrator","name":"Narrateur","text":"Description de la scène."}
-{"speaker":"character","name":"Lina","text":"Dialogue de Lina."}
+{"type":"message","speaker":"narrator","name":"Narrateur","text":"Description de la scène."}
+{"type":"message","speaker":"character","name":"Lina","text":"Dialogue de Lina."}
+{"type":"scene_change"}
 Le narrateur est un participant ordinaire, au même titre que les personnages.
-Tu peux produire plusieurs lignes JSON pour un même tour, avec plusieurs
-personnages et le narrateur, dans l'ordre des événements.
-Le champ speaker vaut uniquement narrator ou character.
-Le champ name doit être constant pour une même personne dans la scène.
-N'invente aucune intervention du joueur. Chaque ligne est un objet JSON
-indépendant, avec des chaînes correctement échappées.
+Tu peux produire plusieurs lignes JSON pour un même tour, dans leur ordre.
+Utilise {"type":"scene_change"} uniquement quand une véritable scène se termine
+et que la suivante commence (rupture de lieu, de temps ou de séquence narrative).
+NE METS AUCUN TITRE, NOM, LIEU, HEURE OU AUTRE CHAMP dans cet événement.
+N'envoie pas de changement de scène juste parce qu'un personnage intervient.
+Évite les changements de scène consécutifs.
+Pour les messages, speaker vaut uniquement narrator ou character et name doit
+rester constant pour une personne. N'invente aucune intervention du joueur.
+Chaque ligne est un objet JSON indépendant, avec des chaînes échappées.
 Conserve des réponses suffisamment courtes pour un chat sur téléphone.
 ''';
 
@@ -42,8 +46,22 @@ class NarrativeChatController extends ChangeNotifier {
   final AiConfiguration? Function() configuration;
   final Future<NarrativeAiEndpoint> Function()? resolveConnection;
 
-  final List<ChatEntry> _messages = [];
-  List<ChatEntry> get messages => List.unmodifiable(_messages);
+  final List<ChatTimelineEvent> _timeline = [];
+  List<ChatTimelineEvent> get timeline => List.unmodifiable(_timeline);
+
+  /// Only dialogue bubbles. Old callers need not know about scene dividers.
+  List<ChatEntry> get messages =>
+      List.unmodifiable(_timeline.whereType<ChatEntry>());
+
+  /// A future image prompt builder can read just the current scene's dialogue.
+  List<ChatEntry> get currentSceneMessages {
+    final boundary = _timeline.lastIndexWhere(
+      (event) => event is ChatSceneChange,
+    );
+    return List.unmodifiable(
+      _timeline.skip(boundary + 1).whereType<ChatEntry>(),
+    );
+  }
   ChatEntry? preview;
   bool busy = false;
   String? error;
@@ -70,8 +88,8 @@ class NarrativeChatController extends ChangeNotifier {
       _notify();
       return;
     }
-    _lastPlayerIndex = _messages.length;
-    _messages.add(ChatEntry(
+    _lastPlayerIndex = _timeline.length;
+    _timeline.add(ChatEntry(
       id: _nextId++,
       speaker: ChatSpeaker.player,
       name: 'Vous',
@@ -83,43 +101,57 @@ class NarrativeChatController extends ChangeNotifier {
   Future<void> regenerate() async {
     if (_closed || busy || _lastPlayerIndex == null) return;
     // Keep the original player message. Never add it a second time.
-    _messages.removeRange(_lastPlayerIndex! + 1, _messages.length);
+    _timeline.removeRange(_lastPlayerIndex! + 1, _timeline.length);
     await _generate();
   }
 
   Future<void> retry() => regenerate();
 
   List<AiMessage> _buildContext() {
-    final recent = _messages.length > 35
-        ? _messages.sublist(_messages.length - 35)
-        : _messages;
+    final recent = _timeline.length > 35
+        ? _timeline.sublist(_timeline.length - 35)
+        : _timeline;
     return [
       const AiMessage(role: 'system', content: groupChatSystemPrompt),
-      for (final message in recent)
-        AiMessage(
-          role: message.speaker == ChatSpeaker.player ? 'user' : 'assistant',
-          content: message.speaker == ChatSpeaker.player
-              ? message.text
-              : jsonEncode({
-                  'speaker': message.speaker == ChatSpeaker.narrator
-                      ? 'narrator'
-                      : 'character',
-                  'name': message.name,
-                  'text': message.text,
-                }),
-        ),
+      for (final event in recent)
+        if (event is ChatSceneChange)
+          const AiMessage(
+            role: 'assistant',
+            content: '{"type":"scene_change"}',
+          )
+        else if (event is ChatEntry)
+          AiMessage(
+            role: event.speaker == ChatSpeaker.player ? 'user' : 'assistant',
+            content: event.speaker == ChatSpeaker.player
+                ? event.text
+                : jsonEncode({
+                    'type': 'message',
+                    'speaker': event.speaker == ChatSpeaker.narrator
+                        ? 'narrator'
+                        : 'character',
+                    'name': event.name,
+                    'text': event.text,
+                  }),
+          ),
     ];
   }
 
-  void _addLines(Iterable<ChatLine> lines) {
-    for (final line in lines) {
-      _currentTurnCount++;
-      _messages.add(ChatEntry(
-        id: _nextId++,
-        speaker: line.speaker,
-        name: line.name,
-        text: line.text,
-      ));
+  void _addLines(Iterable<ChatOutputEvent> events) {
+    for (final event in events) {
+      if (event is ChatSceneChangeOutput) {
+        if (_timeline.isEmpty || _timeline.last is ChatSceneChange) {
+          throw const FormatException('Changement de scène consécutif ou isolé.');
+        }
+        _timeline.add(ChatSceneChange(id: _nextId++));
+      } else if (event is ChatLine) {
+        _currentTurnCount++;
+        _timeline.add(ChatEntry(
+          id: _nextId++,
+          speaker: event.speaker,
+          name: event.name,
+          text: event.text,
+        ));
+      }
     }
   }
 
@@ -185,8 +217,10 @@ class NarrativeChatController extends ChangeNotifier {
               if (chunk.text.isNotEmpty) {
                 _addLines(decoder.add(chunk.text));
                 final current = decoder.preview;
-                preview = current == null
-                    ? ChatEntry(
+                preview = decoder.isPendingSceneChange
+                    ? null
+                    : current == null
+                        ? ChatEntry(
                         id: -1,
                         speaker: ChatSpeaker.narrator,
                         name: 'Narrateur',
