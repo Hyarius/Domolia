@@ -178,3 +178,8 @@ Le menu **Narrateur** (également accessible depuis **Paramètres**) permet de p
 2. Les **premiers messages possibles**, à raison d'un message par ligne. Une ouverture est choisie automatiquement lorsque vous démarrez une nouvelle conversation, et s'affiche comme une bulle du narrateur.
 
 Les réglages sont sauvegardés localement et réutilisés au prochain lancement de l'application. Les instructions du protocole JSON demeurent fixes et non éditables ; elles sont combinées au style à chaque requête. Le premier message est inséré localement, **sans appel réseau ni consommation de crédits**. Les tests et la CI utilisent uniquement des fournisseurs simulés.
+
+
+## Bibliothèque de Livres (refonte)
+
+Chaque Livre possède un titre, une couverture, un narrateur, un niveau de détail et des tags. Les parties sont enregistrées localement et les configurations IA restent séparées dans le stockage sécurisé. Un Livre peut être exporté/importé comme JSON portable, sans clés, compte, lien de profil ou historique de Partie. Format et limites : [docs/books/format.md](docs/books/format.md).
