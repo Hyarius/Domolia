@@ -23,6 +23,7 @@ class NarrativeChatController extends ChangeNotifier {
     this.narrator = const Narrator(),
     this.narratorProvider,
     this.onTimelineChanged,
+    this.onExchangeCaptured,
     this.diagnostics,
     int Function(int count)? selectOpeningIndex,
   }) : _selectOpeningIndex = selectOpeningIndex ?? Random.secure().nextInt;
@@ -32,6 +33,8 @@ class NarrativeChatController extends ChangeNotifier {
   final Future<NarrativeAiEndpoint> Function()? resolveConnection;
   final Narrator narrator;
   final AiExchangeRecorder? diagnostics;
+  /// Called once for each actually emitted HTTP request after decoding.
+  final void Function(AiExchange exchange)? onExchangeCaptured;
   AiExchange? lastExchange;
 
   /// Reads the latest saved narrator settings for each new model request.
@@ -249,6 +252,7 @@ class NarrativeChatController extends ChangeNotifier {
     final decoder = ChatLineDecoder();
     final context = _buildContext();
     final priorExchange = diagnostics?.last;
+    final responseStart = _timeline.length;
     try {
       if (selectedProvider is AiStreamingChatProvider) {
         final complete = Completer<void>();
@@ -335,8 +339,36 @@ class NarrativeChatController extends ChangeNotifier {
     } catch (_) {
       if (!_cancelled) error = 'Impossible de générer la réponse. Réessayez.';
     } finally {
-      if (diagnostics?.last != priorExchange) {
-        lastExchange = diagnostics?.last;
+      if (diagnostics?.last != null && diagnostics?.last != priorExchange) {
+        final exchange = diagnostics!.last!;
+        exchange.complete(
+          promptTokens: promptTokens,
+          completionTokens: completionTokens,
+          error: error,
+          cancelled: _cancelled,
+          interpretedEvents: [
+            for (final event in _timeline.skip(responseStart))
+              if (event is ChatSceneChange)
+                <String, dynamic>{
+                  'id': event.id,
+                  'type': 'scene_change',
+                }
+              else if (event is ChatEntry)
+                <String, dynamic>{
+                  'id': event.id,
+                  'type': 'message',
+                  'speaker': event.speaker.name,
+                  'name': event.name,
+                  'text': event.text,
+                },
+          ],
+        );
+        lastExchange = exchange;
+        try {
+          onExchangeCaptured?.call(exchange);
+        } catch (_) {
+          // Diagnostic persistence must never interrupt the conversation.
+        }
       }
       _subscription = null;
       _done = null;
