@@ -110,19 +110,6 @@ void main() {
     expect(storage.lines, hasLength(1));
     expect(await logger.snapshot(), contains('after failure'));
   });
-}
-
-class _FailingReadStorage extends MemoryAppLogStorage {
-  bool failNextRead = true;
-
-  @override
-  Future<List<String>> readLines() {
-    if (failNextRead) {
-      failNextRead = false;
-      throw StateError('temporary read failure');
-    }
-    return super.readLines();
-  }
 
   test('quoted JSON credentials are scrubbed in messages and details', () async {
     final logger = AppLogger(storage: MemoryAppLogStorage());
@@ -147,5 +134,19 @@ class _FailingReadStorage extends MemoryAppLogStorage {
     }
     expect(snapshot, contains('[REDACTED]'));
   });
+}
+
+class _FailingReadStorage extends MemoryAppLogStorage {
+  bool failNextRead = true;
+
+  @override
+  Future<List<String>> readLines() {
+    if (failNextRead) {
+      failNextRead = false;
+      throw StateError('temporary read failure');
+    }
+    return super.readLines();
+  }
+
 
 }
