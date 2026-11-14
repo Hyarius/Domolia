@@ -75,7 +75,7 @@ void main() {
       find.byKey(const ValueKey('narratorOpeningsField')),
       'Premier début\nSecond début',
     );
-    await tester.testTextInput.hide();
+    tester.testTextInput.hide();
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('narratorSave')),
