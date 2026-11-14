@@ -21,6 +21,7 @@ class NarrativeChatController extends ChangeNotifier {
     this.resolveConnection,
     this.narrator = const Narrator(),
     this.narratorProvider,
+    this.onTimelineChanged,
     int Function(int count)? selectOpeningIndex,
   }) : _selectOpeningIndex = selectOpeningIndex ?? Random.secure().nextInt;
 
@@ -31,6 +32,29 @@ class NarrativeChatController extends ChangeNotifier {
   /// Reads the latest saved narrator settings for each new model request.
   final Narrator Function()? narratorProvider;
   final int Function(int count) _selectOpeningIndex;
+
+  /// Store only committed events, never streaming previews.
+  final void Function(List<ChatTimelineEvent> events)? onTimelineChanged;
+
+  void _timelineChanged() =>
+      onTimelineChanged?.call(List<ChatTimelineEvent>.unmodifiable(_timeline));
+
+  /// Restore a saved session before beginConversation without triggering AI.
+  void restoreTimeline(List<ChatTimelineEvent> events) {
+    if (_closed || busy || _timeline.isNotEmpty) {
+      throw StateError('La conversation est déjà ouverte.');
+    }
+    _timeline.addAll(events);
+    _started = events.isNotEmpty;
+    if (events.isNotEmpty) {
+      _nextId = events.last.id + 1;
+      final last = _timeline.lastIndexWhere(
+        (item) => item is ChatEntry && item.speaker == ChatSpeaker.player,
+      );
+      _lastPlayerIndex = last < 0 ? null : last;
+    }
+    _notify();
+  }
   bool _started = false;
 
   /// Adds one local narrator bubble at the beginning of the conversation.
@@ -52,6 +76,7 @@ class NarrativeChatController extends ChangeNotifier {
       name: 'Narrateur',
       text: candidates[index].trim(),
     ));
+    _timelineChanged();
     _notify();
   }
 
@@ -104,6 +129,7 @@ class NarrativeChatController extends ChangeNotifier {
       name: 'Vous',
       text: action,
     ));
+    _timelineChanged();
     await _generate();
   }
 
@@ -111,6 +137,7 @@ class NarrativeChatController extends ChangeNotifier {
     if (_closed || busy || _lastPlayerIndex == null) return;
     // Keep the original player message. Never add it a second time.
     _timeline.removeRange(_lastPlayerIndex! + 1, _timeline.length);
+    _timelineChanged();
     await _generate();
   }
 
@@ -149,7 +176,9 @@ class NarrativeChatController extends ChangeNotifier {
   }
 
   void _addLines(Iterable<ChatOutputEvent> events) {
+    var changed = false;
     for (final event in events) {
+      changed = true;
       if (event is ChatSceneChangeOutput) {
         if (_timeline.isEmpty || _timeline.last is ChatSceneChange) {
           throw const FormatException('Changement de scène consécutif ou isolé.');
@@ -165,6 +194,7 @@ class NarrativeChatController extends ChangeNotifier {
         ));
       }
     }
+    if (changed) _timelineChanged();
   }
 
   Future<void> _generate() async {
