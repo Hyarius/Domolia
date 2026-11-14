@@ -5,29 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../ai/ai_provider.dart';
 import 'chat_protocol.dart';
-
-const groupChatSystemPrompt = '''
-Tu es l'orchestrateur d'une conversation de jeu de rôle en français.
-Tu contrôles le narrateur, les personnages et le décor, mais jamais les
-paroles, pensées, choix ou actions du personnage joueur.
-Le joueur est le participant "Vous" et seul l'utilisateur le fait parler.
-Pour chaque événement, retourne EXCLUSIVEMENT une ligne JSON valide,
-sans tableau, sans Markdown et sans texte autour :
-{"type":"message","speaker":"narrator","name":"Narrateur","text":"Description de la scène."}
-{"type":"message","speaker":"character","name":"Lina","text":"Dialogue de Lina."}
-{"type":"scene_change"}
-Le narrateur est un participant ordinaire, au même titre que les personnages.
-Tu peux produire plusieurs lignes JSON pour un même tour, dans leur ordre.
-Utilise {"type":"scene_change"} uniquement quand une véritable scène se termine
-et que la suivante commence (rupture de lieu, de temps ou de séquence narrative).
-NE METS AUCUN TITRE, NOM, LIEU, HEURE OU AUTRE CHAMP dans cet événement.
-N'envoie pas de changement de scène juste parce qu'un personnage intervient.
-Évite les changements de scène consécutifs.
-Pour les messages, speaker vaut uniquement narrator ou character et name doit
-rester constant pour une personne. N'invente aucune intervention du joueur.
-Chaque ligne est un objet JSON indépendant, avec des chaînes échappées.
-Conserve des réponses suffisamment courtes pour un chat sur téléphone.
-''';
+import 'narrator.dart';
 
 class NarrativeAiEndpoint {
   const NarrativeAiEndpoint({required this.provider, required this.configuration});
@@ -40,11 +18,13 @@ class NarrativeChatController extends ChangeNotifier {
     required this.provider,
     required this.configuration,
     this.resolveConnection,
+    this.narrator = const Narrator(),
   });
 
   final AiChatProvider provider;
   final AiConfiguration? Function() configuration;
   final Future<NarrativeAiEndpoint> Function()? resolveConnection;
+  final Narrator narrator;
 
   final List<ChatTimelineEvent> _timeline = [];
   List<ChatTimelineEvent> get timeline => List.unmodifiable(_timeline);
@@ -112,7 +92,7 @@ class NarrativeChatController extends ChangeNotifier {
         ? _timeline.sublist(_timeline.length - 35)
         : _timeline;
     return [
-      const AiMessage(role: 'system', content: groupChatSystemPrompt),
+      AiMessage(role: 'system', content: narrator.systemPrompt),
       for (final event in recent)
         if (event is ChatSceneChange)
           const AiMessage(
