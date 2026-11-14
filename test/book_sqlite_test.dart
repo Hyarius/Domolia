@@ -6,7 +6,6 @@ import 'package:domolia/books/book_session.dart';
 import 'package:domolia/books/book_store.dart';
 import 'package:domolia/chat/chat_protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sqflite/sqflite.dart' show OpenDatabaseOptions;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
