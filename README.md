@@ -169,3 +169,12 @@ Le moteur de dialogue demande aux modèles un format **une ligne JSON par prise 
 Domolia présente **une seule liste de configurations IA nommées**. Dans chaque configuration, « Type de fournisseur » propose `ChatGPT` ou `CustomAI`. Le choix change seulement les champs du profil : connexion OAuth de votre compte ChatGPT et modèles autorisés, ou configuration HTTPS + clé API personnalisée. Toutes les autres fonctions peuvent cibler la configuration par son nom et son identifiant stable, sans connaître son fournisseur.
 
 L'option ChatGPT demande séparément l'autorisation d'utiliser le forfait et ses limites ; l'application utilise alors l'API publique Responses avec un jeton OAuth chiffré sur l'appareil. Elle ne récupère ni l'historique ni la mémoire des conversations ChatGPT. Le retour du navigateur OAuth sur Android doit être validé sur téléphone avec un compte autorisé. Les tests automatisés sont **entièrement mockés**, sans aucun appel à des API payantes ni gratuites.
+
+### Configuration du narrateur (PR04)
+
+Le menu **Narrateur** (également accessible depuis **Paramètres**) permet de personnaliser :
+
+1. Le **style narratif** du jeu de rôle : instructions de narration transmises à l'IA.
+2. Les **premiers messages possibles**, à raison d'un message par ligne. Une ouverture est choisie automatiquement lorsque vous démarrez une nouvelle conversation, et s'affiche comme une bulle du narrateur.
+
+Les réglages sont sauvegardés localement et réutilisés au prochain lancement de l'application. Les instructions du protocole JSON demeurent fixes et non éditables ; elles sont combinées au style à chaque requête. Le premier message est inséré localement, **sans appel réseau ni consommation de crédits**. Les tests et la CI utilisent uniquement des fournisseurs simulés.
