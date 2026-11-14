@@ -145,7 +145,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
                           }
                           return _ChatBubble(
                             key: ValueKey('chat-entry-${entry.id}'),
-                            entry: entry as ChatEntry,
+                            entry: entry,
                           );
                         },
                       ),
