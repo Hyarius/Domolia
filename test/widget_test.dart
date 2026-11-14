@@ -9,8 +9,14 @@ import 'package:material_ui/material_ui.dart';
 
 class _Release implements ReleaseSource {
   UpdateCandidate? candidate;
+  Object? failure;
+  Completer<UpdateCandidate?>? gate;
   @override
-  Future<UpdateCandidate?> latest(String channel) async => candidate;
+  Future<UpdateCandidate?> latest(String channel) async {
+    if (gate != null) return gate!.future;
+    if (failure != null) throw failure!;
+    return candidate;
+  }
 }
 class _Downloader implements ApkDownloader {
   Completer<void>? gate;
@@ -109,4 +115,79 @@ void main() {
     await tester.pumpAndSettle();
     expect(prefs.enabled,false);
   });
+  testWidgets('Manual update check always confirms already up to date',
+      (tester) async {
+    prefs.enabled = false;
+    await tester.pumpWidget(DomoliaApp(updateController: updates));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('updateCheckDialog')), findsNothing);
+    await tester.tap(find.widgetWithText(FilledButton, 'Mise à jour'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('updateCheckDialog')), findsOneWidget);
+    expect(find.textContaining('déjà à jour'), findsOneWidget);
+    await tester.tap(find.text('Fermer'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('updateCheckDialog')), findsNothing);
+  });
+
+  testWidgets('Dialog shows checking, download and installation permission',
+      (tester) async {
+    prefs.enabled = false;
+    release.candidate = UpdateCandidate(
+      channel: 'dev-latest',
+      versionName: '0.2.0',
+      versionCode: 2,
+      packageName: 'fr.domolia.domolia',
+      apkName: 'Domolia-dev.apk',
+      sha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      downloadUrl: Uri(scheme: 'https', host: 'github.com'),
+    );
+    release.gate = Completer<UpdateCandidate?>();
+    downloader.gate = Completer<void>();
+    await tester.pumpWidget(DomoliaApp(updateController: updates));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Mise à jour'));
+    await tester.pump();
+    expect(find.textContaining('Recherche de mises à jour'), findsOneWidget);
+    release.gate!.complete(release.candidate);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining('Téléchargement en cours'), findsOneWidget);
+    downloader.gate!.complete();
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Autorisez les installations'), findsOneWidget);
+    await tester.tap(find.text('Fermer'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('Manual check displays network error and settings feedback',
+      (tester) async {
+    prefs.enabled = false;
+    release.failure = const FormatException('Réseau indisponible');
+    await tester.pumpWidget(DomoliaApp(updateController: updates));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Paramètres'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Vérifier maintenant'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('updateCheckDialog')), findsOneWidget);
+    expect(find.textContaining('Mise à jour impossible'), findsOneWidget);
+    await tester.tap(find.text('Fermer'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('Menu update entry displays explicit feedback', (tester) async {
+    prefs.enabled = false;
+    await tester.pumpWidget(DomoliaApp(updateController: updates));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'Mise à jour'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('updateCheckDialog')), findsOneWidget);
+    expect(find.textContaining('déjà à jour'), findsOneWidget);
+  });
+
 }

@@ -139,7 +139,7 @@ Dans **Menu → Paramètres → Fournisseur IA**, renseigner votre clé OpenUnce
 
 - URL par défaut : `https://api.openuncensored.com/v1`
 - Clé API : `ou-…`, saisie masquée et enregistrée dans le **stockage sécurisé Android**, jamais dans des préférences en texte clair.
-- **Charger les modèles** : consulte les modèles textuels disponibles sur le fournisseur. Un identifiant peut aussi être saisi manuellement.
+- **Modèle de chat** : choix uniquement dans le menu déroulant, qui affiche aussi le modèle déjà enregistré. **Charger les modèles** récupère la liste disponible.
 - **Tester la connexion** : envoie une courte requête de chat en français, **susceptible de consommer des crédits**.
 - Les paramètres sont conservés entre les démarrages. Une clé enregistrée ne s'affiche jamais ; le champ vide la conserve, le bouton « Supprimer la clé API » l'efface.
 
@@ -148,3 +148,5 @@ Le client est compatible OpenAI via un contrat `AiChatProvider` réutilisable pa
 Pour éviter la restauration de secrets chiffrés sans leur clé Android Keystore, la sauvegarde automatique Android et le transfert de données de l'application sont désactivés ; l'export volontaire des aventures est prévu en PR17.
 
 Voir [PR03](docs/rp/PR03.md) et la [documentation OpenUncensored](https://openuncensored.com/docs).
+
+Les vérifications **manuelles** des mises à jour affichent une fenêtre avec un retour explicite : recherche, « déjà à jour », téléchargement, installation Android ou erreur. La vérification automatique au démarrage reste discrète si aucune nouvelle version n'est disponible.

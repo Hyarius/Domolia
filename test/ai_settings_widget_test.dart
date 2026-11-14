@@ -50,6 +50,8 @@ void main() {
       const ValueKey('aiApiKeyField'),
     ));
     expect(keyField.obscureText, true);
+    expect(find.text('Identifiant du modèle'), findsNothing);
+    expect(find.byKey(const ValueKey('aiModelSelector')), findsOneWidget);
     await tester.enterText(find.byKey(const ValueKey('aiApiKeyField')), 'ou-my-key');
     await tester.tap(find.text('Enregistrer la configuration'));
     await tester.pumpAndSettle();
