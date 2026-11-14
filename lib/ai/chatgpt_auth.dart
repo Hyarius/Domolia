@@ -92,7 +92,7 @@ abstract interface class ChatGptSessionStore {
 
 class SecureChatGptSessionStore implements ChatGptSessionStore {
   SecureChatGptSessionStore({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+      : _storage = storage ?? FlutterSecureStorage();
 
   final FlutterSecureStorage _storage;
   static const _hostIdKey = 'domolia.chatgpt.host-id.v1';
@@ -157,22 +157,21 @@ class LocalChatGptAuthBrowser implements ChatGptAuthBrowser {
       if (!opened) {
         throw const AiProviderException('Impossible d’ouvrir la connexion ChatGPT.');
       }
-      while (true) {
-        final request = await server.first.timeout(const Duration(minutes: 3));
-        if (request.uri.path != '/auth/callback') {
-          request.response.statusCode = 404;
-          await request.response.close();
-          continue;
-        }
-        final query = request.uri.queryParameters;
-        request.response.headers.contentType = ContentType.html;
-        request.response.write(
-          '<!doctype html><html><head><meta charset="utf-8"></head>'
-          '<body>Retournez dans Domolia pour terminer la connexion.</body></html>',
-        );
+      // The local server is single-subscription; accept exactly one callback.
+      final request = await server.first.timeout(const Duration(minutes: 3));
+      if (request.uri.path != '/auth/callback') {
+        request.response.statusCode = 404;
         await request.response.close();
-        return query;
+        throw const AiProviderException('Retour OAuth inattendu.');
       }
+      final query = request.uri.queryParameters;
+      request.response.headers.contentType = ContentType.html;
+      request.response.write(
+        '<!doctype html><html><head><meta charset="utf-8"></head>'
+        '<body>Retournez dans Domolia pour terminer la connexion.</body></html>',
+      );
+      await request.response.close();
+      return query;
     } on TimeoutException {
       throw const AiProviderException(
         'La connexion ChatGPT a expiré. Réessayez.',
@@ -458,13 +457,36 @@ class ChatGptAuthService implements ChatGptAccountService {
     }
   }
 
+  Future<Uri> _revocationEndpoint() async {
+    try {
+      final response = await _client.get(
+        Uri.parse('https://auth.openai.com/.well-known/openid-configuration'),
+      ).timeout(const Duration(seconds: 15));
+      if (response.statusCode != 200) throw const FormatException();
+      final body = jsonDecode(response.body);
+      final raw = body is Map<String, dynamic>
+          ? body['revocation_endpoint'] : null;
+      final endpoint = raw is String ? Uri.tryParse(raw) : null;
+      if (endpoint == null ||
+          endpoint.scheme != 'https' ||
+          endpoint.host != 'auth.openai.com') {
+        throw const FormatException();
+      }
+      return endpoint;
+    } catch (_) {
+      throw const AiProviderException(
+        'Impossible de vérifier la révocation ChatGPT.',
+      );
+    }
+  }
+
   @override
   Future<void> disconnect(String profileId) async {
     final current = await store.read(profileId);
     if (current == null) return;
     try {
       final response = await _client.post(
-        Uri.parse('https://auth.openai.com/api/accounts/oauth/revoke'),
+        await _revocationEndpoint(),
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
         body: {
           'token': current.refreshToken,
