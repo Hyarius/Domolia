@@ -245,7 +245,7 @@ class _BookEditorPageState extends State<BookEditorPage> {
       label: const Text('Choisir une image locale'),
     ),
     const SizedBox(height: 8),
-    const OutlinedButton.icon(
+    OutlinedButton.icon(
       onPressed: null,
       icon: Icon(Icons.auto_awesome_outlined),
       label: Text('Générer une couverture — à venir'),
@@ -328,7 +328,7 @@ class _BookEditorPageState extends State<BookEditorPage> {
           children: [
             DropdownButtonFormField<String>(
               key: const ValueKey('bookAiProfile'),
-              value: _profileId ?? '',
+              initialValue: _profileId ?? '',
               isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Connexion IA locale',

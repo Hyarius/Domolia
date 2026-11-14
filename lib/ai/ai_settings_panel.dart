@@ -260,7 +260,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
         const SizedBox(height: 12),
         DropdownButtonFormField<AiNsfwCompatibility>(
           key: const ValueKey('aiNsfwCapability'),
-          value: controller.selectedProfile.nsfwCompatibility,
+          initialValue: controller.selectedProfile.nsfwCompatibility,
           decoration: const InputDecoration(
             labelText: 'Capacité NSFW déclarée',
           ),

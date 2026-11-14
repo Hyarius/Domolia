@@ -262,7 +262,7 @@ void main() {
     await library.setProfile(book.id, _profile.id);
     final ai = AiConnectionController(
       store: _Profiles(const AiProfilesState(
-        profiles: [_profile], selectedId: _profile.id,
+        profiles: [_profile], selectedId: 'profile-1',
       )), provider: _NoNetwork(),
     );
     addTearDown(ai.dispose);
