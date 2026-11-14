@@ -227,10 +227,9 @@ void main() {
     await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
     await tester.pumpAndSettle();
     expect(find.text('Vérifier maintenant'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('allVersionsLink')), 260,
-    );
-    expect(find.byKey(const ValueKey('allVersionsLink')), findsOneWidget);
+    await tester.drag(find.byType(ListView).last, const Offset(0, -650));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('allVersionsLink')).last, findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Retour aux paramètres').last, -260,
     );
