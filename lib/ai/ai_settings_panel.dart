@@ -146,6 +146,9 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
     );
   }
 
+  /// Separate full-width controls are easier to read and tap on phones.
+  /// In particular, do not share a single horizontal row between the
+  /// profile picker, the actions and the connection status.
   Widget _profileAndStatus(AiConnectionController controller) {
     final status = controller.status;
     final (label, indicatorColor) = switch (status) {
@@ -154,145 +157,184 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
       AiConnectionStatus.connected => ('Connecté', const Color(0xFF59D78F)),
       AiConnectionStatus.invalid => ('Invalide', const Color(0xFFFF7777)),
     };
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          flex: 6,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Configuration API',
-                  style: TextStyle(color: DomoliaColors.goldLight)),
-              const SizedBox(height: 8),
-              Container(
-                key: const ValueKey('aiProfilePicker'),
-                padding: const EdgeInsets.fromLTRB(8, 0, 0, 0),
-                decoration: BoxDecoration(
-                  color: DomoliaColors.raisedSurface,
-                  border: Border.all(color: DomoliaColors.border),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          key: const ValueKey('aiProfileSelector'),
-                          isExpanded: true,
-                          value: controller.selectedProfileId,
-                          items: [
-                            for (final profile in controller.profiles)
-                              DropdownMenuItem(
-                                value: profile.id,
-                                child: Text(
-                                  profile.name,
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                ),
-                              ),
-                          ],
-                          onChanged: controller.busy
-                              ? null
-                              : (id) {
-                                  if (id != null) _selectProfile(id);
-                                },
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      key: const ValueKey('aiAddProfile'),
-                      tooltip: 'Ajouter une configuration API',
-                      constraints: const BoxConstraints.tightFor(width: 36, height: 40),
-                      padding: EdgeInsets.zero,
-                      icon: const Icon(Icons.add, size: 22),
-                      onPressed: controller.busy ? null : _createProfile,
-                    ),
-                    PopupMenuButton<String>(
-                      key: const ValueKey('aiProfileActions'),
-                      tooltip: 'Gérer la configuration API',
-                      padding: EdgeInsets.zero,
-                      icon: const Icon(Icons.more_vert, size: 21),
-                      enabled: !controller.busy,
-                      onSelected: (action) {
-                        if (action == 'rename') _renameProfile();
-                        if (action == 'delete') _deleteProfile();
-                      },
-                      itemBuilder: (_) => [
-                        const PopupMenuItem(
-                          value: 'rename',
-                          child: Text('Renommer'),
-                        ),
-                        PopupMenuItem(
-                          value: 'delete',
-                          enabled: controller.profiles.length > 1,
-                          child: const Text('Supprimer'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
+        const Text(
+          'Configuration API',
+          style: TextStyle(
+            color: DomoliaColors.goldLight,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 4,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Connexion',
-                  style: TextStyle(color: DomoliaColors.goldLight)),
-              const SizedBox(height: 8),
-              Container(
-                key: const ValueKey('aiConnectionStatus'),
-                constraints: const BoxConstraints(minHeight: 50),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                decoration: BoxDecoration(
-                  color: indicatorColor.withValues(alpha: 0.10),
-                  border: Border.all(color: indicatorColor),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    if (status == AiConnectionStatus.testing)
-                      const SizedBox(
-                        height: 12,
-                        width: 12,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: DomoliaColors.muted,
-                        ),
-                      )
-                    else
-                      Icon(Icons.circle, color: indicatorColor, size: 12),
-                    const SizedBox(width: 5),
-                    Expanded(
+        const SizedBox(height: 8),
+        Container(
+          key: const ValueKey('aiProfilePicker'),
+          constraints: const BoxConstraints(minHeight: 58),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: DomoliaColors.raisedSurface,
+            border: Border.all(color: DomoliaColors.border),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              key: const ValueKey('aiProfileSelector'),
+              value: controller.selectedProfileId,
+              isExpanded: true,
+              itemHeight: 64,
+              menuMaxHeight: 360,
+              dropdownColor: DomoliaColors.raisedSurface,
+              borderRadius: BorderRadius.circular(12),
+              icon: const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: DomoliaColors.goldLight,
+              ),
+              selectedItemBuilder: (context) => [
+                for (final profile in controller.profiles)
+                  Tooltip(
+                    message: profile.name,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
                       child: Text(
-                        label,
-                        key: const ValueKey('aiConnectionStatusLabel'),
+                        profile.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: indicatorColor,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
+                        style: const TextStyle(
+                          color: DomoliaColors.cream,
+                          fontSize: 16,
                         ),
                       ),
                     ),
-                    if (status == AiConnectionStatus.invalid)
-                      IconButton(
-                        key: const ValueKey('aiStatusErrorButton'),
-                        tooltip: 'Voir la raison de l’échec',
-                        constraints: const BoxConstraints.tightFor(width: 26, height: 32),
-                        padding: EdgeInsets.zero,
-                        icon: Icon(Icons.chevron_right, size: 23, color: indicatorColor),
-                        onPressed: _showStatusError,
+                  ),
+              ],
+              items: [
+                for (final profile in controller.profiles)
+                  DropdownMenuItem(
+                    value: profile.id,
+                    child: Text(
+                      profile.name,
+                      maxLines: 2,
+                      softWrap: true,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: DomoliaColors.cream,
+                        fontSize: 16,
                       ),
+                    ),
+                  ),
+              ],
+              onChanged: controller.busy
+                  ? null
+                  : (id) {
+                      if (id != null) _selectProfile(id);
+                    },
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 12,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            TextButton.icon(
+              key: const ValueKey('aiAddProfile'),
+              onPressed: controller.busy ? null : _createProfile,
+              icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
+              label: const Text('Ajouter un profil'),
+            ),
+            PopupMenuButton<String>(
+              key: const ValueKey('aiProfileActions'),
+              tooltip: 'Gérer la configuration API',
+              enabled: !controller.busy,
+              onSelected: (action) {
+                if (action == 'rename') _renameProfile();
+                if (action == 'delete') _deleteProfile();
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'rename',
+                  child: Text('Renommer'),
+                ),
+                PopupMenuItem(
+                  value: 'delete',
+                  enabled: controller.profiles.length > 1,
+                  child: const Text('Supprimer'),
+                ),
+              ],
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.more_horiz_rounded,
+                        color: DomoliaColors.goldLight, size: 20),
+                    SizedBox(width: 7),
+                    Text('Gérer',
+                        style: TextStyle(color: DomoliaColors.goldLight)),
                   ],
                 ),
               ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 17),
+        const Text(
+          'État de la connexion',
+          style: TextStyle(
+            color: DomoliaColors.goldLight,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          key: const ValueKey('aiConnectionStatus'),
+          constraints: const BoxConstraints(minHeight: 56),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: indicatorColor.withValues(alpha: 0.08),
+            border: Border.all(color: indicatorColor),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              if (status == AiConnectionStatus.testing)
+                SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: indicatorColor,
+                  ),
+                )
+              else
+                Icon(Icons.circle, color: indicatorColor, size: 16),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  key: const ValueKey('aiConnectionStatusLabel'),
+                  style: TextStyle(
+                    color: indicatorColor,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              if (status == AiConnectionStatus.invalid)
+                IconButton(
+                  key: const ValueKey('aiStatusErrorButton'),
+                  tooltip: 'Voir la raison de l’échec',
+                  icon: Icon(
+                    Icons.chevron_right_rounded,
+                    size: 26,
+                    color: indicatorColor,
+                  ),
+                  onPressed: _showStatusError,
+                ),
             ],
           ),
         ),
@@ -317,14 +359,17 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
 
         return SafeArea(
           child: ListView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
             children: [
-              TextButton.icon(
-                onPressed: widget.onBack,
-                icon: const Icon(Icons.arrow_back),
-                label: const Text('Retour aux paramètres'),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: widget.onBack,
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('Retour aux paramètres'),
+                ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 8),
               const Text(
                 'Fournisseur IA',
                 style: TextStyle(
@@ -335,13 +380,13 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               ),
               const SizedBox(height: 10),
               const Text(
-                'Gérez plusieurs connexions IA. Chaque configuration conserve '
-                'ses propres identifiants sur votre téléphone.',
+                'Sélectionnez votre connexion. Chaque profil conserve '
+                'ses propres paramètres et sa clé sécurisée.'
                 style: TextStyle(color: DomoliaColors.cream, height: 1.5),
               ),
-              const SizedBox(height: 22),
+              const SizedBox(height: 20),
               _profileAndStatus(c),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               TextField(
                 controller: _base,
                 enabled: !c.busy,
