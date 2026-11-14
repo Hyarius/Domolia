@@ -49,8 +49,32 @@ class AiExchange {
   final BytesBuilder _response = BytesBuilder(copy: false);
   int? statusCode;
   bool truncated = false;
+  int totalResponseBytes = 0;
+  DateTime? completedAtUtc;
+  int? promptTokens;
+  int? completionTokens;
+  String? error;
+  bool cancelled = false;
+  List<Map<String, dynamic>> interpretedEvents = const [];
+
+  /// Called after the narrator has decoded the response (also on failure).
+  void complete({
+    int? promptTokens,
+    int? completionTokens,
+    String? error,
+    bool cancelled = false,
+    List<Map<String, dynamic>> interpretedEvents = const [],
+  }) {
+    completedAtUtc = DateTime.now().toUtc();
+    this.promptTokens = promptTokens;
+    this.completionTokens = completionTokens;
+    this.error = error;
+    this.cancelled = cancelled;
+    this.interpretedEvents = List.unmodifiable(interpretedEvents);
+  }
 
   void addRawResponse(List<int> bytes) {
+    totalResponseBytes += bytes.length;
     final left = maxRawResponseBytes - _response.length;
     if (left <= 0) {
       truncated = true;
@@ -76,6 +100,8 @@ class AiExchange {
   Map<String, dynamic> toJson() => {
     'format': 'domolia-ai-exchange-v1',
     'recordedAtUtc': createdAtUtc.toIso8601String(),
+    'completedAtUtc': completedAtUtc?.toIso8601String(),
+    'durationMs': completedAtUtc?.difference(createdAtUtc).inMilliseconds,
     'provider': provider,
     'credentialsRedacted': true,
     'request': {
@@ -92,7 +118,22 @@ class AiExchange {
     'response': {
       'statusCode': statusCode,
       'rawBody': _redact(utf8.decode(_response.toBytes(), allowMalformed: true)),
+      'capturedBytes': _response.length,
+      'totalBytesReceived': totalResponseBytes,
       'truncated': truncated,
+    },
+    'interpretation': {
+      'promptTokens': promptTokens,
+      'completionTokens': completionTokens,
+      'cancelled': cancelled,
+      'error': error == null ? null : _redact(error!),
+      'events': [
+        for (final event in interpretedEvents)
+          {
+            for (final field in event.entries)
+              field.key: field.value is String ? _redact(field.value as String) : field.value,
+          },
+      ],
     },
   };
 
