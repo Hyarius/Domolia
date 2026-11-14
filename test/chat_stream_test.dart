@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:domolia/ai/ai_provider.dart';
+import 'package:domolia/ai/ai_diagnostics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -34,7 +35,9 @@ void main() {
         headers: {'content-type': 'text/event-stream; charset=utf-8'},
       );
     });
-    final provider = OpenAiCompatibleChatProvider(client: client);
+    final recorder = AiExchangeRecorder();
+    final provider = OpenAiCompatibleChatProvider(
+      client: client, diagnostics: recorder);
     final chunks = await provider.streamChat(
       credentials,
       messages: const [AiMessage(role: 'user', content: 'Salut')],
@@ -42,6 +45,15 @@ void main() {
     expect(chunks.map((e) => e.text).join(), 'Bonjour à tous !');
     expect(chunks.last.promptTokens, 23);
     expect(chunks.last.completionTokens, 8);
+    final trace = recorder.last!.toJson();
+    expect((trace['request'] as Map)['url'],
+      'https://api.openuncensored.com/v1/chat/completions');
+    expect((trace['request'] as Map)['body']['stream_options'],
+      {'include_usage': true});
+    expect((trace['response'] as Map)['statusCode'], 200);
+    expect((trace['response'] as Map)['rawBody'],
+      contains('data: {"choices":[],"usage"'));
+    expect(recorder.last!.exportJson(), isNot(contains(credentials.apiKey)));
     client.close();
   });
 

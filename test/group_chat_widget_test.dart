@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:domolia/ai/ai_provider.dart';
+import 'package:domolia/ai/ai_diagnostics.dart';
 import 'package:domolia/chat/chat_controller.dart';
 import 'package:domolia/chat/group_chat_page.dart';
 import 'package:domolia/theme/domolia_theme.dart';
@@ -204,6 +205,65 @@ void main() {
         greaterThan(300));
     expect(divider.decoration, isA<BoxDecoration>());
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('The export menu offers conversation scopes and a combined raw AI trace',
+      (tester) async {
+    final controller = NarrativeChatController(
+      provider: ScriptedProvider(), configuration: () => config,
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: Scaffold(body: GroupChatPage(
+        controller: controller, onOpenSettings: () {},
+      )),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('chatExportMenu')));
+    await tester.pumpAndSettle();
+    expect(find.text('Exporter la conversation'), findsOneWidget);
+    expect(find.text('Requête IA + réponse brute'), findsOneWidget);
+    await tester.tap(find.text('Exporter la conversation'));
+    await tester.pumpAndSettle();
+    expect(find.text('Toute la conversation'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('chatExportScope')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('X derniers messages').last);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('chatExportCount')), findsOneWidget);
+    await tester.tap(find.text('Annuler'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('Diagnostic menu exposes raw exchange after a completed request',
+      (tester) async {
+    final recorder = AiExchangeRecorder();
+    final exchange = recorder.begin(
+      provider: 'openai-compatible',
+      method: 'POST',
+      url: 'https://example.invalid/v1/chat/completions',
+      requestBody: '{"model":"test","messages":[]}',
+      secret: 'token', accept: 'text/event-stream',
+    );
+    exchange.statusCode = 200;
+    final controller = NarrativeChatController(
+      provider: ScriptedProvider(), configuration: () => config,
+      diagnostics: recorder,
+    );
+    addTearDown(controller.dispose);
+    // This checks the menu's safety gate, not a live network request.
+    expect(recorder.last, isNotNull);
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: Scaffold(body: GroupChatPage(
+        controller: controller, onOpenSettings: () {},
+      )),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('chatExportMenu')));
+    await tester.pumpAndSettle();
+    expect(find.text('Requête IA + réponse brute'), findsOneWidget);
   });
 
 }

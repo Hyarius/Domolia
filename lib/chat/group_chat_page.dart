@@ -107,10 +107,8 @@ class _GroupChatPageState extends State<GroupChatPage> {
   Future<void> _exportConversation() async {
     var scope = ChatExportScope.complete;
     var invalid = false;
-    final number = TextEditingController(text: '3');
-    _TranscriptChoice? choice;
-    try {
-      choice = await showDialog<_TranscriptChoice>(
+    var number = '3';
+    final choice = await showDialog<_TranscriptChoice>(
         context: context,
         builder: (dialogContext) => StatefulBuilder(
           builder: (context, setDialogState) => AlertDialog(
@@ -148,9 +146,10 @@ class _GroupChatPageState extends State<GroupChatPage> {
                 ),
                 if (scope != ChatExportScope.complete) ...[
                   const SizedBox(height: 14),
-                  TextField(
+                  TextFormField(
                     key: const ValueKey('chatExportCount'),
-                    controller: number,
+                    initialValue: number,
+                    onChanged: (value) => number = value,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       labelText: 'Nombre',
@@ -168,7 +167,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
               FilledButton(
                 onPressed: () {
                   final count = scope == ChatExportScope.complete
-                      ? 1 : int.tryParse(number.text);
+                      ? 1 : int.tryParse(number);
                   if (count == null || count < 1 || count > 50000) {
                     setDialogState(() => invalid = true);
                     return;
@@ -181,9 +180,6 @@ class _GroupChatPageState extends State<GroupChatPage> {
           ),
         ),
       );
-    } finally {
-      number.dispose();
-    }
     if (choice == null || !mounted) return;
     final data = exportConversation(
       widget.controller.timeline,

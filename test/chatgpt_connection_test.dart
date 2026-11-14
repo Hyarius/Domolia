@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:domolia/ai/ai_provider.dart';
+import 'package:domolia/ai/ai_diagnostics.dart';
 import 'package:domolia/ai/chatgpt_auth.dart';
 import 'package:domolia/ai/chatgpt_responses.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -132,7 +133,9 @@ void main() {
   });
 
   test('Responses API uses OAuth bearer, store:false and streaming', () async {
+    final recorder = AiExchangeRecorder();
     final provider = ChatGptResponsesProvider(
+      diagnostics: recorder,
       client: MockClient((request) async {
         expect(request.followRedirects, false);
         expect(request.url.toString(), 'https://api.openai.com/v1/responses');
@@ -159,6 +162,13 @@ void main() {
     ).toList();
     expect(chunks.map((part) => part.text).join(), 'Bonjour');
     expect(chunks.last.promptTokens, 7);
+    final exported = recorder.last!.toJson();
+    expect((exported['request'] as Map)['url'],
+      'https://api.openai.com/v1/responses');
+    expect((exported['request'] as Map)['body']['store'], false);
+    expect((exported['response'] as Map)['rawBody'],
+      contains('response.output_text.delta'));
+    expect(recorder.last!.exportJson(), isNot(contains('oauth-mocked')));
   });
 
   test('Responses failure is surfaced without raw token or body', () async {
