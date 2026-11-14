@@ -16,6 +16,12 @@ L'application est exécutée sur le téléphone avec des données locales (SQLit
 - Garder **une seule livraison produit** par PR autant que possible ; toute nouvelle capacité modifiant le modèle de données doit être accompagnée de migrations et tests.
 - **Ne pas fusionner automatiquement** : le propriétaire valide les PR.
 
+## Architecture centrale : Livres et Parties
+
+Le **Livre** est une définition partageable (identité, couverture, tags, narrateur, scénario et personnages à venir). Une **Partie / BookSession** est la progression privée d'un joueur, associée à un Livre. Plusieurs Parties peuvent utiliser la même définition. Les configurations IA appartiennent exclusivement au joueur : un Livre ne stocke qu'une liaison locale à un ID de profil, jamais le profil ni ses secrets. Voir [format portable des Livres](../books/format.md).
+
+La refonte autour des Livres est intégrée à la fin de PR04, avant les compléments de PR05. PR05 termine la gestion multi-parties et la robustesse SQLite ; PR06 enrichit le narrateur déjà propre à chaque Livre ; PR07 fournit les onglets Scénario/Personnages ; PR08 construit un contexte explicite Livre+Partie.
+
 ## Jalons
 
 | Jalon | Livrable utilisateur | PR |
@@ -32,8 +38,8 @@ L'application est exécutée sur le téléphone avec des données locales (SQLit
 - **[PR01 — Socle Android, identité et distribution](PR01.md)** — fusionnée : Domolia s'installe sur Android avec son thème vert/or et un canal GitHub de préversions utilisables.
 - **[PR02 — Mise à jour Android depuis l'application](PR02.md)** — fusionnée : L'utilisateur découvre une nouvelle préversion, la télécharge dans Domolia et peut lancer son installation sans visiter GitHub manuellement.
 - **[PR03 — Connexion sécurisée à OpenUncensored](PR03.md)** — fusionnée : Depuis les paramètres, l'utilisateur configure sa clé OpenUncensored, sélectionne un modèle et vérifie que la connexion fonctionne.
-- **[PR04 — Premier chat narratif utilisable](PR04.md)** : L'utilisateur peut écrire des actions et recevoir une narration en français, progressivement, depuis son téléphone.
-- **[PR05 — Aventures et conversations persistantes](PR05.md)** : Les aventures peuvent être créées, nommées, rouvertes et poursuivies après fermeture de Domolia.
+- **[PR04 — Premier chat narratif utilisable](PR04.md)** — fusionnée : L'utilisateur peut écrire des actions et recevoir une narration en français, progressivement, depuis son téléphone.
+- **[PR05 — Aventures et conversations persistantes](PR05.md)** — socle Livres livré, suite à développer : Les aventures peuvent être créées, nommées, rouvertes et poursuivies après fermeture de Domolia.
 - **[PR06 — Narrateur RP, liberté du joueur et préférences](PR06.md)** : Le chat devient un véritable jeu de rôle narratif en français : aventures, exploration, quotidien et relations, sans voler les décisions du personnage joueur.
 - **[PR07 — Création de monde, aventure et personnage joueur](PR07.md)** : L'utilisateur façonne le cadre de son aventure et définit son personnage avant de commencer à jouer.
 - **[PR08 — Constructeur de contexte et continuité narrative](PR08.md)** : Le narrateur reçoit automatiquement les informations pertinentes sur l'aventure, sans devoir relire tout l'historique à chaque tour.

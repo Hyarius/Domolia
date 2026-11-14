@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../ai/ai_provider.dart';
+import '../ai/ai_diagnostics.dart';
 import 'chat_protocol.dart';
 import 'narrator.dart';
 
@@ -21,6 +22,9 @@ class NarrativeChatController extends ChangeNotifier {
     this.resolveConnection,
     this.narrator = const Narrator(),
     this.narratorProvider,
+    this.onTimelineChanged,
+    this.onExchangeCaptured,
+    this.diagnostics,
     int Function(int count)? selectOpeningIndex,
   }) : _selectOpeningIndex = selectOpeningIndex ?? Random.secure().nextInt;
 
@@ -28,9 +32,45 @@ class NarrativeChatController extends ChangeNotifier {
   final AiConfiguration? Function() configuration;
   final Future<NarrativeAiEndpoint> Function()? resolveConnection;
   final Narrator narrator;
+  final AiExchangeRecorder? diagnostics;
+  /// Called once for each actually emitted HTTP request after decoding.
+  final void Function(AiExchange exchange)? onExchangeCaptured;
+  AiExchange? lastExchange;
+
+  /// Hide purged traces from the current screen as well as from SQLite.
+  void forgetLastExchange() {
+    lastExchange = null;
+    diagnostics?.last = null;
+    _notify();
+  }
+
+
   /// Reads the latest saved narrator settings for each new model request.
   final Narrator Function()? narratorProvider;
   final int Function(int count) _selectOpeningIndex;
+
+  /// Store only committed events, never streaming previews.
+  final void Function(List<ChatTimelineEvent> events)? onTimelineChanged;
+
+  void _timelineChanged() =>
+      onTimelineChanged?.call(List<ChatTimelineEvent>.unmodifiable(_timeline));
+
+  /// Restore a saved session before beginConversation without triggering AI.
+  void restoreTimeline(List<ChatTimelineEvent> events) {
+    if (_closed || busy || _timeline.isNotEmpty) {
+      throw StateError('La conversation est déjà ouverte.');
+    }
+    _timeline.addAll(events);
+    _started = events.isNotEmpty;
+    if (events.isNotEmpty) {
+      _nextId = events.last.id + 1;
+      final last = _timeline.lastIndexWhere(
+        (item) => item is ChatEntry && item.speaker == ChatSpeaker.player,
+      );
+      _lastPlayerIndex = last < 0 ? null : last;
+    }
+    _notify();
+  }
   bool _started = false;
 
   /// Adds one local narrator bubble at the beginning of the conversation.
@@ -52,6 +92,7 @@ class NarrativeChatController extends ChangeNotifier {
       name: 'Narrateur',
       text: candidates[index].trim(),
     ));
+    _timelineChanged();
     _notify();
   }
 
@@ -104,6 +145,7 @@ class NarrativeChatController extends ChangeNotifier {
       name: 'Vous',
       text: action,
     ));
+    _timelineChanged();
     await _generate();
   }
 
@@ -111,10 +153,71 @@ class NarrativeChatController extends ChangeNotifier {
     if (_closed || busy || _lastPlayerIndex == null) return;
     // Keep the original player message. Never add it a second time.
     _timeline.removeRange(_lastPlayerIndex! + 1, _timeline.length);
+    _timelineChanged();
     await _generate();
   }
 
   Future<void> retry() => regenerate();
+
+  int _playerIndex(int id) => _timeline.indexWhere(
+    (event) => event is ChatEntry &&
+        event.id == id && event.speaker == ChatSpeaker.player,
+  );
+
+  /// Edits a previously committed player message without altering history.
+  /// The player can then choose « Reprendre ici » to rebuild the future.
+  bool editPlayerMessage(int id, String text) {
+    final value = text.trim();
+    if (_closed || busy || value.isEmpty || value.length > 4000) return false;
+    final index = _playerIndex(id);
+    if (index < 0) return false;
+    final old = _timeline[index] as ChatEntry;
+    if (old.text == value) return true;
+    _timeline[index] = ChatEntry(
+      id: old.id, speaker: old.speaker, name: old.name, text: value,
+    );
+    _timelineChanged();
+    _notify();
+    return true;
+  }
+
+  /// Discards every event after the chosen player entry (including scene
+  /// changes), then generates a new turn from its possibly edited text.
+  /// Event IDs remain monotonic to keep older diagnostics unambiguous.
+  Future<bool> resumeFromPlayerMessage(int id) async {
+    if (_closed || busy) return false;
+    final index = _playerIndex(id);
+    if (index < 0) return false;
+    _timeline.removeRange(index + 1, _timeline.length);
+    _lastPlayerIndex = index;
+    _timelineChanged();
+    _notify();
+    await _generate();
+    return true;
+  }
+
+  /// AI output is a multi-message turn, so regeneration replaces the whole
+  /// turn, not just one bubble (which could duplicate dialogue or dividers).
+  bool canRegenerateFromAiMessage(int id) {
+    if (_closed || busy) return false;
+    final index = _timeline.indexWhere(
+      (event) => event is ChatEntry &&
+          event.id == id && event.speaker != ChatSpeaker.player,
+    );
+    if (index < 0) return false;
+    return _timeline.take(index).any(
+      (event) => event is ChatEntry && event.speaker == ChatSpeaker.player,
+    );
+  }
+
+  Future<bool> regenerateFromAiMessage(int id) async {
+    if (!canRegenerateFromAiMessage(id)) return false;
+    final index = _timeline.indexWhere((event) => event.id == id);
+    final player = _timeline.take(index).lastWhere(
+      (event) => event is ChatEntry && event.speaker == ChatSpeaker.player,
+    ) as ChatEntry;
+    return resumeFromPlayerMessage(player.id);
+  }
 
   List<AiMessage> _buildContext() {
     final recent = _timeline.length > 35
@@ -149,7 +252,9 @@ class NarrativeChatController extends ChangeNotifier {
   }
 
   void _addLines(Iterable<ChatOutputEvent> events) {
+    var changed = false;
     for (final event in events) {
+      changed = true;
       if (event is ChatSceneChangeOutput) {
         if (_timeline.isEmpty || _timeline.last is ChatSceneChange) {
           throw const FormatException('Changement de scène consécutif ou isolé.');
@@ -165,9 +270,11 @@ class NarrativeChatController extends ChangeNotifier {
         ));
       }
     }
+    if (changed) _timelineChanged();
   }
 
   Future<void> _generate() async {
+    lastExchange = null;
     error = null;
     busy = true;
     _cancelled = false;
@@ -212,6 +319,8 @@ class NarrativeChatController extends ChangeNotifier {
 
     final decoder = ChatLineDecoder();
     final context = _buildContext();
+    final priorExchange = diagnostics?.last;
+    final responseStart = _timeline.length;
     try {
       if (selectedProvider is AiStreamingChatProvider) {
         final complete = Completer<void>();
@@ -298,6 +407,37 @@ class NarrativeChatController extends ChangeNotifier {
     } catch (_) {
       if (!_cancelled) error = 'Impossible de générer la réponse. Réessayez.';
     } finally {
+      if (diagnostics?.last != null && diagnostics?.last != priorExchange) {
+        final exchange = diagnostics!.last!;
+        exchange.complete(
+          promptTokens: promptTokens,
+          completionTokens: completionTokens,
+          error: error,
+          cancelled: _cancelled,
+          interpretedEvents: [
+            for (final event in _timeline.skip(responseStart))
+              if (event is ChatSceneChange)
+                <String, dynamic>{
+                  'id': event.id,
+                  'type': 'scene_change',
+                }
+              else if (event is ChatEntry)
+                <String, dynamic>{
+                  'id': event.id,
+                  'type': 'message',
+                  'speaker': event.speaker.name,
+                  'name': event.name,
+                  'text': event.text,
+                },
+          ],
+        );
+        lastExchange = exchange;
+        try {
+          onExchangeCaptured?.call(exchange);
+        } catch (_) {
+          // Diagnostic persistence must never interrupt the conversation.
+        }
+      }
       _subscription = null;
       _done = null;
       preview = null;

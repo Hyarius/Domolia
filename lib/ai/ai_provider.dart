@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'ai_diagnostics.dart';
+
 const defaultAiBaseUrl = 'https://api.openuncensored.com/v1';
 const defaultAiModel = 'deepseek-v4.1-flash-1017-uncensored';
 
@@ -23,6 +25,9 @@ class AiConfiguration {
 /// A named, locally stored connection. Each profile owns its API key.
 enum AiProviderKind { chatGpt, customAi }
 
+/// Declared provider capability; never inferred from a model name.
+enum AiNsfwCompatibility { supported, unsupported, unknown }
+
 class AiProfile {
   const AiProfile({
     required this.id,
@@ -31,9 +36,11 @@ class AiProfile {
     required this.model,
     required this.apiKey,
     this.kind = AiProviderKind.customAi,
+    this.nsfwCompatibility = AiNsfwCompatibility.unknown,
   });
 
   final AiProviderKind kind;
+  final AiNsfwCompatibility nsfwCompatibility;
   final String id;
   final String name;
   final String baseUrl;
@@ -48,12 +55,14 @@ class AiProfile {
 
   AiProfile copyWith({
     AiProviderKind? kind,
+    AiNsfwCompatibility? nsfwCompatibility,
     String? name,
     String? baseUrl,
     String? model,
     String? apiKey,
   }) => AiProfile(
         kind: kind ?? this.kind,
+        nsfwCompatibility: nsfwCompatibility ?? this.nsfwCompatibility,
         id: id,
         name: name ?? this.name,
         baseUrl: baseUrl ?? this.baseUrl,
@@ -153,10 +162,11 @@ String validatedAiModel(String value) {
 }
 
 class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatProvider {
-  OpenAiCompatibleChatProvider({http.Client? client})
+  OpenAiCompatibleChatProvider({http.Client? client, this.diagnostics})
       : _client = client ?? http.Client();
 
   final http.Client _client;
+  final AiExchangeRecorder? diagnostics;
 
   Future<dynamic> _request(
     AiConfiguration configuration,
@@ -177,12 +187,22 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
       request.body = jsonEncode(payload);
     }
 
+    final exchange = payload == null ? null : diagnostics?.begin(
+      provider: 'openai-compatible',
+      method: request.method,
+      url: request.url.toString(),
+      requestBody: request.body,
+      secret: configuration.apiKey.trim(),
+      accept: request.headers['Accept'] ?? 'application/json',
+    );
     http.Response response;
     try {
       final streamed = await _client.send(request).timeout(const Duration(seconds: 25));
       response = await http.Response.fromStream(streamed).timeout(
         const Duration(seconds: 65),
       );
+      exchange?.statusCode = response.statusCode;
+      exchange?.addRawResponse(response.bodyBytes);
     } on TimeoutException {
       throw const AiProviderException('Le fournisseur IA ne répond pas à temps.');
     } catch (_) {
@@ -321,11 +341,20 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
         ],
       });
 
+    final exchange = diagnostics?.begin(
+      provider: 'openai-compatible',
+      method: request.method,
+      url: request.url.toString(),
+      requestBody: request.body,
+      secret: configuration.apiKey.trim(),
+      accept: request.headers['Accept'] ?? 'text/event-stream',
+    );
     http.StreamedResponse response;
     try {
       response = await _client.send(request).timeout(
         const Duration(seconds: 25),
       );
+      exchange?.statusCode = response.statusCode;
     } on TimeoutException {
       throw const AiProviderException('Le fournisseur IA ne répond pas à temps.');
     } catch (_) {
@@ -335,6 +364,19 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
     }
 
     if (response.statusCode != 200) {
+      // Preserve the actual upstream error body for offline diagnosis.
+      // Only a bounded amount is captured; user-visible errors stay sanitized.
+      if (exchange != null) {
+        try {
+          await for (final bytes in response.stream.timeout(
+              const Duration(seconds: 8))) {
+            exchange.addRawResponse(bytes);
+            if (exchange.truncated) break;
+          }
+        } catch (_) {
+          // A broken error stream must not replace the useful HTTP status.
+        }
+      }
       switch (response.statusCode) {
         case 401:
         case 403:
@@ -359,6 +401,10 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
     var receivedText = 0;
     try {
       await for (final line in response.stream
+          .map((bytes) {
+            exchange?.addRawResponse(bytes);
+            return bytes;
+          })
           .transform(utf8.decoder)
           .transform(const LineSplitter())
           .timeout(const Duration(seconds: 75))) {

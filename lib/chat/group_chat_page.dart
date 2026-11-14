@@ -1,18 +1,43 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../ai/ai_diagnostics.dart';
 import '../theme/domolia_theme.dart';
 import 'chat_controller.dart';
 import 'chat_protocol.dart';
+import 'chat_exports.dart';
+
+enum _ChatExportAction { conversation, purgeDiagnostics }
+
+class _TranscriptChoice {
+  const _TranscriptChoice(this.scope, this.count);
+  final ChatExportScope scope;
+  final int count;
+}
 
 class GroupChatPage extends StatefulWidget {
   const GroupChatPage({
     super.key,
     required this.controller,
     required this.onOpenSettings,
+    this.bookTitle,
+    this.sessionTitle,
+    this.onLoadDiagnostics,
+    this.onPurgeDiagnostics,
+    this.onExportDiagnostic,
   });
 
   final NarrativeChatController controller;
   final VoidCallback onOpenSettings;
+  final String? bookTitle;
+  final String? sessionTitle;
+  final Future<List<StoredAiDiagnostic>> Function()? onLoadDiagnostics;
+  final Future<void> Function()? onPurgeDiagnostics;
+  /// Test adapter; production uses Android's file picker.
+  final Future<void> Function(String, Map<String, dynamic>)? onExportDiagnostic;
 
   @override
   State<GroupChatPage> createState() => _GroupChatPageState();
@@ -64,6 +89,314 @@ class _GroupChatPageState extends State<GroupChatPage> {
     widget.controller.send(value);
   }
 
+  void _showExportMessage(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Future<void> _saveDiagnostic(String name, Map<String, dynamic> data) async {
+    try {
+      if (widget.onExportDiagnostic != null) {
+        await widget.onExportDiagnostic!(name, data);
+        _showExportMessage('Export JSON enregistré.');
+        return;
+      }
+      final content = Uint8List.fromList(
+        utf8.encode(const JsonEncoder.withIndent('  ').convert(data)),
+      );
+      final saved = await FilePicker.platform.saveFile(
+        dialogTitle: 'Exporter pour diagnostic',
+        fileName: name,
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        bytes: content,
+      );
+      if (saved != null) _showExportMessage('Export JSON enregistré.');
+    } catch (_) {
+      _showExportMessage('Impossible d’exporter le diagnostic JSON.');
+    }
+  }
+
+  Future<void> _exportConversation() async {
+    var scope = ChatExportScope.complete;
+    var invalid = false;
+    var number = '3';
+    final choice = await showDialog<_TranscriptChoice>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Exporter la conversation'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<ChatExportScope>(
+                  key: const ValueKey('chatExportScope'),
+                  initialValue: scope,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Portée de l’export'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: ChatExportScope.complete,
+                      child: Text('Toute la conversation'),
+                    ),
+                    DropdownMenuItem(
+                      value: ChatExportScope.lastScenes,
+                      child: Text('X dernières scènes'),
+                    ),
+                    DropdownMenuItem(
+                      value: ChatExportScope.lastMessages,
+                      child: Text('X derniers messages'),
+                    ),
+                  ],
+                  onChanged: (selected) {
+                    if (selected != null) {
+                      setDialogState(() {
+                        scope = selected;
+                        invalid = false;
+                      });
+                    }
+                  },
+                ),
+                if (scope != ChatExportScope.complete) ...[
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    key: const ValueKey('chatExportCount'),
+                    initialValue: number,
+                    onChanged: (value) => number = value,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Nombre',
+                      errorText: invalid ? 'Entre 1 et 50 000' : null,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Annuler'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final count = scope == ChatExportScope.complete
+                      ? 1 : int.tryParse(number);
+                  if (count == null || count < 1 || count > 50000) {
+                    setDialogState(() => invalid = true);
+                    return;
+                  }
+                  Navigator.pop(dialogContext, _TranscriptChoice(scope, count));
+                },
+                child: const Text('Exporter'),
+              ),
+            ],
+          ),
+        ),
+      );
+    if (choice == null || !mounted) return;
+    final data = exportConversation(
+      widget.controller.timeline,
+      scope: choice.scope,
+      count: choice.count,
+      bookTitle: widget.bookTitle,
+      sessionTitle: widget.sessionTitle,
+    );
+    await _saveDiagnostic(
+      'domolia-conversation-${DateTime.now().millisecondsSinceEpoch}.json',
+      data,
+    );
+  }
+
+
+  /// Export only the exact HTTP request which produced the tapped bubble.
+  Future<void> _exportAiMessage(ChatEntry entry) async {
+    try {
+      final choices = <StoredAiDiagnostic>[];
+      final last = widget.controller.lastExchange;
+      if (last != null) {
+        choices.add(StoredAiDiagnostic(
+          id: 'latest', sessionId: '', createdAtUtc: last.createdAtUtc,
+          content: last.exportJson(),
+        ));
+      }
+      if (widget.onLoadDiagnostics != null) {
+        choices.addAll(await widget.onLoadDiagnostics!());
+      }
+      if (!mounted) return;
+      StoredAiDiagnostic? selected;
+      for (final candidate in choices) {
+        if (candidate.containsMessage(entry.id)) {
+          selected = candidate;
+          break;
+        }
+      }
+      if (selected == null) {
+        _showExportMessage('Aucun diagnostic conservé pour ce message IA '
+            '(conservation désactivée ou traces purgées).');
+        return;
+      }
+      await _saveDiagnostic(
+        'domolia-message-${entry.id}-requete-reponse.json',
+        selected.data,
+      );
+    } catch (_) {
+      _showExportMessage('Impossible de lire le diagnostic de ce message.');
+    }
+  }
+
+  Future<void> _editPlayerMessage(ChatEntry entry) async {
+    final updated = await showDialog<String>(
+      context: context,
+      builder: (_) => _PlayerMessageEditor(initialText: entry.text),
+    );
+    if (updated == null || !mounted) return;
+    if (!widget.controller.editPlayerMessage(entry.id, updated)) {
+      _showExportMessage('Impossible de modifier ce message.');
+      return;
+    }
+    _showExportMessage(
+      'Message modifié. Utilisez « Reprendre ici » pour recalculer la suite.',
+    );
+  }
+
+  Future<bool> _confirmRewind({
+    required String title, required String message,
+  }) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title), content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Continuer'),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
+  Future<void> _resumeAt(ChatEntry entry) async {
+    if (!await _confirmRewind(
+      title: 'Reprendre ici ?',
+      message: 'Tous les messages et changements de scène après ce message '
+          'seront supprimés. Une nouvelle réponse IA sera générée '
+          'à partir de votre texte actuel.',
+    )) {
+      return;
+    }
+    await widget.controller.resumeFromPlayerMessage(entry.id);
+  }
+
+  Future<void> _regenerateAt(ChatEntry entry) async {
+    if (!await _confirmRewind(
+      title: 'Régénérer cette réponse ?',
+      message: 'La réponse IA complète de ce tour (y compris les autres '
+          'bulles et changements de scène), ainsi que toute la suite, '
+          'sera remplacée par une nouvelle génération.',
+    )) {
+      return;
+    }
+    await widget.controller.regenerateFromAiMessage(entry.id);
+  }
+
+  Future<void> _showMessageActions(ChatEntry entry) async {
+    if (entry.inProgress || widget.controller.busy) return;
+    final isPlayer = entry.speaker == ChatSpeaker.player;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(isPlayer ? 'Mon message' : entry.name),
+              subtitle: Text(entry.text,
+                maxLines: 2, overflow: TextOverflow.ellipsis),
+            ),
+            if (isPlayer) ...[
+              ListTile(
+                key: const ValueKey('chatActionEdit'),
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Éditer'),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await _editPlayerMessage(entry);
+                },
+              ),
+              ListTile(
+                key: const ValueKey('chatActionResume'),
+                leading: const Icon(Icons.history_rounded),
+                title: const Text('Reprendre ici'),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await _resumeAt(entry);
+                },
+              ),
+            ] else ...[
+              ListTile(
+                key: const ValueKey('chatActionRegenerate'),
+                leading: const Icon(Icons.refresh_rounded),
+                title: const Text('Régénérer'),
+                enabled: widget.controller.canRegenerateFromAiMessage(entry.id),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await _regenerateAt(entry);
+                },
+              ),
+              ListTile(
+                key: const ValueKey('chatActionExport'),
+                leading: const Icon(Icons.file_download_outlined),
+                title: const Text('Exporter'),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await _exportAiMessage(entry);
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _purgeDiagnostics() async {
+    if (widget.controller.busy || widget.onPurgeDiagnostics == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Purger les diagnostics ?'),
+        content: const Text(
+          'Supprimer définitivement les requêtes et réponses IA '
+          'enregistrées pour cette partie ? Les messages et les scènes '
+          'de la conversation seront conservés.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Purger'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await widget.onPurgeDiagnostics!();
+      widget.controller.forgetLastExchange();
+      _showExportMessage('Diagnostics de cette partie supprimés.');
+    } catch (_) {
+      _showExportMessage('Impossible de purger les diagnostics.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final chat = widget.controller;
@@ -99,6 +432,8 @@ class _GroupChatPageState extends State<GroupChatPage> {
                         children: [
                           Text(
                             'Conversation de groupe',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w700,
@@ -116,6 +451,32 @@ class _GroupChatPageState extends State<GroupChatPage> {
                           ),
                         ],
                       ),
+                    ),
+                    PopupMenuButton<_ChatExportAction>(
+                      key: const ValueKey('chatExportMenu'),
+                      tooltip: 'Options de la conversation',
+                      icon: const Icon(Icons.ios_share_outlined,
+                        color: DomoliaColors.goldLight),
+                      onSelected: (action) {
+                        switch (action) {
+                          case _ChatExportAction.conversation:
+                            _exportConversation();
+                          case _ChatExportAction.purgeDiagnostics:
+                            _purgeDiagnostics();
+                        }
+                      },
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(
+                          value: _ChatExportAction.conversation,
+                          child: Text('Exporter la conversation'),
+                        ),
+                        PopupMenuItem(
+                          value: _ChatExportAction.purgeDiagnostics,
+                          enabled: !chat.busy &&
+                              widget.onPurgeDiagnostics != null,
+                          child: const Text('Purger les diagnostics'),
+                        ),
+                      ],
                     ),
                     IconButton(
                       tooltip: 'Configurer le fournisseur IA',
@@ -143,9 +504,12 @@ class _GroupChatPageState extends State<GroupChatPage> {
                               key: ValueKey('chat-scene-${entry.id}'),
                             );
                           }
+                          final bubble = entry as ChatEntry;
                           return _ChatBubble(
-                            key: ValueKey('chat-entry-${entry.id}'),
-                            entry: entry as ChatEntry,
+                            key: ValueKey('chat-entry-${bubble.id}'),
+                            entry: bubble,
+                            onLongPress: bubble.inProgress
+                                ? null : () => _showMessageActions(bubble),
                           );
                         },
                       ),
@@ -179,18 +543,6 @@ class _GroupChatPageState extends State<GroupChatPage> {
                           child: const Text('Réessayer'),
                         ),
                     ],
-                  ),
-                ),
-              if (!chat.busy &&
-                  chat.error == null &&
-                  chat.messages.any((m) => m.speaker != ChatSpeaker.player))
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    key: const ValueKey('chatRegenerate'),
-                    onPressed: chat.regenerate,
-                    icon: const Icon(Icons.refresh_rounded, size: 18),
-                    label: const Text('Régénérer'),
                   ),
                 ),
               if (chat.modelUsed != null)
@@ -279,6 +631,73 @@ class _GroupChatPageState extends State<GroupChatPage> {
   }
 }
 
+/// The text field owns its controller for the full route transition.
+class _PlayerMessageEditor extends StatefulWidget {
+  const _PlayerMessageEditor({required this.initialText});
+
+  final String initialText;
+
+  @override
+  State<_PlayerMessageEditor> createState() => _PlayerMessageEditorState();
+}
+
+class _PlayerMessageEditorState extends State<_PlayerMessageEditor> {
+  late final TextEditingController _controller;
+  bool _invalid = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialText);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final value = _controller.text.trim();
+    if (value.isEmpty || value.length > 4000) {
+      setState(() => _invalid = true);
+      return;
+    }
+    Navigator.pop(context, value);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Éditer mon message'),
+    content: TextField(
+      key: const ValueKey('chatEditMessageInput'),
+      controller: _controller,
+      autofocus: true,
+      minLines: 2,
+      maxLines: 7,
+      maxLength: 4000,
+      decoration: InputDecoration(
+        labelText: 'Votre message',
+        errorText: _invalid
+            ? 'Saisissez un texte (4 000 caractères max).' : null,
+      ),
+      onChanged: (_) {
+        if (_invalid) setState(() => _invalid = false);
+      },
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Annuler'),
+      ),
+      FilledButton(
+        onPressed: _save,
+        child: const Text('Enregistrer'),
+      ),
+    ],
+  );
+}
+
 class _EmptyConversation extends StatelessWidget {
   const _EmptyConversation({required this.onOpenSettings});
   final VoidCallback onOpenSettings;
@@ -355,8 +774,9 @@ class _SceneDivider extends StatelessWidget {
 }
 
 class _ChatBubble extends StatelessWidget {
-  const _ChatBubble({super.key, required this.entry});
+  const _ChatBubble({super.key, required this.entry, this.onLongPress});
   final ChatEntry entry;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -367,8 +787,10 @@ class _ChatBubble extends StatelessWidget {
       ChatSpeaker.character => DomoliaColors.cream,
     };
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
+    return GestureDetector(
+      onLongPress: onLongPress,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 18),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -431,6 +853,7 @@ class _ChatBubble extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }

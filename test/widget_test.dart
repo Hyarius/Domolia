@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:domolia/main.dart';
+import 'package:domolia/ai/ai_settings_panel.dart';
+import 'package:domolia/ai/ai_controller.dart';
+import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/theme/domolia_theme.dart';
 import 'package:domolia/updates/update_service.dart';
 import 'package:domolia/updates/update_widgets.dart';
@@ -50,6 +53,27 @@ class _Prefs implements UpdatePreferences {
   Future<void> setAutomatic(bool e) async {enabled=e;}
 }
 
+class _MemoryAiProfiles implements AiProfileStore {
+  AiProfilesState? state;
+
+  @override
+  Future<AiProfilesState?> read() async => state;
+
+  @override
+  Future<void> write(AiProfilesState value) async { state = value; }
+}
+
+class _NeverCallAi implements AiChatProvider {
+  @override
+  Future<List<AiModel>> listModels(AiConfiguration configuration) async =>
+      throw StateError('Aucun appel réseau dans le test de navigation');
+
+  @override
+  Future<String> complete(AiConfiguration configuration, {
+    required List<AiMessage> messages, int maxTokens = 1200,
+  }) async => throw StateError('Aucun appel réseau dans le test de navigation');
+}
+
 void main() {
   late _Release release;
   late _Downloader downloader;
@@ -84,6 +108,8 @@ void main() {
     await tester.tap(find.text('Paramètres'));
     await tester.pumpAndSettle();
     expect(find.text('Mises à jour'),findsOneWidget);
+    await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
+    await tester.pumpAndSettle();
     expect(find.text('Vérifier maintenant'),findsOneWidget);
   });
   testWidgets('Progression visible et navigation non bloquée',(tester) async {
@@ -110,6 +136,8 @@ void main() {
     await tester.tap(find.byIcon(Icons.menu));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Paramètres'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(SwitchListTile));
     await tester.pumpAndSettle();
@@ -172,6 +200,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Paramètres'));
     await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Vérifier maintenant'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('updateCheckDialog')), findsOneWidget);
@@ -183,16 +213,76 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('Menu update entry displays explicit feedback', (tester) async {
+  testWidgets('La page Mises à jour affiche une vérification explicite', (tester) async {
     prefs.enabled = false;
     await tester.pumpWidget(DomoliaApp(updateController: updates));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.menu));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, 'Mise à jour'));
+    await tester.tap(find.widgetWithText(ListTile, 'Paramètres'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Vérifier maintenant'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('updateCheckDialog')), findsOneWidget);
     expect(find.textContaining('déjà à jour'), findsOneWidget);
+  });
+
+  testWidgets('Les réglages IA et les versions sont dans Paramètres',
+      (tester) async {
+    prefs.enabled = false;
+    // Inject a deterministic, local AI profile store. Secure storage plugins
+    // are unavailable in Flutter widget tests and leave a pending spinner.
+    final ai = AiConnectionController(
+      store: _MemoryAiProfiles(), provider: _NeverCallAi(),
+    );
+    addTearDown(ai.dispose);
+    await ai.initialize();
+    await tester.pumpWidget(DomoliaApp(
+      updateController: updates, aiController: ai,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ListTile, 'Fournisseur IA'), findsNothing);
+    expect(find.widgetWithText(ListTile, 'Mise à jour'), findsNothing);
+    expect(find.widgetWithText(ListTile, 'Toutes les versions'), findsNothing);
+
+    await tester.tap(find.widgetWithText(ListTile, 'Paramètres'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ListTile, 'Configurations IA'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Mises à jour'), findsOneWidget);
+    expect(find.text('Toutes les versions'), findsNothing);
+
+    await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
+    await tester.pumpAndSettle();
+    expect(find.text('Vérifier maintenant'), findsOneWidget);
+    final updatesList = find.descendant(
+      of: find.byType(UpdateSettingsPanel),
+      matching: find.byType(ListView),
+    );
+    await tester.drag(updatesList, const Offset(0, -650));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('allVersionsLink')), findsOneWidget);
+    await tester.drag(updatesList, const Offset(0, 900));
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(
+      of: find.byType(UpdateSettingsPanel),
+      matching: find.text('Retour aux paramètres'),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(ListTile, 'Configurations IA'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AiSettingsPanel), findsOneWidget);
+    await tester.tap(find.descendant(
+      of: find.byType(AiSettingsPanel),
+      matching: find.text('Retour aux paramètres'),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ListTile, 'Mises à jour'), findsOneWidget);
   });
 
 }

@@ -178,3 +178,25 @@ Le menu **Narrateur** (également accessible depuis **Paramètres**) permet de p
 2. Les **premiers messages possibles**, à raison d'un message par ligne. Une ouverture est choisie automatiquement lorsque vous démarrez une nouvelle conversation, et s'affiche comme une bulle du narrateur.
 
 Les réglages sont sauvegardés localement et réutilisés au prochain lancement de l'application. Les instructions du protocole JSON demeurent fixes et non éditables ; elles sont combinées au style à chaque requête. Le premier message est inséré localement, **sans appel réseau ni consommation de crédits**. Les tests et la CI utilisent uniquement des fournisseurs simulés.
+
+
+## Conversations : appui long, reprise et exports
+
+Dans une Partie, maintenez une bulle enfoncée pour accéder à ses actions :
+
+- **Votre message → Éditer** : modifier et sauvegarder son texte, sans effacer encore la suite ;
+- **Votre message → Reprendre ici** : après confirmation, supprimer les messages et séparateurs de scène suivants, puis demander à l’IA une nouvelle réponse tenant compte du texte modifié ;
+- **Message du narrateur ou d’un personnage → Régénérer** : remplacer tout le tour IA associé à cette bulle, ainsi que la suite de la conversation, après confirmation ;
+- **Message IA → Exporter** : sauvegarder un JSON contenant la requête HTTP et la réponse brute **ayant réellement produit cette bulle**. Si la trace n’est plus disponible, aucun autre échange n’est substitué.
+
+**Options de la conversation** conserve l’export de l’historique complet ou des X dernières scènes/messages, ainsi que la purge des traces IA sans effacer l’histoire. **Paramètres → Diagnostics IA** règle la conservation (0, 5, 10, 20 ou 50 échanges par Partie, 10 par défaut). Les corps bruts sont limités à 1 Mio et les clés d’authentification sont expurgées ; le contenu des prompts et réponses est toutefois conservé dans les fichiers exportés.
+
+Voir [le format, les contrôles et la confidentialité des diagnostics](docs/books/diagnostics.md).
+
+## Navigation de l'application
+
+Le menu latéral se limite à **Accueil**, **Livres**, **À propos** et **Paramètres**. La page **Paramètres** donne accès séparément à **Configurations IA** (profils et fournisseurs) et **Mises à jour** (canal, installation et lien **Toutes les versions**). Le menu ne contient plus d'entrées directes pour les fournisseurs IA et les releases. Les conversations sont supprimables depuis **Commencer ou reprendre une partie**, avec confirmation et effacement de l'historique local de la partie uniquement.
+
+## Bibliothèque de Livres (refonte)
+
+Chaque Livre possède un titre, une couverture, un narrateur, un niveau de détail et des tags. Les parties sont enregistrées localement et les configurations IA restent séparées dans le stockage sécurisé. Un Livre peut être exporté/importé comme JSON portable, sans clés, compte, lien de profil ou historique de Partie. Format et limites : [docs/books/format.md](docs/books/format.md).

@@ -4,14 +4,16 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'ai_provider.dart';
+import 'ai_diagnostics.dart';
 
 /// ChatGPT plan sessions must use the public Responses API, not
 /// /chat/completions and never ChatGPT's internal backend-api endpoints.
 class ChatGptResponsesProvider implements AiChatProvider, AiStreamingChatProvider {
-  ChatGptResponsesProvider({http.Client? client})
+  ChatGptResponsesProvider({http.Client? client, this.diagnostics})
       : _client = client ?? http.Client();
 
   final http.Client _client;
+  final AiExchangeRecorder? diagnostics;
   static final _responses =
       Uri.parse('https://api.openai.com/v1/responses');
 
@@ -47,13 +49,35 @@ class ChatGptResponsesProvider implements AiChatProvider, AiStreamingChatProvide
         'max_output_tokens': maxTokens,
       });
 
+    final exchange = diagnostics?.begin(
+      provider: 'chatgpt-responses',
+      method: request.method,
+      url: request.url.toString(),
+      requestBody: request.body,
+      secret: configuration.apiKey,
+      accept: request.headers['Accept'] ?? 'text/event-stream',
+    );
     http.StreamedResponse response;
     try {
       response = await _client.send(request).timeout(const Duration(seconds: 25));
+      exchange?.statusCode = response.statusCode;
     } catch (_) {
       throw const AiProviderException('Connexion à ChatGPT impossible.');
     }
     if (response.statusCode != 200) {
+      // Preserve the actual upstream error body for offline diagnosis.
+      // Only a bounded amount is captured; user-visible errors stay sanitized.
+      if (exchange != null) {
+        try {
+          await for (final bytes in response.stream.timeout(
+              const Duration(seconds: 8))) {
+            exchange.addRawResponse(bytes);
+            if (exchange.truncated) break;
+          }
+        } catch (_) {
+          // A broken error stream must not replace the useful HTTP status.
+        }
+      }
       switch (response.statusCode) {
         case 401:
         case 403:
@@ -74,6 +98,10 @@ class ChatGptResponsesProvider implements AiChatProvider, AiStreamingChatProvide
     var size = 0;
     try {
       await for (final line in response.stream
+          .map((bytes) {
+            exchange?.addRawResponse(bytes);
+            return bytes;
+          })
           .transform(utf8.decoder)
           .transform(const LineSplitter())
           .timeout(const Duration(seconds: 90))) {

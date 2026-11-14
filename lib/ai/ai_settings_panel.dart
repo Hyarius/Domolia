@@ -257,6 +257,31 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
             ),
           ),
         ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<AiNsfwCompatibility>(
+          key: const ValueKey('aiNsfwCapability'),
+          initialValue: controller.selectedProfile.nsfwCompatibility,
+          decoration: const InputDecoration(
+            labelText: 'Capacité NSFW déclarée',
+          ),
+          items: const [
+            DropdownMenuItem(
+              value: AiNsfwCompatibility.unknown,
+              child: Text('Inconnue'),
+            ),
+            DropdownMenuItem(
+              value: AiNsfwCompatibility.supported,
+              child: Text('Compatible'),
+            ),
+            DropdownMenuItem(
+              value: AiNsfwCompatibility.unsupported,
+              child: Text('Incompatible'),
+            ),
+          ],
+          onChanged: controller.busy ? null : (value) {
+            if (value != null) controller.setNsfwCompatibility(value);
+          },
+        ),
         const SizedBox(height: 6),
         Wrap(
           spacing: 12,

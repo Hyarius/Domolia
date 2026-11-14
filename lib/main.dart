@@ -9,8 +9,15 @@ import 'theme/domolia_theme.dart';
 import 'chat/chat_controller.dart';
 import 'chat/group_chat_page.dart';
 import 'chat/narrator_settings.dart';
-import 'chat/narrator_settings_page.dart';
+import 'books/book_definition.dart';
+import 'books/book_session.dart';
+import 'books/book_library_controller.dart';
+import 'books/book_library_page.dart';
+import 'books/book_editor_page.dart';
+import 'books/book_store.dart';
 import 'ai/ai_controller.dart';
+import 'ai/ai_diagnostics.dart';
+import 'ai/ai_diagnostic_settings.dart';
 import 'ai/ai_provider.dart';
 import 'ai/ai_settings_panel.dart';
 import 'ai/ai_storage.dart';
@@ -31,12 +38,14 @@ class DomoliaApp extends StatelessWidget {
     this.aiController,
     this.chatController,
     this.narratorSettingsController,
+    this.bookLibraryController,
   });
 
   final UpdateController? updateController;
   final AiConnectionController? aiController;
   final NarrativeChatController? chatController;
   final NarratorSettingsController? narratorSettingsController;
+  final BookLibraryController? bookLibraryController;
 
   @override
   Widget build(BuildContext context) {
@@ -56,12 +65,13 @@ class DomoliaApp extends StatelessWidget {
         ai: aiController,
         chat: chatController,
         narratorSettings: narratorSettingsController,
+        books: bookLibraryController,
       ),
     );
   }
 }
 
-enum _Page { home, chat, narrator, about, updates, ai }
+enum _Page { home, books, book, chat, about, settings, updates, ai, diagnostics }
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -70,11 +80,13 @@ class HomePage extends StatefulWidget {
     this.ai,
     this.chat,
     this.narratorSettings,
+    this.books,
   });
   final UpdateController? updates;
   final AiConnectionController? ai;
   final NarrativeChatController? chat;
   final NarratorSettingsController? narratorSettings;
+  final BookLibraryController? books;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -82,14 +94,23 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   _Page _page = _Page.home;
+  _Page _aiReturnPage = _Page.settings;
   late final UpdateController _updates;
   late final bool _ownsUpdates;
+  final AiExchangeRecorder _aiDiagnostics = AiExchangeRecorder();
   late final AiConnectionController _ai;
   late final bool _ownsAi;
-  late final NarrativeChatController _chat;
+  late NarrativeChatController _chat;
   late final bool _ownsChat;
   late final NarratorSettingsController _narratorSettings;
   late final bool _ownsNarratorSettings;
+  late final BookLibraryController _books;
+  late final bool _ownsBooks;
+  String? _selectedBookId;
+  String? _activeBookTitle;
+  String? _activeSessionTitle;
+  String? _activeSessionId;
+  Future<void> Function()? _awaitSessionWrites;
 
   @override
   void initState() {
@@ -99,29 +120,24 @@ class _HomePageState extends State<HomePage> {
     _ownsAi = widget.ai == null;
     _ai = widget.ai ?? AiConnectionController(
       store: SecureAiProfileStore(),
-      provider: OpenAiCompatibleChatProvider(),
+      provider: OpenAiCompatibleChatProvider(diagnostics: _aiDiagnostics),
       chatGpt: ChatGptAuthService(store: SecureChatGptSessionStore()),
-      chatGptProvider: ChatGptResponsesProvider(),
+      chatGptProvider: ChatGptResponsesProvider(diagnostics: _aiDiagnostics),
     );
     _ownsNarratorSettings = widget.narratorSettings == null;
     _narratorSettings = widget.narratorSettings ?? NarratorSettingsController(
       store: LocalNarratorSettingsStore(),
     );
+    _ownsBooks = widget.books == null;
+    _books = widget.books ?? BookLibraryController(
+      store: SqliteBookStore(),
+      legacyNarrator: _narratorSettings.store,
+    );
     _ownsChat = widget.chat == null;
     _chat = widget.chat ?? NarrativeChatController(
       provider: _ai.provider,
-      narratorProvider: () => _narratorSettings.narrator,
-      configuration: () => _ai.initialized && _ai.profiles.isNotEmpty
-          ? _ai.selectedProfile.configuration
-          : null,
-      resolveConnection: () async {
-        await _ai.initialize();
-        final binding = await _ai.activeConnection;
-        return NarrativeAiEndpoint(
-          provider: binding.provider,
-          configuration: binding.configuration,
-        );
-      },
+      configuration: () => null,
+      diagnostics: _aiDiagnostics,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_updates.initialize());
@@ -133,6 +149,12 @@ class _HomePageState extends State<HomePage> {
     if (_ownsUpdates) _updates.dispose();
     if (_ownsChat) _chat.dispose();
     if (_ownsNarratorSettings) _narratorSettings.dispose();
+    if (_ownsBooks) {
+      if (_books.store is SqliteBookStore) {
+        unawaited((_books.store as SqliteBookStore).close());
+      }
+      _books.dispose();
+    }
     if (_ownsAi) _ai.dispose();
     super.dispose();
   }
@@ -161,31 +183,103 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _openChat() {
+  void _openBooks() {
+    unawaited(_books.initialize());
+    setState(() => _page = _Page.books);
+  }
+
+  void _openBook(BookDefinition book) {
     unawaited(_ai.initialize());
-    setState(() => _page = _Page.chat);
-    unawaited(_prepareChat());
+    setState(() {
+      _selectedBookId = book.id;
+      _page = _Page.book;
+    });
   }
 
-  Future<void> _prepareChat() async {
-    await _narratorSettings.initialize();
-    if (!mounted) return;
-    _chat.beginConversation();
-    setState(() {});
-  }
-
-  void _openNarratorSettings() {
-    unawaited(_narratorSettings.initialize());
-    setState(() => _page = _Page.narrator);
+  Future<void> _openBookSession(
+      BookDefinition book, BookSession session) async {
+    try {
+      await _ai.initialize();
+      if (!mounted) return;
+      if (_ownsChat) {
+        _chat.dispose();
+        Future<void> writes = Future<void>.value();
+        _awaitSessionWrites = () => writes;
+        _chat = NarrativeChatController(
+          provider: _ai.provider,
+          configuration: () => null,
+          narrator: book.narrator,
+          diagnostics: _aiDiagnostics,
+          resolveConnection: () async {
+            final id = await _books.profileFor(book.id);
+            if (id == null || id.isEmpty) {
+              throw const AiProviderException(
+                'Choisissez une configuration IA pour ce Livre.',
+              );
+            }
+            final binding = await _ai.connectionForProfile(id);
+            return NarrativeAiEndpoint(
+              provider: binding.provider,
+              configuration: binding.configuration,
+            );
+          },
+          onTimelineChanged: (events) {
+            // Serialize writes, so a slower prior write cannot override
+            // the latest conversation snapshot.
+            writes = writes.then((_) => _books.saveSession(
+              session.copyWith(timeline: events),
+            )).catchError((Object _) {
+              // The UI remains usable if local storage is temporarily unavailable.
+            });
+          },
+          onExchangeCaptured: (exchange) {
+            // Persist the already-redacted HTTP request and raw response.
+            writes = writes.then((_) async {
+              final retention =
+                  await const AiDiagnosticsRetentionPreferences().limit();
+              if (retention == 0) return;
+              await _books.saveDiagnostic(
+                StoredAiDiagnostic(
+                  id: 'exchange-${exchange.createdAtUtc.microsecondsSinceEpoch}',
+                  sessionId: session.id,
+                  createdAtUtc: exchange.createdAtUtc,
+                  content: exchange.exportJson(),
+                ),
+                retention,
+              );
+            }).catchError((Object _) {
+              // Diagnostics never prevent the story from continuing.
+            });
+          },
+        );
+      }
+      _chat.restoreTimeline(session.timeline);
+      _chat.beginConversation();
+      setState(() {
+        _activeBookTitle = book.title;
+        _activeSessionTitle = session.title;
+        _activeSessionId = session.id;
+        _page = _Page.chat;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d’ouvrir cette partie.')),
+      );
+    }
   }
 
   void _openAiSettings() {
     unawaited(_ai.initialize());
-    setState(() => _page = _Page.ai);
+    setState(() {
+      _aiReturnPage = _page == _Page.chat ? _Page.chat : _Page.settings;
+      _page = _Page.ai;
+    });
   }
 
   void _showPage(_Page page) {
     Navigator.pop(context); // Ferme le menu latéral.
+    if (page == _Page.books) unawaited(_books.initialize());
     setState(() => _page = page);
   }
 
@@ -216,19 +310,51 @@ class _HomePageState extends State<HomePage> {
         if (_updates.phase == UpdatePhase.downloading)
           UpdateProgressStrip(controller: _updates),
         Expanded(child: _page == _Page.home ? _buildHome()
-          : _page == _Page.chat ?
-              _narratorSettings.initialized ? GroupChatPage(
-                controller: _chat,
-                onOpenSettings: _openAiSettings,
-              ) : const Center(child: CircularProgressIndicator())
-          : _page == _Page.narrator ? NarratorSettingsPage(
-              controller: _narratorSettings,
-              onBack: () => setState(() => _page = _Page.updates),
+          : _page == _Page.books ? BookLibraryPage(
+              library: _books, onOpen: _openBook,
+            )
+          : _page == _Page.book && _selectedBookId != null &&
+                  _books.byId(_selectedBookId!) != null
+              ? BookEditorPage(
+                  key: ValueKey(_selectedBookId),
+                  book: _books.byId(_selectedBookId!)!,
+                  library: _books,
+                  ai: _ai,
+                  onPlay: _openBookSession,
+                )
+          : _page == _Page.chat ? GroupChatPage(
+              controller: _chat,
+              onOpenSettings: _openAiSettings,
+              bookTitle: _activeBookTitle,
+              sessionTitle: _activeSessionTitle,
+              onLoadDiagnostics: () async {
+                final id = _activeSessionId;
+                if (id == null) return <StoredAiDiagnostic>[];
+                await _awaitSessionWrites?.call();
+                return _books.diagnostics(id);
+              },
+              onPurgeDiagnostics: () async {
+                final id = _activeSessionId;
+                if (id == null) return;
+                await _awaitSessionWrites?.call();
+                await _books.clearDiagnostics(id);
+              },
             )
           : _page == _Page.about ? _buildAbout()
+          : _page == _Page.settings ? _buildSettings()
+          : _page == _Page.updates ? UpdateSettingsPanel(
+              controller: _updates,
+              onBack: () => setState(() => _page = _Page.settings),
+              onViewAllVersions: () => _openUrl(_allReleasesUrl),
+              onCheckManually: _checkForUpdates,
+            )
           : _page == _Page.ai ? AiSettingsPanel(
               controller: _ai,
-              onBack: () => setState(() => _page = _Page.updates),
+              onBack: () => setState(() => _page = _aiReturnPage),
+            )
+          : _page == _Page.diagnostics ? AiDiagnosticsSettingsPage(
+              onBack: () => setState(() => _page = _Page.settings),
+              onPrune: _books.pruneDiagnostics,
             )
           : _buildSettings()),
       ]),
@@ -288,15 +414,13 @@ class _HomePageState extends State<HomePage> {
               onTap: () => _showPage(_Page.home),
             ),
             ListTile(
-              leading: const Icon(Icons.forum_outlined),
-              title: const Text('Conversation'),
-              selected: _page == _Page.chat,
+              leading: const Icon(Icons.library_books_outlined),
+              title: const Text('Livres'),
+              selected: _page == _Page.books || _page == _Page.book ||
+                  _page == _Page.chat,
               selectedColor: DomoliaColors.goldLight,
               selectedTileColor: DomoliaColors.raisedSurface,
-              onTap: () {
-                Navigator.pop(context);
-                _openChat();
-              },
+              onTap: () => _showPage(_Page.books),
             ),
             ListTile(
               leading: const Icon(Icons.info_outline_rounded),
@@ -310,42 +434,12 @@ class _HomePageState extends State<HomePage> {
             ListTile(
               leading: const Icon(Icons.settings_outlined),
               title: const Text('Paramètres'),
-              selected: _page == _Page.updates,
-              onTap: () => _showPage(_Page.updates),
-            ),
-            ListTile(
-              leading: const Icon(Icons.auto_stories_outlined),
-              title: const Text('Narrateur'),
-              selected: _page == _Page.narrator,
+              selected: _page == _Page.settings ||
+                  _page == _Page.updates || _page == _Page.ai ||
+                  _page == _Page.diagnostics,
               selectedColor: DomoliaColors.goldLight,
               selectedTileColor: DomoliaColors.raisedSurface,
-              onTap: () {
-                Navigator.pop(context);
-                _openNarratorSettings();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.smart_toy_outlined),
-              title: const Text('Fournisseur IA'),
-              onTap: () => _showPage(_Page.ai),
-            ),
-            ListTile(
-              leading: const Icon(Icons.system_update_alt_rounded),
-              title: const Text('Mise à jour'),
-              iconColor: DomoliaColors.gold,
-              onTap: () {
-                Navigator.pop(context);
-                _checkForUpdates();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.new_releases_outlined),
-              title: const Text('Toutes les versions'),
-              iconColor: DomoliaColors.gold,
-              onTap: () {
-                Navigator.pop(context);
-                _openUrl(_allReleasesUrl);
-              },
+              onTap: () => _showPage(_Page.settings),
             ),
             const Padding(
               padding: EdgeInsets.all(24),
@@ -364,11 +458,45 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildSettings() => UpdateSettingsPanel(
-    controller: _updates,
-    onConfigureAi: _openAiSettings,
-    onConfigureNarrator: _openNarratorSettings,
-    onCheckManually: _checkForUpdates,
+  Widget _buildSettings() => SafeArea(
+    child: ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const Text(
+          'Paramètres',
+          style: TextStyle(
+            color: DomoliaColors.goldLight,
+            fontSize: 25,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 20),
+        ListTile(
+          leading: const Icon(Icons.smart_toy_outlined, color: DomoliaColors.gold),
+          title: const Text('Configurations IA'),
+          subtitle: const Text('Profils, fournisseurs et modèles'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: _openAiSettings,
+        ),
+        const Divider(),
+        ListTile(
+          leading: const Icon(Icons.system_update_alt_rounded, color: DomoliaColors.gold),
+          title: const Text('Mises à jour'),
+          subtitle: const Text('Version installée, canal et préversions'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => setState(() => _page = _Page.updates),
+        ),
+        const Divider(),
+        ListTile(
+          leading: const Icon(Icons.bug_report_outlined,
+              color: DomoliaColors.gold),
+          title: const Text('Diagnostics IA'),
+          subtitle: const Text('Conservation locale des requêtes et réponses'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => setState(() => _page = _Page.diagnostics),
+        ),
+      ],
+    ),
   );
 
   Widget _buildHome() {
@@ -441,21 +569,15 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 24),
                   FilledButton.icon(
-                    onPressed: _openChat,
-                    icon: const Icon(Icons.forum_outlined),
-                    label: const Text('Commencer une conversation'),
+                    onPressed: _openBooks,
+                    icon: const Icon(Icons.library_books_outlined),
+                    label: const Text('Ouvrir mes Livres'),
                   ),
                   const SizedBox(height: 12),
                   FilledButton.icon(
                     onPressed: _checkForUpdates,
                     icon: const Icon(Icons.system_update_alt_rounded),
                     label: const Text('Mise à jour'),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () => _openUrl(_allReleasesUrl),
-                    icon: const Icon(Icons.new_releases_outlined),
-                    label: const Text('Toutes les versions'),
                   ),
                   const SizedBox(height: 22),
                   Text(

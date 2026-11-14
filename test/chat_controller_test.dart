@@ -41,6 +41,7 @@ class FakeStreamingProvider implements AiChatProvider, AiStreamingChatProvider {
 
 class SimpleProvider implements AiChatProvider {
   String text = '';
+  List<AiMessage>? lastContext;
   @override
   Future<List<AiModel>> listModels(AiConfiguration config) async => [];
   @override
@@ -48,7 +49,10 @@ class SimpleProvider implements AiChatProvider {
     AiConfiguration config, {
     required List<AiMessage> messages,
     int maxTokens = 1200,
-  }) async => text;
+  }) async {
+    lastContext = messages;
+    return text;
+  }
 }
 
 const credentials = AiConfiguration(
@@ -322,6 +326,100 @@ void main() {
     await current.send('Une action');
     expect(current.error, contains('aucun message'));
     current.dispose();
+  });
+
+  test('Editing a past player turn and resuming uses the changed text '
+      'without keeping any superseded scenes or messages', () async {
+    final scripted = SimpleProvider()
+      ..text = line('narrator', 'Narrateur', 'La nouvelle histoire.');
+    final changed = <List<ChatTimelineEvent>>[];
+    final current = NarrativeChatController(
+      provider: scripted,
+      configuration: () => credentials,
+      onTimelineChanged: (events) => changed.add(events),
+    );
+    addTearDown(current.dispose);
+    current.restoreTimeline(const [
+      ChatEntry(id: 0, speaker: ChatSpeaker.player, name: 'Vous',
+          text: 'J’ouvre la porte.'),
+      ChatEntry(id: 1, speaker: ChatSpeaker.narrator, name: 'Narrateur',
+          text: 'Une vieille réponse.'),
+      ChatSceneChange(id: 2),
+      ChatEntry(id: 3, speaker: ChatSpeaker.character, name: 'Lina',
+          text: 'Suivez-moi !'),
+      ChatEntry(id: 4, speaker: ChatSpeaker.player, name: 'Vous',
+          text: 'Je continue.'),
+      ChatEntry(id: 5, speaker: ChatSpeaker.narrator, name: 'Narrateur',
+          text: 'La suite à supprimer.'),
+    ]);
+    expect(current.editPlayerMessage(0, ''), isFalse);
+    expect(current.editPlayerMessage(1, 'Malveillant'), isFalse);
+    expect(current.editPlayerMessage(0, 'Je ferme la porte.'), isTrue);
+    expect(current.timeline, hasLength(6));
+    expect((current.timeline.first as ChatEntry).text, 'Je ferme la porte.');
+    expect(changed, hasLength(1));
+
+    expect(await current.resumeFromPlayerMessage(0), isTrue);
+    expect(current.timeline, hasLength(2));
+    expect(current.timeline.whereType<ChatSceneChange>(), isEmpty);
+    expect((current.timeline.first as ChatEntry).text, 'Je ferme la porte.');
+    expect((current.timeline.last as ChatEntry).text, 'La nouvelle histoire.');
+    expect(current.timeline.last.id, greaterThan(5));
+    // The request uses the edited text, never the discarded future.
+    expect(scripted.lastContext!.last.role, 'user');
+    expect(scripted.lastContext!.last.content, 'Je ferme la porte.');
+    expect(scripted.lastContext!.map((e) => e.content).join('\n'),
+        isNot(contains('La suite à supprimer.')));
+    expect(current.error, isNull);
+  });
+
+  test('Regenerating any AI bubble replays the entire originating turn',
+      () async {
+    final scripted = SimpleProvider()
+      ..text = line('character', 'Lina', 'Nous repartons.');
+    final current = NarrativeChatController(
+      provider: scripted, configuration: () => credentials,
+    );
+    addTearDown(current.dispose);
+    current.restoreTimeline(const [
+      ChatEntry(id: 0, speaker: ChatSpeaker.player, name: 'Vous',
+          text: 'Premier tour.'),
+      ChatEntry(id: 1, speaker: ChatSpeaker.narrator, name: 'Narrateur',
+          text: 'Premier résultat.'),
+      ChatEntry(id: 2, speaker: ChatSpeaker.player, name: 'Vous',
+          text: 'Deuxième tour.'),
+      ChatEntry(id: 3, speaker: ChatSpeaker.narrator, name: 'Narrateur',
+          text: 'Deuxième résultat.'),
+      ChatSceneChange(id: 4),
+      ChatEntry(id: 5, speaker: ChatSpeaker.character, name: 'Marc',
+          text: 'Autre bulle du même tour.'),
+    ]);
+    expect(current.canRegenerateFromAiMessage(1), isTrue);
+    expect(current.canRegenerateFromAiMessage(5), isTrue);
+    expect(current.canRegenerateFromAiMessage(0), isFalse);
+    expect(await current.regenerateFromAiMessage(5), isTrue);
+    expect(current.timeline, hasLength(4));
+    expect((current.timeline[1] as ChatEntry).text, 'Premier résultat.');
+    expect((current.timeline[2] as ChatEntry).text, 'Deuxième tour.');
+    expect((current.timeline[3] as ChatEntry).text, 'Nous repartons.');
+    expect(current.timeline.last.id, greaterThan(5));
+    expect(current.timeline.whereType<ChatSceneChange>(), isEmpty);
+    expect(current.canRegenerateFromAiMessage(5), isFalse);
+  });
+
+  test('AI-only opening cannot be regenerated without a player turn',
+      () async {
+    final current = NarrativeChatController(
+      provider: SimpleProvider(), configuration: () => credentials,
+    );
+    addTearDown(current.dispose);
+    current.restoreTimeline(const [
+      ChatEntry(id: 0, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Bienvenue.'),
+    ]);
+    expect(current.canRegenerateFromAiMessage(0), isFalse);
+    expect(await current.regenerateFromAiMessage(0), isFalse);
+    expect(current.timeline, hasLength(1));
   });
 
 }
