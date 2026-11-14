@@ -110,6 +110,7 @@ class _HomePageState extends State<HomePage> {
   String? _activeBookTitle;
   String? _activeSessionTitle;
   String? _activeSessionId;
+  Future<void> Function()? _awaitSessionWrites;
 
   @override
   void initState() {
@@ -203,6 +204,7 @@ class _HomePageState extends State<HomePage> {
       if (_ownsChat) {
         _chat.dispose();
         Future<void> writes = Future<void>.value();
+        _awaitSessionWrites = () => writes;
         _chat = NarrativeChatController(
           provider: _ai.provider,
           configuration: () => null,
@@ -327,8 +329,15 @@ class _HomePageState extends State<HomePage> {
               sessionTitle: _activeSessionTitle,
               onLoadDiagnostics: () async {
                 final id = _activeSessionId;
-                return id == null ? <StoredAiDiagnostic>[] :
-                    _books.diagnostics(id);
+                if (id == null) return <StoredAiDiagnostic>[];
+                await _awaitSessionWrites?.call();
+                return _books.diagnostics(id);
+              },
+              onPurgeDiagnostics: () async {
+                final id = _activeSessionId;
+                if (id == null) return;
+                await _awaitSessionWrites?.call();
+                await _books.clearDiagnostics(id);
               },
             )
           : _page == _Page.about ? _buildAbout()
