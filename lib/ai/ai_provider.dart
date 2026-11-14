@@ -23,6 +23,9 @@ class AiConfiguration {
 /// A named, locally stored connection. Each profile owns its API key.
 enum AiProviderKind { chatGpt, customAi }
 
+/// Declared provider capability; never inferred from a model name.
+enum AiNsfwCompatibility { supported, unsupported, unknown }
+
 class AiProfile {
   const AiProfile({
     required this.id,
@@ -31,9 +34,11 @@ class AiProfile {
     required this.model,
     required this.apiKey,
     this.kind = AiProviderKind.customAi,
+    this.nsfwCompatibility = AiNsfwCompatibility.unknown,
   });
 
   final AiProviderKind kind;
+  final AiNsfwCompatibility nsfwCompatibility;
   final String id;
   final String name;
   final String baseUrl;
@@ -48,12 +53,14 @@ class AiProfile {
 
   AiProfile copyWith({
     AiProviderKind? kind,
+    AiNsfwCompatibility? nsfwCompatibility,
     String? name,
     String? baseUrl,
     String? model,
     String? apiKey,
   }) => AiProfile(
         kind: kind ?? this.kind,
+        nsfwCompatibility: nsfwCompatibility ?? this.nsfwCompatibility,
         id: id,
         name: name ?? this.name,
         baseUrl: baseUrl ?? this.baseUrl,

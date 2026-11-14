@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
@@ -74,9 +72,12 @@ class SqliteBookStore implements BookStore {
   @override
   Future<void> putBook(BookDefinition book) async {
     final json = book.exportJson();
-    await (await database).insert('books', {
-      'id': book.id, 'definition_json': json,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    final db = await database;
+    final updated = await db.update('books', {'definition_json': json},
+      where: 'id = ?', whereArgs: [book.id]);
+    if (updated == 0) {
+      await db.insert('books', {'id': book.id, 'definition_json': json});
+    }
   }
 
   @override
