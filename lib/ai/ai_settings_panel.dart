@@ -19,7 +19,7 @@ class AiSettingsPanel extends StatefulWidget {
 
 class _AiSettingsPanelState extends State<AiSettingsPanel> {
   final _base = TextEditingController();
-  final _model = TextEditingController();
+  String? _selectedModel;
   final _key = TextEditingController();
 
   @override
@@ -31,20 +31,23 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
   Future<void> _load() async {
     await widget.controller.initialize();
     if (!mounted) return;
-    _base.text = widget.controller.baseUrl;
-    _model.text = widget.controller.model;
+    setState(() {
+      _base.text = widget.controller.baseUrl;
+      _selectedModel = widget.controller.model;
+    });
   }
 
   @override
   void dispose() {
     _base.dispose();
-    _model.dispose();
     _key.dispose();
     super.dispose();
   }
 
   Future<bool> _save() async {
-    final saved = await widget.controller.save(_base.text, _model.text, _key.text);
+    final saved = await widget.controller.save(
+      _base.text, _selectedModel ?? widget.controller.model, _key.text,
+    );
     if (saved && mounted) _key.clear();
     return saved;
   }
@@ -63,6 +66,11 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
       animation: widget.controller,
       builder: (context, _) {
         final c = widget.controller;
+        final selectedModel = _selectedModel ?? c.model;
+        final modelIds = <String>{
+          if (selectedModel.isNotEmpty) selectedModel,
+          for (final entry in c.models) entry.id,
+        }.toList();
         return SafeArea(
           child: ListView(
             padding: const EdgeInsets.all(24),
@@ -116,41 +124,30 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                 ),
               ),
               const SizedBox(height: 16),
-              TextField(
-                controller: _model,
-                enabled: !c.busy,
-                autocorrect: false,
+              InputDecorator(
                 decoration: const InputDecoration(
-                  labelText: 'Identifiant du modèle',
-                  helperText: 'Sélectionnez dans le catalogue ou saisissez un identifiant.',
+                  labelText: 'Modèle de chat',
+                  helperText: 'Utilisez « Charger les modèles » pour actualiser la liste.',
                 ),
-              ),
-              if (c.models.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                InputDecorator(
-                  decoration: const InputDecoration(labelText: 'Modèles disponibles'),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      key: const ValueKey('aiModelSelector'),
-                      value: c.models.any((entry) => entry.id == _model.text)
-                          ? _model.text
-                          : null,
-                      isExpanded: true,
-                      hint: const Text('Choisir un modèle'),
-                      items: [
-                        for (final item in c.models)
-                          DropdownMenuItem(
-                            value: item.id,
-                            child: Text(item.id, overflow: TextOverflow.ellipsis),
-                          ),
-                      ],
-                      onChanged: c.busy ? null : (value) {
-                        if (value != null) setState(() => _model.text = value);
-                      },
-                    ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    key: const ValueKey('aiModelSelector'),
+                    value: modelIds.contains(selectedModel) ? selectedModel : null,
+                    isExpanded: true,
+                    hint: const Text('Charger les modèles'),
+                    items: [
+                      for (final id in modelIds)
+                        DropdownMenuItem(
+                          value: id,
+                          child: Text(id, overflow: TextOverflow.ellipsis),
+                        ),
+                    ],
+                    onChanged: c.busy ? null : (value) {
+                      if (value != null) setState(() => _selectedModel = value);
+                    },
                   ),
                 ),
-              ],
+              ),
               const SizedBox(height: 22),
               FilledButton.icon(
                 onPressed: c.busy ? null : _save,
