@@ -18,6 +18,8 @@ abstract interface class BookStore {
   Future<List<BookSession>> listSessions(String bookId);
   Future<BookSession?> findSession(String id);
   Future<void> putSession(BookSession session);
+  /// Update a saved session without recreating it after deletion.
+  Future<void> updateSession(BookSession session);
   Future<void> deleteSession(String id);
   Future<void> putDiagnostic(StoredAiDiagnostic diagnostic, int retentionLimit);
   Future<List<StoredAiDiagnostic>> listDiagnostics(String sessionId);
@@ -184,6 +186,17 @@ class SqliteBookStore implements BookStore {
         await txn.insert('sessions', {'id': session.id, ...values});
       }
     });
+  }
+
+  @override
+  Future<void> updateSession(BookSession session) async {
+    // A late autosave must never reinsert a session the user has deleted.
+    await (await database).update('sessions', {
+      'title': session.title,
+      'timeline_json': session.encodeTimeline(),
+      'updated_at': DateTime.now().microsecondsSinceEpoch,
+    }, where: 'id = ? AND book_id = ?',
+      whereArgs: [session.id, session.bookId]);
   }
 
   @override
