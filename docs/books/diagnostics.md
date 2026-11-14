@@ -9,10 +9,23 @@ Aucun diagnostic n'est envoyé à un serveur Domolia.
   conversation entière, les **X dernières scènes** ou les **X derniers messages**.
   Les scènes sont délimitées par les événements `scene_change` du moteur.
   Les messages conservent leur identifiant, locuteur, nom et texte.
-- **Options de la conversation → Requête IA + réponse brute** :
-  sélectionner un échange sauvegardé, y compris une génération antérieure,
-  puis enregistrer un seul fichier réunissant la requête et la réponse
-  HTTP/SSE effectivement reçue.
+- **Appui long sur une bulle IA → Exporter** : enregistrer un seul JSON
+  réunissant la requête et la réponse HTTP/SSE **exactement associées à ce
+  message**, y compris s'il fait partie d'une réponse avec plusieurs bulles.
+  Si le diagnostic correspondant a été purgé ou n'a jamais été enregistré,
+  l'application le signale au lieu d'exporter une autre requête.
+- **Appui long sur un message du joueur → Éditer** : modifier uniquement
+  le texte et le sauvegarder. Le reste de la conversation demeure tant que
+  l'utilisateur ne choisit pas « Reprendre ici ».
+- **Appui long sur un message du joueur → Reprendre ici** : après
+  confirmation, supprimer toutes les bulles et tous les changements de scène
+  suivants, puis générer une nouvelle réponse à partir du message modifié
+  et du contexte antérieur.
+- **Appui long sur une bulle IA → Régénérer** : après confirmation,
+  remplacer toute la réponse IA du tour contenant la bulle sélectionnée
+  (et la suite de l'histoire) depuis le message du joueur précédent.
+  Une ouverture locale du narrateur, qui n'a pas de tour de joueur, ne
+  peut pas être régénérée.
 - **Options de la conversation → Purger les diagnostics** :
   après confirmation, supprime les diagnostics de **cette partie uniquement**
   sans supprimer les messages, les scènes ni les autres parties.
