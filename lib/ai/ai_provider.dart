@@ -91,6 +91,28 @@ abstract interface class AiChatProvider {
   });
 }
 
+
+class AiStreamChunk {
+  const AiStreamChunk({
+    this.text = '',
+    this.promptTokens,
+    this.completionTokens,
+  });
+
+  final String text;
+  final int? promptTokens;
+  final int? completionTokens;
+}
+
+/// Optional capability: providers without streaming can still use complete().
+abstract interface class AiStreamingChatProvider {
+  Stream<AiStreamChunk> streamChat(
+    AiConfiguration configuration, {
+    required List<AiMessage> messages,
+    int maxTokens,
+  });
+}
+
 class AiProviderException implements Exception {
   const AiProviderException(this.userMessage);
   final String userMessage;
@@ -124,7 +146,7 @@ String validatedAiModel(String value) {
   return model;
 }
 
-class OpenAiCompatibleChatProvider implements AiChatProvider {
+class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatProvider {
   OpenAiCompatibleChatProvider({http.Client? client})
       : _client = client ?? http.Client();
 
@@ -255,4 +277,149 @@ class OpenAiCompatibleChatProvider implements AiChatProvider {
     }
     return content;
   }
+  /// OpenUncensored/OpenAI-compatible chat streaming over SSE. Cancelling
+  /// a Dart subscription cancels this request, not the shared HTTP client.
+  @override
+  Stream<AiStreamChunk> streamChat(
+    AiConfiguration configuration, {
+    required List<AiMessage> messages,
+    int maxTokens = 1200,
+  }) async* {
+    if (configuration.apiKey.trim().isEmpty) {
+      throw const AiProviderException('Enregistrez une clé API avant de discuter.');
+    }
+    validatedAiModel(configuration.model);
+    if (messages.isEmpty ||
+        messages.any((entry) =>
+            !{'system', 'user', 'assistant'}.contains(entry.role) ||
+            entry.content.trim().isEmpty) ||
+        maxTokens < 1 ||
+        maxTokens > 8192) {
+      throw const AiProviderException('Requête de discussion invalide.');
+    }
+
+    final base = validatedAiBaseUrl(configuration.baseUrl);
+    final request = http.Request('POST', Uri.parse('$base/chat/completions'))
+      ..followRedirects = false
+      ..headers['Authorization'] = 'Bearer ${configuration.apiKey.trim()}'
+      ..headers['Accept'] = 'text/event-stream'
+      ..headers['Content-Type'] = 'application/json'
+      ..body = jsonEncode({
+        'model': configuration.model.trim(),
+        'stream': true,
+        'stream_options': {'include_usage': true},
+        'max_tokens': maxTokens,
+        'messages': [
+          for (final item in messages)
+            {'role': item.role, 'content': item.content},
+        ],
+      });
+
+    http.StreamedResponse response;
+    try {
+      response = await _client.send(request).timeout(
+        const Duration(seconds: 25),
+      );
+    } on TimeoutException {
+      throw const AiProviderException('Le fournisseur IA ne répond pas à temps.');
+    } catch (_) {
+      throw const AiProviderException(
+        'Connexion au fournisseur impossible. Vérifiez le réseau et l’URL.',
+      );
+    }
+
+    if (response.statusCode != 200) {
+      switch (response.statusCode) {
+        case 401:
+        case 403:
+          throw const AiProviderException('Clé API refusée. Vérifiez votre clé.');
+        case 402:
+          throw const AiProviderException('Crédits insuffisants chez le fournisseur.');
+        case 404:
+          throw const AiProviderException('Modèle ou point d’accès introuvable.');
+        case 429:
+          throw const AiProviderException('Limite de débit atteinte. Réessayez plus tard.');
+        case 408:
+        case 504:
+          throw const AiProviderException('Délai de réponse du fournisseur dépassé.');
+        default:
+          throw AiProviderException(
+            'Le fournisseur IA a retourné une erreur HTTP ${response.statusCode}.',
+          );
+      }
+    }
+
+    var done = false;
+    var receivedText = 0;
+    try {
+      await for (final line in response.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .timeout(const Duration(seconds: 75))) {
+        if (!line.startsWith('data:')) continue;
+        final data = line.substring(5).trim();
+        if (data == '[DONE]') {
+          done = true;
+          break;
+        }
+        if (data.isEmpty) continue;
+        if (data.length > 131072) {
+          throw const AiProviderException('Flux du fournisseur trop volumineux.');
+        }
+        dynamic parsed;
+        try {
+          parsed = jsonDecode(data);
+        } catch (_) {
+          throw const AiProviderException('Flux IA mal formé.');
+        }
+        if (parsed is! Map<String, dynamic>) {
+          throw const AiProviderException('Flux IA mal formé.');
+        }
+        if (parsed['error'] != null) {
+          // OpenUncensored may send an in-band upstream error *after* 200.
+          // Never display the raw body: it may contain private data.
+          throw const AiProviderException(
+            'Le fournisseur a interrompu la génération. Réessayez.',
+          );
+        }
+        final usage = parsed['usage'];
+        if (usage is Map<String, dynamic>) {
+          yield AiStreamChunk(
+            promptTokens: usage['prompt_tokens'] is int
+                ? usage['prompt_tokens'] as int : null,
+            completionTokens: usage['completion_tokens'] is int
+                ? usage['completion_tokens'] as int : null,
+          );
+        }
+        final choices = parsed['choices'];
+        if (choices is! List || choices.isEmpty) continue;
+        final first = choices.first;
+        if (first is! Map<String, dynamic>) continue;
+        final delta = first['delta'];
+        if (delta is! Map<String, dynamic>) continue;
+        final text = delta['content'];
+        if (text is String && text.isNotEmpty) {
+          receivedText += text.length;
+          if (receivedText > 131072) {
+            throw const AiProviderException('Réponse du modèle trop longue.');
+          }
+          yield AiStreamChunk(text: text);
+        }
+      }
+      if (!done) {
+        throw const AiProviderException(
+          'Le flux IA s’est interrompu avant la fin de la réponse.',
+        );
+      }
+    } on AiProviderException {
+      rethrow;
+    } on TimeoutException {
+      throw const AiProviderException('Délai de réponse du fournisseur dépassé.');
+    } catch (_) {
+      throw const AiProviderException(
+        'Connexion interrompue pendant la génération. Réessayez.',
+      );
+    }
+  }
+
 }
