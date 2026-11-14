@@ -241,6 +241,8 @@ class _GroupChatPageState extends State<GroupChatPage> {
                         children: [
                           Text(
                             'Conversation de groupe',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w700,
