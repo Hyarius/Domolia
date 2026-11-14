@@ -20,9 +20,54 @@ class AiConfiguration {
   final String apiKey;
 }
 
-abstract interface class AiConfigurationStore {
-  Future<AiConfiguration?> read();
-  Future<void> write(AiConfiguration configuration);
+/// A named, locally stored connection. Each profile owns its API key.
+class AiProfile {
+  const AiProfile({
+    required this.id,
+    required this.name,
+    required this.baseUrl,
+    required this.model,
+    required this.apiKey,
+  });
+
+  final String id;
+  final String name;
+  final String baseUrl;
+  final String model;
+  final String apiKey;
+
+  AiConfiguration get configuration => AiConfiguration(
+        baseUrl: baseUrl,
+        model: model,
+        apiKey: apiKey,
+      );
+
+  AiProfile copyWith({
+    String? name,
+    String? baseUrl,
+    String? model,
+    String? apiKey,
+  }) => AiProfile(
+        id: id,
+        name: name ?? this.name,
+        baseUrl: baseUrl ?? this.baseUrl,
+        model: model ?? this.model,
+        apiKey: apiKey ?? this.apiKey,
+      );
+}
+
+/// The selected profile ID and all credentials are committed atomically.
+/// The production store persists this entire state in encrypted Android storage.
+class AiProfilesState {
+  const AiProfilesState({required this.profiles, required this.selectedId});
+
+  final List<AiProfile> profiles;
+  final String selectedId;
+}
+
+abstract interface class AiProfileStore {
+  Future<AiProfilesState?> read();
+  Future<void> write(AiProfilesState state);
 }
 
 class AiMessage {
