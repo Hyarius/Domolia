@@ -227,24 +227,28 @@ void main() {
     await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
     await tester.pumpAndSettle();
     expect(find.text('Vérifier maintenant'), findsOneWidget);
-    await tester.drag(find.byType(ListView).last, const Offset(0, -650));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('allVersionsLink')).last, findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Retour aux paramètres').last, -260,
+    final updatesList = find.descendant(
+      of: find.byType(UpdateSettingsPanel),
+      matching: find.byType(ListView),
     );
+    await tester.drag(updatesList, const Offset(0, -650));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Retour aux paramètres'));
+    expect(find.byKey(const ValueKey('allVersionsLink')), findsOneWidget);
+    await tester.drag(updatesList, const Offset(0, 900));
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(
+      of: find.byType(UpdateSettingsPanel),
+      matching: find.text('Retour aux paramètres'),
+    ));
     await tester.pumpAndSettle();
 
     await tester.tap(find.widgetWithText(ListTile, 'Configurations IA'));
     await tester.pumpAndSettle();
     expect(find.byType(AiSettingsPanel), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Retour aux paramètres').last, 260,
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Retour aux paramètres'));
+    await tester.tap(find.descendant(
+      of: find.byType(AiSettingsPanel),
+      matching: find.text('Retour aux paramètres'),
+    ));
     await tester.pumpAndSettle();
     expect(find.widgetWithText(ListTile, 'Mises à jour'), findsOneWidget);
   });
