@@ -229,4 +229,99 @@ void main() {
     expect(chat.error, contains('trop long'));
     expect(provider.requests, 0);
   });
+  test('Scene change splits the timeline and current scene image context',
+      () async {
+    final fake = SimpleProvider()
+      ..text = [
+        jsonEncode({
+          'type': 'message',
+          'speaker': 'narrator',
+          'name': 'Narrateur',
+          'text': 'Dans la forêt.',
+        }),
+        '{"type":"scene_change"}',
+        jsonEncode({
+          'type': 'message',
+          'speaker': 'character',
+          'name': 'Lina',
+          'text': 'Nous entrons dans la maison.',
+        }),
+      ].join('\n');
+    final current = NarrativeChatController(
+      provider: fake, configuration: () => credentials,
+    );
+    await current.send('Je suis Lina.');
+    expect(current.timeline, hasLength(4));
+    expect(current.timeline[0], isA<ChatEntry>());
+    expect(current.timeline[1], isA<ChatEntry>());
+    expect(current.timeline[2], isA<ChatSceneChange>());
+    expect(current.timeline[3], isA<ChatEntry>());
+    expect(current.messages, hasLength(3));
+    expect(current.currentSceneMessages.map((x) => x.text),
+        ['Nous entrons dans la maison.']);
+    expect(current.timeline[2].id, isNot(current.timeline[3].id));
+    current.dispose();
+  });
+
+  test('Scene boundary is included in follow-up model context', () async {
+    provider.pipe = StreamController<AiStreamChunk>();
+    final first = chat.send('Je quitte la forêt.');
+    provider.pipe!.add(AiStreamChunk(text:
+        '{"type":"scene_change"}\n'
+        '{"type":"message","speaker":"narrator",'
+        '"name":"Narrateur","text":"Une maison apparaît."}\n'));
+    await provider.pipe!.close();
+    await first;
+    expect(chat.timeline.whereType<ChatSceneChange>(), hasLength(1));
+    expect(chat.currentSceneMessages.map((event) => event.text),
+        ['Une maison apparaît.']);
+
+    provider.pipe = StreamController<AiStreamChunk>();
+    final second = chat.send('J’entre dans la maison.');
+    final context = provider.lastContext!;
+    expect(context.map((event) => event.content),
+        contains('{"type":"scene_change"}'));
+    provider.pipe!.add(AiStreamChunk(
+      text: line('character', 'Lina', 'Entre.'),
+    ));
+    await provider.pipe!.close();
+    await second;
+    expect(chat.currentSceneMessages.map((event) => event.text),
+        ['Une maison apparaît.', 'J’entre dans la maison.', 'Entre.']);
+  });
+
+  test('Regenerate removes scene dividers generated in the previous turn',
+      () async {
+    provider.pipe = StreamController<AiStreamChunk>();
+    final first = chat.send('Nous partons.');
+    provider.pipe!.add(const AiStreamChunk(text:
+        '{"type":"scene_change"}\n'
+        '{"type":"message","speaker":"narrator",'
+        '"name":"Narrateur","text":"Nous arrivons."}\n'));
+    await provider.pipe!.close();
+    await first;
+    expect(chat.timeline.whereType<ChatSceneChange>(), hasLength(1));
+
+    provider.pipe = StreamController<AiStreamChunk>();
+    final rerun = chat.regenerate();
+    provider.pipe!.add(AiStreamChunk(
+      text: line('narrator', 'Narrateur', 'Nous restons ici.'),
+    ));
+    await provider.pipe!.close();
+    await rerun;
+    expect(chat.timeline.whereType<ChatSceneChange>(), isEmpty);
+    expect(chat.messages.map((m) => m.text),
+        ['Nous partons.', 'Nous restons ici.']);
+  });
+
+  test('A scene change alone is not a valid AI response', () async {
+    final onlyDivider = SimpleProvider()..text = '{"type":"scene_change"}';
+    final current = NarrativeChatController(
+      provider: onlyDivider, configuration: () => credentials,
+    );
+    await current.send('Une action');
+    expect(current.error, contains('aucun message'));
+    current.dispose();
+  });
+
 }

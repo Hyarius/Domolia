@@ -161,4 +161,46 @@ void main() {
     expect(find.byKey(const ValueKey('groupChatSend')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('Scene change renders as an unlabeled gray full-width divider',
+      (tester) async {
+    tester.view.physicalSize = const Size(420, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final mock = ScriptedProvider()
+      ..response = [
+        line('character', 'Lina', 'Suis-moi.'),
+        '{"type":"scene_change"}',
+        line('narrator', 'Narrateur', 'La porte s’ouvre.'),
+      ].join('\n');
+    final state = NarrativeChatController(
+      provider: mock, configuration: () => config,
+    );
+    addTearDown(state.dispose);
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: Scaffold(body: GroupChatPage(
+        controller: state, onOpenSettings: () {},
+      )),
+    ));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('groupChatInput')), 'Nous partons.',
+    );
+    await tester.tap(find.byKey(const ValueKey('groupChatSend')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('chatSceneDivider')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chatBubbleText')), findsNWidgets(3));
+    expect(find.text('Scène 2'), findsNothing);
+    expect(find.text('Changement de scène'), findsNothing);
+    final divider = tester.widget<Container>(
+      find.byKey(const ValueKey('chatSceneDivider')),
+    );
+    expect(divider.constraints, isNull);
+    expect(divider.decoration, isA<BoxDecoration>());
+    expect(tester.takeException(), isNull);
+  });
+
 }
