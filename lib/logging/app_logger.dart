@@ -141,6 +141,10 @@ class AppLogger {
     safe = safe.replaceAll(RegExp(r'Bearer\s+\S+', caseSensitive: false),
         'Bearer [REDACTED]');
     safe = safe.replaceAll(RegExp(r'sk-[A-Za-z0-9_-]{8,}'), '[REDACTED]');
+    safe = safe.replaceAll(
+      RegExp(r'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]*)?'),
+      '[REDACTED]');
+
     return safe.length > limit ? '${safe.substring(0, limit)}…' : safe;
   }
 
@@ -153,7 +157,13 @@ class AppLogger {
     final safeDetails = <String, Object?>{};
     for (final item in details.entries.take(12)) {
       final value = item.value;
-      safeDetails[_clean(item.key, limit: 48)] = switch (value) {
+      final key = _clean(item.key, limit: 48);
+      if (RegExp(r'authorization|token|secret|password|api.?key|credential|cookie|bearer',
+          caseSensitive: false).hasMatch(key)) {
+        safeDetails[key] = '[REDACTED]';
+        continue;
+      }
+      safeDetails[key] = switch (value) {
         num() || bool() => value,
         String() => _clean(value, limit: 120),
         _ => '[OMITTED]',
