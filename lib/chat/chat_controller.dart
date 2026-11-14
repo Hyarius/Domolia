@@ -159,6 +159,66 @@ class NarrativeChatController extends ChangeNotifier {
 
   Future<void> retry() => regenerate();
 
+  int _playerIndex(int id) => _timeline.indexWhere(
+    (event) => event is ChatEntry &&
+        event.id == id && event.speaker == ChatSpeaker.player,
+  );
+
+  /// Edits a previously committed player message without altering history.
+  /// The player can then choose « Reprendre ici » to rebuild the future.
+  bool editPlayerMessage(int id, String text) {
+    final value = text.trim();
+    if (_closed || busy || value.isEmpty || value.length > 4000) return false;
+    final index = _playerIndex(id);
+    if (index < 0) return false;
+    final old = _timeline[index] as ChatEntry;
+    if (old.text == value) return true;
+    _timeline[index] = ChatEntry(
+      id: old.id, speaker: old.speaker, name: old.name, text: value,
+    );
+    _timelineChanged();
+    _notify();
+    return true;
+  }
+
+  /// Discards every event after the chosen player entry (including scene
+  /// changes), then generates a new turn from its possibly edited text.
+  /// Event IDs remain monotonic to keep older diagnostics unambiguous.
+  Future<bool> resumeFromPlayerMessage(int id) async {
+    if (_closed || busy) return false;
+    final index = _playerIndex(id);
+    if (index < 0) return false;
+    _timeline.removeRange(index + 1, _timeline.length);
+    _lastPlayerIndex = index;
+    _timelineChanged();
+    _notify();
+    await _generate();
+    return true;
+  }
+
+  /// AI output is a multi-message turn, so regeneration replaces the whole
+  /// turn, not just one bubble (which could duplicate dialogue or dividers).
+  bool canRegenerateFromAiMessage(int id) {
+    if (_closed || busy) return false;
+    final index = _timeline.indexWhere(
+      (event) => event is ChatEntry &&
+          event.id == id && event.speaker != ChatSpeaker.player,
+    );
+    if (index < 0) return false;
+    return _timeline.take(index).any(
+      (event) => event is ChatEntry && event.speaker == ChatSpeaker.player,
+    );
+  }
+
+  Future<bool> regenerateFromAiMessage(int id) async {
+    if (!canRegenerateFromAiMessage(id)) return false;
+    final index = _timeline.indexWhere((event) => event.id == id);
+    final player = _timeline.take(index).lastWhere(
+      (event) => event is ChatEntry && event.speaker == ChatSpeaker.player,
+    ) as ChatEntry;
+    return resumeFromPlayerMessage(player.id);
+  }
+
   List<AiMessage> _buildContext() {
     final recent = _timeline.length > 35
         ? _timeline.sublist(_timeline.length - 35)
