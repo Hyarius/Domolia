@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../ai/ai_diagnostics.dart';
 import '../chat/narrator_settings.dart';
 import 'book_definition.dart';
 import 'book_session.dart';
@@ -128,6 +129,16 @@ class BookLibraryController extends ChangeNotifier {
   Future<void> saveSession(BookSession session) => store.putSession(session);
 
   Future<void> deleteSession(String id) => store.deleteSession(id);
+
+  Future<List<StoredAiDiagnostic>> diagnostics(String sessionId) =>
+      store.listDiagnostics(sessionId);
+
+  Future<void> saveDiagnostic(
+      StoredAiDiagnostic diagnostic, int retentionLimit) =>
+      store.putDiagnostic(diagnostic, retentionLimit);
+
+  Future<void> pruneDiagnostics(int retentionLimit) =>
+      store.pruneDiagnostics(retentionLimit);
 
   @override
   void dispose() {
