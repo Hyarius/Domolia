@@ -381,7 +381,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               const SizedBox(height: 10),
               const Text(
                 'Sélectionnez votre connexion. Chaque profil conserve '
-                'ses propres paramètres et sa clé sécurisée.'
+                'ses propres paramètres et sa clé sécurisée.',
                 style: TextStyle(color: DomoliaColors.cream, height: 1.5),
               ),
               const SizedBox(height: 20),
