@@ -141,9 +141,20 @@ class AppLogger {
   Future<void> flush() => _tail;
 
   static String _clean(String input, {int limit = 1000}) {
+    // Redact quoted values first; the free-form key=value rule alone misses
+    // secrets in strings such as {"password":"value"}.
     var safe = input.replaceAllMapped(
-      RegExp(r'(authorization|api[_-]?key|access[_-]?token|password|secret)\s*[:=]\s*\S+',
-          caseSensitive: false),
+      RegExp(
+        r'"(authorization|api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|cookie|credential)"\s*:\s*"(?:\\.|[^"\\])*"',
+        caseSensitive: false,
+      ),
+      (match) => '"${match.group(1)}":"[REDACTED]"',
+    );
+    safe = safe.replaceAllMapped(
+      RegExp(
+        r'(authorization|api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|cookie|credential)\s*[:=]\s*\S+',
+        caseSensitive: false,
+      ),
       (match) => '${match.group(1)}=[REDACTED]',
     );
     safe = safe.replaceAll(RegExp(r'Bearer\s+\S+', caseSensitive: false),

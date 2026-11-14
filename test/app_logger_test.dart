@@ -123,4 +123,29 @@ class _FailingReadStorage extends MemoryAppLogStorage {
     }
     return super.readLines();
   }
+
+  test('quoted JSON credentials are scrubbed in messages and details', () async {
+    final logger = AppLogger(storage: MemoryAppLogStorage());
+    logger.log(
+      AppLogLevel.warning,
+      '{"password":"secret-phrase-123",'
+      '"api_key":"private-api-456",'
+      '"cookie":"session-cookie-789"}',
+      details: const {
+        'debugPayload': '{"access_token":"private-access-987"}',
+      },
+    );
+    await logger.flush();
+    final snapshot = await logger.snapshot();
+    for (final secret in [
+      'secret-phrase-123',
+      'private-api-456',
+      'session-cookie-789',
+      'private-access-987',
+    ]) {
+      expect(snapshot, isNot(contains(secret)));
+    }
+    expect(snapshot, contains('[REDACTED]'));
+  });
+
 }
