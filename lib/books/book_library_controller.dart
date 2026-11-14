@@ -137,6 +137,9 @@ class BookLibraryController extends ChangeNotifier {
       StoredAiDiagnostic diagnostic, int retentionLimit) =>
       store.putDiagnostic(diagnostic, retentionLimit);
 
+  Future<void> clearDiagnostics(String sessionId) =>
+      store.clearDiagnostics(sessionId);
+
   Future<void> pruneDiagnostics(int retentionLimit) =>
       store.pruneDiagnostics(retentionLimit);
 
