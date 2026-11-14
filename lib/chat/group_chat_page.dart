@@ -138,9 +138,14 @@ class _GroupChatPageState extends State<GroupChatPage> {
                         itemCount: transcript.length,
                         itemBuilder: (context, index) {
                           final entry = transcript[index];
+                          if (entry is ChatSceneChange) {
+                            return _SceneDivider(
+                              key: ValueKey('chat-scene-${entry.id}'),
+                            );
+                          }
                           return _ChatBubble(
                             key: ValueKey('chat-entry-${entry.id}'),
-                            entry: entry,
+                            entry: entry as ChatEntry,
                           );
                         },
                       ),
@@ -323,6 +328,27 @@ class _EmptyConversation extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A quiet full-width gray rule, without a label, avatar or chat bubble.
+class _SceneDivider extends StatelessWidget {
+  const _SceneDivider({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Changement de scène',
+      child: Container(
+        key: const ValueKey('chatSceneDivider'),
+        margin: const EdgeInsets.symmetric(vertical: 22, horizontal: 2),
+        height: 2,
+        decoration: BoxDecoration(
+          color: const Color(0xFF7B8785),
+          borderRadius: BorderRadius.circular(2),
         ),
       ),
     );
