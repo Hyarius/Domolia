@@ -21,14 +21,22 @@ abstract interface class BookStore {
 }
 
 class SqliteBookStore implements BookStore {
+  SqliteBookStore({DatabaseFactory? factory, String? databasePath})
+      : _factory = factory ?? databaseFactory,
+        _databasePath = databasePath;
+
+  final DatabaseFactory _factory;
+  final String? _databasePath;
   Database? _db;
 
   Future<Database> get database async {
     if (_db != null) return _db!;
-    final folder = await getApplicationSupportDirectory();
-    final location = path.join(folder.path, 'domolia_books.sqlite');
-    return _db ??= await openDatabase(
+    final location = _databasePath ?? path.join(
+      (await getApplicationSupportDirectory()).path, 'domolia_books.sqlite',
+    );
+    return _db ??= await _factory.openDatabase(
       location,
+      options: OpenDatabaseOptions(
       version: 1,
       onConfigure: (db) async =>
           db.execute('PRAGMA foreign_keys = ON'),
@@ -51,6 +59,7 @@ class SqliteBookStore implements BookStore {
           'CREATE INDEX sessions_by_book ON sessions(book_id, updated_at)',
         );
       },
+      ),
     );
   }
 
