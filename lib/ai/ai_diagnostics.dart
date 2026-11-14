@@ -139,3 +139,36 @@ class AiExchange {
 
   String exportJson() => const JsonEncoder.withIndent('  ').convert(toJson());
 }
+
+
+/// An already-redacted diagnostic tied to one locally stored conversation.
+/// No credentials or Authorization header values are ever persisted.
+class StoredAiDiagnostic {
+  const StoredAiDiagnostic({
+    required this.id,
+    required this.sessionId,
+    required this.createdAtUtc,
+    required this.content,
+  });
+
+  final String id;
+  final String sessionId;
+  final DateTime createdAtUtc;
+  final String content;
+
+  Map<String, dynamic> get data =>
+      jsonDecode(content) as Map<String, dynamic>;
+
+  String get model {
+    final request = data['request'];
+    if (request is! Map<String, dynamic>) return 'Modèle inconnu';
+    final body = request['body'];
+    if (body is! Map<String, dynamic>) return 'Modèle inconnu';
+    return body['model'] is String ? body['model'] as String : 'Modèle inconnu';
+  }
+
+  int? get statusCode {
+    final response = data['response'];
+    return response is Map<String, dynamic> ? response['statusCode'] as int? : null;
+  }
+}
