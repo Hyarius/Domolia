@@ -85,6 +85,8 @@ void main() {
     await tester.tap(find.text('Paramètres'));
     await tester.pumpAndSettle();
     expect(find.text('Mises à jour'),findsOneWidget);
+    await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
+    await tester.pumpAndSettle();
     expect(find.text('Vérifier maintenant'),findsOneWidget);
   });
   testWidgets('Progression visible et navigation non bloquée',(tester) async {
@@ -111,6 +113,8 @@ void main() {
     await tester.tap(find.byIcon(Icons.menu));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Paramètres'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(SwitchListTile));
     await tester.pumpAndSettle();
@@ -173,6 +177,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Paramètres'));
     await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Vérifier maintenant'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('updateCheckDialog')), findsOneWidget);
@@ -184,13 +190,17 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('Menu update entry displays explicit feedback', (tester) async {
+  testWidgets('La page Mises à jour affiche une vérification explicite', (tester) async {
     prefs.enabled = false;
     await tester.pumpWidget(DomoliaApp(updateController: updates));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.menu));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, 'Mise à jour'));
+    await tester.tap(find.widgetWithText(ListTile, 'Paramètres'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Vérifier maintenant'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('updateCheckDialog')), findsOneWidget);
     expect(find.textContaining('déjà à jour'), findsOneWidget);
@@ -217,7 +227,12 @@ void main() {
     await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
     await tester.pumpAndSettle();
     expect(find.text('Vérifier maintenant'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.widgetWithText(ListTile, 'Toutes les versions'), 260,
+    );
     expect(find.widgetWithText(ListTile, 'Toutes les versions'), findsOneWidget);
+    await tester.ensureVisible(find.text('Retour aux paramètres'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Retour aux paramètres'));
     await tester.pumpAndSettle();
 
