@@ -17,6 +17,7 @@ import 'books/book_editor_page.dart';
 import 'books/book_store.dart';
 import 'ai/ai_controller.dart';
 import 'ai/ai_diagnostics.dart';
+import 'ai/ai_diagnostic_settings.dart';
 import 'ai/ai_provider.dart';
 import 'ai/ai_settings_panel.dart';
 import 'ai/ai_storage.dart';
@@ -70,7 +71,7 @@ class DomoliaApp extends StatelessWidget {
   }
 }
 
-enum _Page { home, books, book, chat, about, settings, updates, ai }
+enum _Page { home, books, book, chat, about, settings, updates, ai, diagnostics }
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -108,6 +109,7 @@ class _HomePageState extends State<HomePage> {
   String? _selectedBookId;
   String? _activeBookTitle;
   String? _activeSessionTitle;
+  String? _activeSessionId;
 
   @override
   void initState() {
@@ -228,6 +230,25 @@ class _HomePageState extends State<HomePage> {
               // The UI remains usable if local storage is temporarily unavailable.
             });
           },
+          onExchangeCaptured: (exchange) {
+            // Persist the already-redacted HTTP request and raw response.
+            writes = writes.then((_) async {
+              final retention =
+                  await const AiDiagnosticsRetentionPreferences().limit();
+              if (retention == 0) return;
+              await _books.saveDiagnostic(
+                StoredAiDiagnostic(
+                  id: 'exchange-${exchange.createdAtUtc.microsecondsSinceEpoch}',
+                  sessionId: session.id,
+                  createdAtUtc: exchange.createdAtUtc,
+                  content: exchange.exportJson(),
+                ),
+                retention,
+              );
+            }).catchError((Object _) {
+              // Diagnostics never prevent the story from continuing.
+            });
+          },
         );
       }
       _chat.restoreTimeline(session.timeline);
@@ -235,6 +256,7 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _activeBookTitle = book.title;
         _activeSessionTitle = session.title;
+        _activeSessionId = session.id;
         _page = _Page.chat;
       });
     } catch (_) {
@@ -303,6 +325,11 @@ class _HomePageState extends State<HomePage> {
               onOpenSettings: _openAiSettings,
               bookTitle: _activeBookTitle,
               sessionTitle: _activeSessionTitle,
+              onLoadDiagnostics: () async {
+                final id = _activeSessionId;
+                return id == null ? <StoredAiDiagnostic>[] :
+                    _books.diagnostics(id);
+              },
             )
           : _page == _Page.about ? _buildAbout()
           : _page == _Page.settings ? _buildSettings()
@@ -315,6 +342,10 @@ class _HomePageState extends State<HomePage> {
           : _page == _Page.ai ? AiSettingsPanel(
               controller: _ai,
               onBack: () => setState(() => _page = _aiReturnPage),
+            )
+          : _page == _Page.diagnostics ? AiDiagnosticsSettingsPage(
+              onBack: () => setState(() => _page = _Page.settings),
+              onPrune: _books.pruneDiagnostics,
             )
           : _buildSettings()),
       ]),
@@ -395,7 +426,8 @@ class _HomePageState extends State<HomePage> {
               leading: const Icon(Icons.settings_outlined),
               title: const Text('Paramètres'),
               selected: _page == _Page.settings ||
-                  _page == _Page.updates || _page == _Page.ai,
+                  _page == _Page.updates || _page == _Page.ai ||
+                  _page == _Page.diagnostics,
               selectedColor: DomoliaColors.goldLight,
               selectedTileColor: DomoliaColors.raisedSurface,
               onTap: () => _showPage(_Page.settings),
@@ -444,6 +476,15 @@ class _HomePageState extends State<HomePage> {
           subtitle: const Text('Version installée, canal et préversions'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => setState(() => _page = _Page.updates),
+        ),
+        const Divider(),
+        ListTile(
+          leading: const Icon(Icons.bug_report_outlined,
+              color: DomoliaColors.gold),
+          title: const Text('Diagnostics IA'),
+          subtitle: const Text('Conservation locale des requêtes et réponses'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => setState(() => _page = _Page.diagnostics),
         ),
       ],
     ),
