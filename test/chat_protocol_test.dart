@@ -106,7 +106,7 @@ void main() {
     expect(parser.add('change"'), isEmpty);
     expect(parser.isPendingSceneChange, true);
     expect(parser.preview, isNull);
-    expect(parser.add('}\n'), [isA<ChatSceneChangeOutput>()]);
+    expect(parser.add('}\n').single, isA<ChatSceneChangeOutput>());
     expect(parser.isPendingSceneChange, false);
   });
 
@@ -125,7 +125,7 @@ void main() {
   test('Scene marker is valid as final event without newline', () {
     final parser = ChatLineDecoder();
     parser.add('{"type":"scene_change"}');
-    expect(parser.finish(), [isA<ChatSceneChangeOutput>()]);
+    expect(parser.finish().single, isA<ChatSceneChangeOutput>());
   });
 
 }
