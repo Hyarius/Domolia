@@ -364,6 +364,19 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
     }
 
     if (response.statusCode != 200) {
+      // Preserve the actual upstream error body for offline diagnosis.
+      // Only a bounded amount is captured; user-visible errors stay sanitized.
+      if (exchange != null) {
+        try {
+          await for (final bytes in response.stream.timeout(
+              const Duration(seconds: 8))) {
+            exchange.addRawResponse(bytes);
+            if (exchange.truncated) break;
+          }
+        } catch (_) {
+          // A broken error stream must not replace the useful HTTP status.
+        }
+      }
       switch (response.statusCode) {
         case 401:
         case 403:
