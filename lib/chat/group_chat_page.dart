@@ -236,7 +236,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
         return;
       }
       await _saveDiagnostic(
-        'domolia-message-' + entry.id.toString() + '-requete-reponse.json',
+        'domolia-message-${entry.id}-requete-reponse.json',
         selected.data,
       );
     } catch (_) {
@@ -319,7 +319,9 @@ class _GroupChatPageState extends State<GroupChatPage> {
       message: 'Tous les messages et changements de scène après ce message '
           'seront supprimés. Une nouvelle réponse IA sera générée '
           'à partir de votre texte actuel.',
-    )) return;
+    )) {
+      return;
+    }
     await widget.controller.resumeFromPlayerMessage(entry.id);
   }
 
@@ -329,7 +331,9 @@ class _GroupChatPageState extends State<GroupChatPage> {
       message: 'La réponse IA complète de ce tour (y compris les autres '
           'bulles et changements de scène), ainsi que toute la suite, '
           'sera remplacée par une nouvelle génération.',
-    )) return;
+    )) {
+      return;
+    }
     await widget.controller.regenerateFromAiMessage(entry.id);
   }
 
@@ -535,8 +539,8 @@ class _GroupChatPageState extends State<GroupChatPage> {
                           }
                           return _ChatBubble(
                             key: ValueKey('chat-entry-${entry.id}'),
-                            entry: entry as ChatEntry,
-                             onLongPress: (entry as ChatEntry).inProgress
+                            entry: entry,
+                            onLongPress: entry.inProgress
                                  ? null : () => _showMessageActions(entry),
                           );
                         },
@@ -751,7 +755,7 @@ class _ChatBubble extends StatelessWidget {
     return GestureDetector(
       onLongPress: onLongPress,
       child: Padding(
-      padding: const EdgeInsets.only(bottom: 18),
+        padding: const EdgeInsets.only(bottom: 18),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -815,7 +819,7 @@ class _ChatBubble extends StatelessWidget {
           ),
         ],
       ),
-    ),
+      ),
     );
   }
 }
