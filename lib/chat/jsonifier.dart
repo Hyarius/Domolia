@@ -38,7 +38,7 @@ class Jsonifier {
     if (raw.isEmpty) return const [];
     final paragraphs = <String>[];
     var start = 0;
-    final separator = RegExp(r'\\r?\\n(?:[ \\t]*\\r?\\n)+');
+    final separator = RegExp(r'\r?\n(?:[ \t]*\r?\n)+');
     for (final match in separator.allMatches(raw)) {
       if (raw.substring(start, match.start).trim().isEmpty) continue;
       paragraphs.add(raw.substring(start, match.end));
@@ -67,7 +67,7 @@ class Jsonifier {
   String blocksForPrompt(String raw) => [
     for (final (index, block) in blocks(raw).indexed)
       'Bloc $index : ${jsonEncode(block)}',
-  ].join('\\n');
+  ].join('\n');
 
   /// [knownCharacters] includes only names seen in the session history.
   /// Unknown character names must appear in the source itself.
