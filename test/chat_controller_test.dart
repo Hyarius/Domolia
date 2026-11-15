@@ -184,6 +184,23 @@ void main() {
         contains('Lina : Bonjour'));
   });
 
+  test('Restored RAW in pending state exposes retry immediately', () async {
+    chat.restoreTimeline(const [
+      ChatEntry(id: 8, speaker: ChatSpeaker.player,
+          name: 'Vous', text: 'J’entre.'),
+    ], rawGenerations: const [
+      RawGeneration(playerEventId: 8, rawText: 'Texte RAW conservé.'),
+    ]);
+    expect(chat.error, contains('mise en forme'));
+    expect(chat.pendingRaw!.rawText, 'Texte RAW conservé.');
+    provider.structured = format('Texte RAW conservé.');
+    await chat.retry();
+    expect(provider.rawCalls, 0);
+    expect(provider.formatCalls, 1);
+    expect(chat.error, isNull);
+    expect(chat.messages.last.text, 'Texte RAW conservé.');
+  });
+
   test('Regenerate discards old RAW and never duplicates player text', () async {
     await chat.send('Test');
     provider.raw = 'Réponse deux.';
