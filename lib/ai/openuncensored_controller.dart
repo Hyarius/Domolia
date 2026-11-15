@@ -27,6 +27,7 @@ class OuCreditsController extends ChangeNotifier {
   bool _disposed = false;
   bool busy = false;
   bool ready = false;
+  bool _vaultReady = false;
   String? error;
   String? notice;
   String? _emergencyKey;
@@ -53,6 +54,9 @@ class OuCreditsController extends ChangeNotifier {
   Future<void> _load() async {
     try {
       await ai.initialize();
+      if (ai.message == 'Impossible de lire les profils IA sécurisés.') {
+        throw StateError('Legacy encrypted profiles unreadable');
+      }
       await routing.initialize();
       var state = await vault.read();
 
@@ -82,6 +86,7 @@ class OuCreditsController extends ChangeNotifier {
         state = migrated;
       }
       _state = state;
+      _vaultReady = true;
       // A process can be killed between writing a newly claimed key and
       // preparing its managed AI profiles. Repair that partial setup on boot.
       final selected = state.find(state.activeKeyId);
@@ -119,6 +124,10 @@ class OuCreditsController extends ChangeNotifier {
     notice = null;
     _notify();
     try {
+      if (!_vaultReady) {
+        throw const OpenUncensoredFailure(
+          'Le coffre sécurisé ne peut pas être lu. Modifications suspendues.');
+      }
       return await action();
     } on OpenUncensoredFailure catch (failure) {
       error = failure.message;
