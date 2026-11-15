@@ -26,6 +26,7 @@ class NarrativeChatController extends ChangeNotifier {
     required this.provider,
     required this.configuration,
     this.resolveConnection,
+    this.resolveFormatterConnection,
     this.narrator = const Narrator(),
     this.narratorProvider,
     this.onTimelineChanged,
@@ -38,6 +39,8 @@ class NarrativeChatController extends ChangeNotifier {
   final AiChatProvider provider;
   final AiConfiguration? Function() configuration;
   final Future<NarrativeAiEndpoint> Function()? resolveConnection;
+  /// Optional distinct profile for later; defaults to the narrator endpoint.
+  final Future<NarrativeAiEndpoint> Function()? resolveFormatterConnection;
   final Narrator narrator;
   final Narrator Function()? narratorProvider;
   final AiExchangeRecorder? diagnostics;
@@ -159,6 +162,11 @@ class NarrativeChatController extends ChangeNotifier {
   Future<void> send(String text) async {
     final action = text.trim();
     if (_closed || busy || action.isEmpty) return;
+    if (pendingRaw != null) {
+      error = 'Terminez ou régénérez la réponse en attente avant de continuer.';
+      _notify();
+      return;
+    }
     if (action.length > 4000) {
       error = 'Le message est trop long (maximum 4 000 caractères).';
       _notify();
@@ -467,13 +475,16 @@ class NarrativeChatController extends ChangeNotifier {
       }
       _check(token);
       stage = 'jsonifier';
+      final formatterEndpoint = resolveFormatterConnection == null
+          ? endpoint : await resolveFormatterConnection!();
+      _check(token);
       AppLogger.info('Début JSONification', component: 'chat');
       final before = diagnostics?.last;
       Object? failed;
       List<ChatTimelineEvent> additions = const [];
       try {
         final formatted = await _requestText(
-            endpoint, _jsonifierContext(rawRecord.rawText), token, 2400);
+            formatterEndpoint, _jsonifierContext(rawRecord.rawText), token, 2400);
         _check(token);
         final known = _timeline.whereType<ChatEntry>()
             .where((e) => e.speaker == ChatSpeaker.character)
