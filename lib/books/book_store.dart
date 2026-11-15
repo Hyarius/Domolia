@@ -1,4 +1,5 @@
 import '../chat/raw_generation.dart';
+import '../ai/ai_task_generation.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
@@ -132,7 +133,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
     return _db ??= await (_factoryOverride ?? databaseFactory).openDatabase(
       location,
       options: OpenDatabaseOptions(
-      version: 5,
+      version: 6,
       onConfigure: (db) async =>
           db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, version) async {
@@ -150,6 +151,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
           'updated_at INTEGER NOT NULL, profile_id TEXT, '
           'formatter_profile_id TEXT, optimizer_profile_id TEXT, '
           'optimized_lore TEXT, optimized_lore_hash TEXT, '
+          'generation_options_json TEXT, '
           'FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE)',
         );
         await db.execute(
@@ -169,6 +171,9 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
           await db.execute('ALTER TABLE sessions ADD COLUMN optimizer_profile_id TEXT');
           await db.execute('ALTER TABLE sessions ADD COLUMN optimized_lore TEXT');
           await db.execute('ALTER TABLE sessions ADD COLUMN optimized_lore_hash TEXT');
+        }
+        if (oldVersion < 6) {
+          await db.execute('ALTER TABLE sessions ADD COLUMN generation_options_json TEXT');
         }
       },
       ),
@@ -239,6 +244,8 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
     aiProfileId: row['profile_id'] as String?,
     formatterProfileId: row['formatter_profile_id'] as String?,
     optimizerProfileId: row['optimizer_profile_id'] as String?,
+    generationOverrides: AiTaskGenerationOverride.decode(
+        row['generation_options_json'] as String?),
     optimizedLore: row['optimized_lore'] as String?,
     optimizedLoreHash: row['optimized_lore_hash'] as String?,
     updatedAtUtc: DateTime.fromMicrosecondsSinceEpoch(
@@ -264,6 +271,8 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
       'profile_id': session.aiProfileId,
       'formatter_profile_id': session.formatterProfileId,
       'optimizer_profile_id': session.optimizerProfileId,
+      'generation_options_json': AiTaskGenerationOverride.encode(
+          session.generationOverrides),
       'optimized_lore': session.optimizedLore,
       'optimized_lore_hash': session.optimizedLoreHash,
     };
