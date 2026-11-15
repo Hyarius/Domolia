@@ -180,8 +180,16 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
           await db.execute('ALTER TABLE sessions ADD COLUMN generation_options_json TEXT');
         }
         if (oldVersion < 8) {
-          await db.execute('ALTER TABLE sessions ADD COLUMN '
-              'tool_calling_enabled INTEGER NOT NULL DEFAULT 1');
+          // Historical RAW-only SQLite fixtures intentionally have no
+          // sessions table. Do not fail their non-destructive migration.
+          final sessions = await db.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type = 'table' "
+            "AND name = 'sessions'",
+          );
+          if (sessions.isNotEmpty) {
+            await db.execute('ALTER TABLE sessions ADD COLUMN '
+                'tool_calling_enabled INTEGER NOT NULL DEFAULT 1');
+          }
         }
         // Older migrations (<4) create the table using the new schema.
         if (oldVersion >= 4 && oldVersion < 7) {
