@@ -600,9 +600,12 @@ void main() {
       )),
     ));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('conversationExport')), 200);
     expect(find.byKey(const ValueKey('conversationExport')), findsOneWidget);
     expect(find.byKey(const ValueKey('bookRawExport')), findsOneWidget);
-    await tester.ensureVisible(find.byKey(const ValueKey('bookRawExport')));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('bookRawExport')), 200);
     await tester.tap(find.byKey(const ValueKey('bookRawExport')));
     await tester.pumpAndSettle();
 
@@ -658,7 +661,8 @@ void main() {
     ));
     await tester.pumpAndSettle();
     await library.remove(book.id);
-    await tester.ensureVisible(find.byKey(const ValueKey('bookRawExport')));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('bookRawExport')), 200);
     await tester.tap(find.byKey(const ValueKey('bookRawExport')));
     await tester.pumpAndSettle();
     expect(called, false);
@@ -734,6 +738,8 @@ void main() {
       )),
     ));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('conversationExport')), 200);
     expect(find.byKey(const ValueKey('conversationExport')), findsOneWidget);
     expect(find.byKey(const ValueKey('bookRawExport')), findsOneWidget);
     await tester.scrollUntilVisible(find.byKey(
