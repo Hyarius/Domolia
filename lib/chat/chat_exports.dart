@@ -103,6 +103,7 @@ Map<String, dynamic> exportAiPipelineTrace(
   for (final raw in rawGenerations) {
     turn(raw.playerEventId)['raw'] = {
       'text': raw.rawText,
+      if (raw.compactText != null) 'compactText': raw.compactText,
       'status': raw.isStructured ? 'jsonified' : 'pending_jsonification',
       'firstEventId': raw.firstEventId,
       'lastEventId': raw.lastEventId,
