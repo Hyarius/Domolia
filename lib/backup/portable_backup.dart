@@ -269,8 +269,16 @@ class PortableBackup {
     if (bytes.length > maxBytes) {
       throw const FormatException('Sauvegarde supérieure à 100 Mio.');
     }
+    // A malformed UTF-8 or JSON stream must never surface a raw parser
+    // diagnostic (potentially containing private file content) in the UI.
+    final Object? decoded;
     try {
-      final m = _object(jsonDecode(utf8.decode(bytes, allowMalformed: false)), {
+      decoded = jsonDecode(utf8.decode(bytes, allowMalformed: false));
+    } catch (_) {
+      throw const FormatException('Fichier de sauvegarde invalide.');
+    }
+    try {
+      final m = _object(decoded, {
         'format', 'version', 'createdAtUtc', 'books', 'sessions',
         'bookBindings', 'aiProfiles', 'preferences',
       });
