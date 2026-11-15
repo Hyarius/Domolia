@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import '../chat/chat_protocol.dart';
+import '../ai/ai_task_generation.dart';
 
 /// Personal and never included in a BookDefinition export.
 class BookSession {
@@ -13,6 +14,7 @@ class BookSession {
     this.aiProfileId,
     this.formatterProfileId,
     this.optimizerProfileId,
+    this.generationOverrides = const {},
     this.optimizedLore,
     this.optimizedLoreHash,
     this.updatedAtUtc,
@@ -27,6 +29,8 @@ class BookSession {
   /// Explicit per-Party overrides; null inherits the application task profile.
   final String? formatterProfileId;
   final String? optimizerProfileId;
+  /// Task-specific output/reasoning overrides; never part of a shared Book.
+  final Map<AiNarrativeTask, AiTaskGenerationOverride> generationOverrides;
   /// Generated summary only. The canonical Lore remains in BookDefinition.
   /// Empty string means an optimization was attempted and rejected.
   final String? optimizedLore;
@@ -46,6 +50,7 @@ class BookSession {
     bool clearFormatterProfile = false,
     String? optimizerProfileId,
     bool clearOptimizerProfile = false,
+    Map<AiNarrativeTask, AiTaskGenerationOverride>? generationOverrides,
     String? optimizedLore,
     String? optimizedLoreHash,
     DateTime? updatedAtUtc,
@@ -59,6 +64,7 @@ class BookSession {
             ? null : formatterProfileId ?? this.formatterProfileId,
         optimizerProfileId: clearOptimizerProfile
             ? null : optimizerProfileId ?? this.optimizerProfileId,
+        generationOverrides: generationOverrides ?? this.generationOverrides,
         optimizedLore: optimizedLore ?? this.optimizedLore,
         optimizedLoreHash: optimizedLoreHash ?? this.optimizedLoreHash,
         updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
