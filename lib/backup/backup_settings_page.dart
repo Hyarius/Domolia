@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -17,11 +19,15 @@ class BackupSettingsPage extends StatefulWidget {
     required this.books,
     required this.ai,
     required this.onBack,
+    this.onBeforeRestore,
+    this.onAfterRestore,
   });
 
   final BookLibraryController books;
   final AiConnectionController ai;
   final VoidCallback onBack;
+  final Future<void> Function()? onBeforeRestore;
+  final VoidCallback? onAfterRestore;
 
   @override
   State<BackupSettingsPage> createState() => _BackupSettingsPageState();
@@ -71,11 +77,14 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
       allowedExtensions: ['domolia'],
       bytes: data,
     );
-    if (result == null) return;
+    // file_picker 10.x triggers a download on Web but returns null because
+    // the browser cannot expose the destination path.
+    if (result == null && !kIsWeb) return;
     if (mounted) {
-      setState(() => _message =
-          'Sauvegarde enregistrée : ${backup.books.length} Livres et '
-          '${backup.sessions.length} Parties.');
+      setState(() => _message = kIsWeb
+          ? 'Téléchargement déclenché. Vérifiez le dossier de téléchargements.'
+          : 'Sauvegarde enregistrée : ${backup.books.length} Livres et '
+              '${backup.sessions.length} Parties.');
     }
   });
 
@@ -171,7 +180,9 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
       );
       if (confirm != true || !mounted) return;
     }
+    await widget.onBeforeRestore?.call();
     await _service.restore(backup, mode);
+    widget.onAfterRestore?.call();
     await widget.ai.reloadProfiles();
     await widget.books.reload();
     if (mounted) {

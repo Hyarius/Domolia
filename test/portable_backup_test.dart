@@ -145,7 +145,7 @@ void main() {
         isA<ChatSceneChange>());
     final linkedId = await newStore.profileIdForBook('book1');
     expect(linkedId, startsWith('imported-'));
-    expect(importedProfiles.state!.profiles.single.apiKey, sensitive);
+    expect(importedProfiles.state!.profiles.first.apiKey, sensitive);
     expect(importedProfiles.state!.profiles.last.apiKey, isEmpty);
     expect(importedProfiles.state!.profiles.last.id, linkedId);
     await restored.restore(portable, BackupRestoreMode.merge);

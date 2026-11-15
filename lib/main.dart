@@ -359,6 +359,18 @@ class _HomePageState extends State<HomePage> {
               books: _books,
               ai: _ai,
               onBack: () => setState(() => _page = _Page.settings),
+              onBeforeRestore: () async {
+                if (_chat.busy) {
+                  throw StateError('Une génération IA est en cours.');
+                }
+                await _awaitSessionWrites?.call();
+              },
+              onAfterRestore: () {
+                _activeSessionId = null;
+                _activeSessionTitle = null;
+                _activeBookTitle = null;
+                _awaitSessionWrites = null;
+              },
             )
           : _buildSettings()),
       ]),
