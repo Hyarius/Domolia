@@ -206,7 +206,7 @@ void main() {
     addTearDown(chat.dispose);
     await chat.send('Je vois le palais et Éloïse.');
     expect(chat.error,isNull);
-    expect(provider.calls,length(2));
+    expect(provider.calls,hasLength(2));
     expect(provider.calls.first.first.content,contains('Érévia'));
     expect(provider.calls.first.first.content,contains('Éloïse'));
     expect(provider.calls.last.first.content,isNot(contains('Érévia')));
