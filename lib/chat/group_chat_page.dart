@@ -220,6 +220,26 @@ class _GroupChatPageState extends State<GroupChatPage> {
               subtitle: Text(entry.text,
                 maxLines: 2, overflow: TextOverflow.ellipsis),
             ),
+            if (!widget.controller.hasSceneChangeBefore(entry.id)) 
+              ListTile(
+                key: const ValueKey('chatActionStartScene'),
+                leading: const Icon(Icons.segment),
+                title: const Text('Commencer une scène ici'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.controller.startSceneAt(entry.id);
+                },
+              )
+            else
+              ListTile(
+                key: const ValueKey('chatActionRemoveScene'),
+                leading: const Icon(Icons.remove),
+                title: const Text('Supprimer le changement de scène'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.controller.removeSceneBefore(entry.id);
+                },
+              ),
             if (isPlayer) ...[
               ListTile(
                 key: const ValueKey('chatActionEdit'),
@@ -305,10 +325,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
     return AnimatedBuilder(
       animation: chat,
       builder: (context, _) {
-        final transcript = [
-          ...chat.timeline,
-          if (chat.preview != null) chat.preview!,
-        ];
+        final transcript = chat.timeline;
         return SafeArea(
           child: Column(
             children: [
