@@ -292,4 +292,147 @@ void main() {
     await task;
     expect(local.messages.last.text, 'Le temple.');
   });
+
+  test('Editing a player turn is blocked while its RAW still awaits JSONification',
+      () async {
+    provider.failFormat = true;
+    await chat.send('Action initiale');
+    final playerId = chat.messages.first.id;
+    expect(chat.pendingRaw, isNotNull);
+    expect(chat.editPlayerMessage(playerId, 'Action modifiée'), isFalse);
+    expect(chat.messages.first.text, 'Action initiale');
+    provider.failFormat = false;
+    await chat.retry();
+    expect(provider.rawCalls, 1);
+    expect(chat.messages.last.text, provider.raw);
+  });
+
+  test('Inserting and removing a scene before the last player keeps regeneration on that turn',
+      () async {
+    await chat.send('Premier tour');
+    await chat.send('Deuxième tour');
+    final firstAiId = chat.messages[1].id;
+    final secondPlayerId = chat.messages[2].id;
+    expect(chat.startSceneAt(firstAiId), isTrue);
+    provider.raw = 'Réponse remplacée.';
+    await chat.regenerate();
+    expect(chat.messages.where((m) => m.speaker == ChatSpeaker.player)
+        .map((m) => m.id), [chat.messages.first.id, secondPlayerId]);
+    expect(chat.messages.last.text, 'Réponse remplacée.');
+    expect(chat.rawGenerations, hasLength(2));
+    expect(chat.rawGenerations.last.playerEventId, secondPlayerId);
+
+    expect(chat.removeSceneBefore(firstAiId), isTrue);
+    provider.raw = 'Troisième réponse.';
+    await chat.regenerate();
+    expect(chat.messages.last.text, 'Troisième réponse.');
+    expect(chat.rawGenerations.last.playerEventId, secondPlayerId);
+  });
+
+  test('Cancellation during the durable RAW save retains it for retry',
+      () async {
+    final enteredSave = Completer<void>();
+    final releaseSave = Completer<void>();
+    final local = NarrativeChatController(
+      provider: provider,
+      configuration: () => credentials,
+      onPersistState: (events, raws) async {
+        if (raws.any((r) => !r.isStructured) && !enteredSave.isCompleted) {
+          enteredSave.complete();
+          await releaseSave.future;
+        }
+      },
+    );
+    addTearDown(local.dispose);
+    final initial = local.send('Je regarde');
+    await enteredSave.future;
+    local.stop();
+    releaseSave.complete();
+    await initial;
+    expect(local.messages, hasLength(1));
+    expect(local.pendingRaw?.rawText, provider.raw);
+    await local.retry();
+    expect(provider.rawCalls, 1);
+    expect(provider.formatCalls, 1);
+    expect(local.messages, hasLength(2));
+  });
+
+  test('Failed final snapshot keeps the RAW and never publishes partial bubbles',
+      () async {
+    var failCommit = true;
+    final local = NarrativeChatController(
+      provider: provider,
+      configuration: () => credentials,
+      onPersistState: (events, raws) async {
+        if (failCommit && raws.any((r) => r.isStructured)) {
+          throw StateError('transaction refused');
+        }
+      },
+    );
+    addTearDown(local.dispose);
+    await local.send('Je m’avance');
+    expect(local.messages, hasLength(1));
+    expect(local.pendingRaw?.rawText, provider.raw);
+    expect(local.error, isNotNull);
+    failCommit = false;
+    await local.retry();
+    expect(provider.rawCalls, 1);
+    expect(provider.formatCalls, 2);
+    expect(local.messages, hasLength(2));
+    expect(local.pendingRaw, isNull);
+  });
+
+  test('Several generated events become visible together only after commit',
+      () async {
+    const first = 'Dans la cour. ';
+    const second = 'Brann : « Viens ! »';
+    provider.raw = first + second;
+    provider.structured = jsonEncode({'events': [
+      {'type': 'scene_change', 'at': 0},
+      {'type': 'message', 'start': 0, 'end': first.length,
+        'speaker': 'narrator', 'name': 'Narrateur'},
+      {'type': 'message', 'start': first.length,
+        'end': provider.raw.length, 'speaker': 'character', 'name': 'Brann'},
+    ]});
+    final commitStarted = Completer<void>();
+    final finishCommit = Completer<void>();
+    final local = NarrativeChatController(
+      provider: provider, configuration: () => credentials,
+      onPersistState: (events, raws) async {
+        if (raws.any((r) => r.isStructured)) {
+          commitStarted.complete();
+          await finishCommit.future;
+        }
+      },
+    );
+    addTearDown(local.dispose);
+    final sending = local.send('Nous changeons de lieu');
+    await commitStarted.future;
+    expect(local.messages, hasLength(1));
+    expect(local.timeline.whereType<ChatSceneChange>(), isEmpty);
+    finishCommit.complete();
+    await sending;
+    expect(local.messages, hasLength(3));
+    expect(local.timeline.whereType<ChatSceneChange>(), hasLength(1));
+  });
+
+  test('A distinct formatter endpoint does not change the narrator model',
+      () async {
+    final formatter = _Provider()..structured = format(provider.raw);
+    final local = NarrativeChatController(
+      provider: provider,
+      configuration: () => credentials,
+      resolveFormatterConnection: () async => NarrativeAiEndpoint(
+        provider: formatter, configuration: credentials,
+      ),
+    );
+    addTearDown(local.dispose);
+    await local.send('Action');
+    expect(provider.rawCalls, 1);
+    expect(provider.formatCalls, 0);
+    expect(formatter.rawCalls, 0);
+    expect(formatter.formatCalls, 1);
+    expect(local.messages.last.text, provider.raw);
+  });
+
 }
