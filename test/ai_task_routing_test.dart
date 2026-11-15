@@ -48,4 +48,45 @@ void main() {
     expect(routing.profileFor(AiNarrativeTask.optimizer), isNull);
     expect(routing.profileFor(AiNarrativeTask.jsonifier), isNull);
   });
+  test('Generation budgets and reasoning settings survive app restart', () async {
+    final first = AiTaskRouting();
+    addTearDown(first.dispose);
+    await first.initialize();
+    expect(first.generationFor(AiNarrativeTask.narrator).maxOutputTokens, 8192);
+    expect(first.generationFor(AiNarrativeTask.jsonifier).maxOutputTokens, 4096);
+    await first.setGeneration(AiNarrativeTask.narrator,
+      const AiTaskGenerationSettings(
+        maxOutputTokens: 16384, reasoningEffort: 'medium',
+      ));
+    await first.setGeneration(AiNarrativeTask.jsonifier,
+      const AiTaskGenerationSettings(
+        maxOutputTokens: 8192, reasoningEffort: 'none',
+      ));
+    final next = AiTaskRouting();
+    addTearDown(next.dispose);
+    await next.initialize();
+    expect(next.generationFor(AiNarrativeTask.narrator).maxOutputTokens, 16384);
+    expect(next.generationFor(AiNarrativeTask.narrator).reasoningEffort, 'medium');
+    expect(next.generationFor(AiNarrativeTask.jsonifier).maxOutputTokens, 8192);
+    expect(next.generationFor(AiNarrativeTask.jsonifier).reasoningEffort, 'none');
+    expect(next.generationFor(AiNarrativeTask.optimizer).maxOutputTokens, 4096);
+  });
+
+  test('Invalid persisted generation settings revert to defaults', () async {
+    SharedPreferences.setMockInitialValues({
+      'aiTaskGeneration-jsonifier': '{"maxOutputTokens":-1,"reasoningEffort":"none"}',
+      'aiTaskGeneration-narrator': 'not-json',
+    });
+    final routing = AiTaskRouting();
+    addTearDown(routing.dispose);
+    await routing.initialize();
+    expect(routing.generationFor(AiNarrativeTask.narrator).maxOutputTokens, 8192);
+    expect(routing.generationFor(AiNarrativeTask.jsonifier).maxOutputTokens, 4096);
+    expect(routing.initialized, true);
+    await expectLater(routing.setGeneration(AiNarrativeTask.jsonifier,
+      const AiTaskGenerationSettings(
+        maxOutputTokens: 50000)), throwsFormatException);
+    expect(routing.generationFor(AiNarrativeTask.jsonifier).maxOutputTokens, 4096);
+  });
+
 }
