@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:domolia/ai/ai_provider.dart';
+import 'package:domolia/ai/ai_diagnostics.dart';
 import 'package:domolia/chat/chat_controller.dart';
 import 'package:domolia/chat/group_chat_page.dart';
 import 'package:domolia/chat/chat_protocol.dart';
@@ -166,6 +167,55 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('chatSceneDivider')), findsNothing);
     expect(provider.narrationCalls, 1);
+  });
+
+  testWidgets('RAW narrator diagnostic export selects the originating turn',
+      (tester) async {
+    final provider = _Provider();
+    final chat = NarrativeChatController(
+      provider: provider, configuration: () => config,
+    );
+    addTearDown(chat.dispose);
+    await chat.send('Je regarde.');
+    final playerId = chat.messages.first.id;
+    final recorder = AiExchangeRecorder();
+    final rawExchange = recorder.begin(
+      provider: 'test', method: 'POST', url: 'https://example.test/raw',
+      requestBody: '{"model":"test"}', secret: 'private-test-key',
+      accept: 'application/json',
+    );
+    rawExchange.stage = 'narrator_raw';
+    rawExchange.playerEventId = playerId;
+    rawExchange.complete();
+    final captured = <String, Map<String, dynamic>>{};
+    final stored = StoredAiDiagnostic(
+      id: 'narrator', sessionId: 'session',
+      createdAtUtc: rawExchange.createdAtUtc, content: rawExchange.exportJson(),
+    );
+    tester.view.physicalSize = const Size(420, 1100);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: Scaffold(body: GroupChatPage(
+        controller: chat, onOpenSettings: () {},
+        onLoadDiagnostics: () async => [stored],
+        onExportDiagnostic: (name, data) async {
+          captured[name] = data;
+        },
+      )),
+    ));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text(provider.raw));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('chatActionExportNarratorRaw')));
+    await tester.pumpAndSettle();
+    expect(captured.length, 1);
+    expect(captured.values.single['stage'], 'narrator_raw');
+    expect(captured.values.single['playerEventId'], playerId);
   });
 
   testWidgets('Stopping never reveals a late RAW response', (tester) async {
