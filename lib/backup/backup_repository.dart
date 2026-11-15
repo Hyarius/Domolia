@@ -99,6 +99,11 @@ class BackupRepository {
     throw const FormatException('Trop de collisions de sauvegarde.');
   }
 
+  static String _canonicalTimeline(String raw) => BookSession(
+    id: '', bookId: '', title: '',
+    timeline: BookSession.decodeTimeline(raw),
+  ).encodeTimeline();
+
   /// Preview is for UI only: apply() always performs fresh conflict checks in
   /// the transaction to avoid applying stale IDs from another tab.
   Future<({int bookConflicts, int sessionConflicts})> preview(
@@ -126,7 +131,8 @@ class BackupRepository {
         return row != null &&
             (row['book_id'] != s.session.bookId ||
               row['title'] != s.session.title ||
-              row['timeline_json'] != s.session.encodeTimeline());
+              _canonicalTimeline(row['timeline_json'] as String) !=
+                  s.session.encodeTimeline());
       }).length,
     );
   }
@@ -217,7 +223,8 @@ class BackupRepository {
       final sessionContent = <String, String>{
         for (final row in sessionRows)
           row['id'] as String: jsonEncode([
-            row['book_id'], row['title'], row['timeline_json'],
+            row['book_id'], row['title'],
+            _canonicalTimeline(row['timeline_json'] as String),
             if (cols.contains('profile_id')) row['profile_id'],
           ]),
       };

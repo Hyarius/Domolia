@@ -634,4 +634,39 @@ void main() {
     expect((await store.listBooks()).single.id, 'existing');
     expect(await store.findBook('book1'), isNull);
   });
+
+  test('same part with pretty-printed timeline does not duplicate messages',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('domolia-pretty-');
+    final store = SqliteBookStore(
+      factory: databaseFactoryFfi,
+      databasePath: path.join(directory.path, 'pretty.db'),
+    );
+    addTearDown(() async {
+      await store.close();
+      await directory.delete(recursive: true);
+    });
+    final incoming = archive();
+    await store.putBook(incoming.books.single);
+    final session = incoming.sessions.single.session;
+    await store.putSession(session);
+    final pretty = const JsonEncoder.withIndent('  ').convert(
+      jsonDecode(session.encodeTimeline()),
+    );
+    await (await store.database).update(
+      'sessions', {'timeline_json': pretty},
+      where: 'id = ?', whereArgs: [session.id],
+    );
+    final service = BackupService(
+      books: store, profileStore: _MemoryProfiles(local),
+    );
+    expect((await service.preview(incoming, BackupRestoreMode.merge))
+        .sessionConflicts, 0);
+    await service.restore(incoming, BackupRestoreMode.merge);
+    expect(await store.listSessions('book1'), hasLength(1));
+    expect((await store.findSession('session1'))!.encodeTimeline(),
+        session.encodeTimeline());
+    await service.restore(incoming, BackupRestoreMode.merge);
+    expect(await store.listSessions('book1'), hasLength(1));
+  });
 }
