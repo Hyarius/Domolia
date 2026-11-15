@@ -77,6 +77,7 @@ class NarrativeChatController extends ChangeNotifier {
   AiExchange? lastExchange;
   bool _closed = false;
   bool _started = false;
+  bool _committingSnapshot = false;
   int _nextId = 0;
   int? _lastPlayerIndex;
   int _generationToken = 0;
@@ -551,8 +552,14 @@ class NarrativeChatController extends ChangeNotifier {
           ..._generations.where((g) => g.playerEventId != playerId),
           rawRecord.structured(_nextId, id - 1),
         ];
-        // Publishing is one atomic SQLite snapshot, with the source attached.
-        await _save([..._timeline, ...prepared], updated);
+        // Once the final transaction starts, stopping cannot safely undo it.
+        // Keep the UI busy until its success/failure is reconciled in memory.
+        _committingSnapshot = true;
+        try {
+          await _save([..._timeline, ...prepared], updated);
+        } finally {
+          _committingSnapshot = false;
+        }
         _check(token);
         _nextId = id;
         _generations
@@ -593,7 +600,9 @@ class NarrativeChatController extends ChangeNotifier {
   }
 
   void stop() {
-    if (!busy || _closed) return;
+    // A committed database transaction is irreversible. Finish publication
+    // instead of showing an aborted turn that reappears after app restart.
+    if (!busy || _closed || _committingSnapshot) return;
     ++_generationToken;
     AppLogger.info('Génération interrompue', component: 'chat');
     error = 'Génération interrompue.';
