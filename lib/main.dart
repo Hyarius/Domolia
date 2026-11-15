@@ -21,6 +21,7 @@ import 'books/book_library_page.dart';
 import 'books/book_editor_page.dart';
 import 'books/book_store.dart';
 import 'ai/ai_controller.dart';
+import 'ai/ai_task_routing.dart';
 import 'ai/ai_diagnostics.dart';
 import 'ai/ai_diagnostic_settings.dart';
 import 'ai/ai_provider.dart';
@@ -125,6 +126,7 @@ class _HomePageState extends State<HomePage> {
   late final UpdateController _updates;
   late final bool _ownsUpdates;
   final AiExchangeRecorder _aiDiagnostics = AiExchangeRecorder();
+  final AiTaskRouting _taskRouting = AiTaskRouting();
   late final AiConnectionController _ai;
   late final bool _ownsAi;
   late NarrativeChatController _chat;
@@ -187,6 +189,7 @@ class _HomePageState extends State<HomePage> {
       _books.dispose();
     }
     if (_ownsAi) _ai.dispose();
+    _taskRouting.dispose();
     super.dispose();
   }
 
@@ -246,8 +249,30 @@ class _HomePageState extends State<HomePage> {
       BookDefinition book, BookSession session) async {
     try {
       await _ai.initialize();
+      await _taskRouting.initialize();
       if (!mounted) return;
       if (_ownsChat) {
+        Future<NarrativeAiEndpoint> endpointForId(String id) async {
+          final binding = await _ai.connectionForProfile(id);
+          return NarrativeAiEndpoint(
+            provider: binding.provider,
+            configuration: binding.configuration,
+          );
+        }
+
+        Future<String> narratorProfileId() async {
+          final current = await _books.session(session.id);
+          final chosen = current?.aiProfileId ??
+              _taskRouting.profileFor(AiNarrativeTask.narrator) ??
+              await _books.profileFor(book.id);
+          if (chosen == null || chosen.isEmpty) {
+            throw const AiProviderException(
+              'Choisissez une configuration IA pour le narrateur.',
+            );
+          }
+          return chosen;
+        }
+
         _chat.dispose();
         Future<void> writes = Future<void>.value();
         _awaitSessionWrites = () => writes;
@@ -257,18 +282,33 @@ class _HomePageState extends State<HomePage> {
           narrator: book.narrator,
           loreProvider: () => _books.byId(book.id)?.lore ?? book.lore,
           diagnostics: _aiDiagnostics,
-          resolveConnection: () async {
-            final id = await _books.profileForSession(session.id, book.id);
-            if (id == null || id.isEmpty) {
-              throw const AiProviderException(
-                'Choisissez une configuration IA pour ce Livre.',
-              );
+          initialOptimizedLore: session.optimizedLore,
+          initialOptimizedLoreHash: session.optimizedLoreHash,
+          resolveConnection: () async =>
+              endpointForId(await narratorProfileId()),
+          resolveFormatterConnection: () async {
+            final current = await _books.session(session.id);
+            final chosen = current?.formatterProfileId ??
+                _taskRouting.profileFor(AiNarrativeTask.jsonifier);
+            if (chosen == null || chosen == '#narrator') {
+              return endpointForId(await narratorProfileId());
             }
-            final binding = await _ai.connectionForProfile(id);
-            return NarrativeAiEndpoint(
-              provider: binding.provider,
-              configuration: binding.configuration,
-            );
+            return endpointForId(chosen);
+          },
+          resolveOptimizerConnection: () async {
+            final current = await _books.session(session.id);
+            final chosen = current?.optimizerProfileId ??
+                _taskRouting.profileFor(AiNarrativeTask.optimizer);
+            if (chosen == null || chosen == '#disabled') return null;
+            return endpointForId(chosen);
+          },
+          onOptimizedLore: (hash, compact) {
+            final pending = writes.then((_) =>
+                _books.saveOptimizedLore(session.id, hash, compact));
+            writes = pending.then((_) {}, onError: (Object error) {
+              AppLogger.warning('Lore compact non sauvegardé', component: 'lore');
+            });
+            return pending;
           },
           onPersistState: (events, List<RawGeneration> generations) {
             final pending = writes.then((_) => _books.saveSessionState(
@@ -366,6 +406,13 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         actions: [
+          if (_page == _Page.chat)
+            IconButton(
+              key: const ValueKey('chatSettingsAppBar'),
+              tooltip: 'Paramètres de la conversation',
+              onPressed: _openConversationSettings,
+              icon: const Icon(Icons.tune_rounded),
+            ),
           IconButton(
             tooltip: 'Mise à jour',
             onPressed: _checkForUpdates,
@@ -401,12 +448,6 @@ class _HomePageState extends State<HomePage> {
                 await _awaitSessionWrites?.call();
                 return _books.diagnostics(id);
               },
-              onPurgeDiagnostics: () async {
-                final id = _activeSessionId;
-                if (id == null) return;
-                await _awaitSessionWrites?.call();
-                await _books.clearDiagnostics(id);
-              },
             )
           : _page == _Page.conversationSettings &&
                   _activeSessionId != null && _selectedBookId != null
@@ -425,6 +466,12 @@ class _HomePageState extends State<HomePage> {
                     await _awaitSessionWrites?.call();
                     return _books.diagnostics(id);
                   },
+                  onPurgeAiDiagnostics: () async {
+                    final id = _activeSessionId;
+                    if (id == null) return;
+                    await _awaitSessionWrites?.call();
+                    await _books.clearDiagnostics(id);
+                  },
                   onBack: () => setState(() => _page = _Page.chat),
                 )
           : _page == _Page.about ? _buildAbout()
@@ -437,6 +484,7 @@ class _HomePageState extends State<HomePage> {
             )
           : _page == _Page.ai ? AiSettingsPanel(
               controller: _ai,
+              taskRouting: _taskRouting,
               onBack: () => setState(() => _page = _aiReturnPage),
             )
           : _page == _Page.diagnostics ? AiDiagnosticsSettingsPage(
