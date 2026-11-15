@@ -935,4 +935,26 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  test('Character status survives session JSON without changing old entries', () {
+    const session = BookSession(
+      id: 'status-test', bookId: 'book', title: 'Partie',
+      timeline: [
+        ChatEntry(id: 1, speaker: ChatSpeaker.character,
+            name: 'Liv', text: 'Quoi ?!', status: 'étonnée'),
+        ChatEntry(id: 2, speaker: ChatSpeaker.player,
+            name: 'Vous', text: 'Je réponds'),
+      ],
+    );
+    final loaded = BookSession.decodeTimeline(session.encodeTimeline());
+    expect((loaded.first as ChatEntry).status, 'étonnée');
+    expect((loaded.last as ChatEntry).status, isNull);
+    expect((jsonDecode(session.encodeTimeline()) as List).first['status'],
+        'étonnée');
+    final legacy = BookSession.decodeTimeline(
+      '[{"id":0,"type":"message","speaker":"character",'
+      '"name":"Liv","text":"Bonjour"}]',
+    );
+    expect((legacy.single as ChatEntry).status, isNull);
+  });
+
 }
