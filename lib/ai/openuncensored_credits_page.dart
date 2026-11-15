@@ -48,6 +48,8 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
     if (widget.controller.pending != null) {
       await _check();
       _startPoller();
+    } else if (widget.controller.active != null) {
+      unawaited(widget.controller.refresh(widget.controller.active!.id));
     }
   }
 
@@ -57,6 +59,10 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
         widget.controller.pending != null) {
       unawaited(_check());
       _startPoller();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      _stopPoller();
     }
   }
 
@@ -116,7 +122,12 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
     if (kIsWeb) return;
     final url = await widget.controller.startCheckout(_amount, topUpKeyId: target);
     if (url == null || !mounted) return;
-    final opened = await launchUrl(url, mode: LaunchMode.externalApplication);
+    var opened = false;
+    try {
+      opened = await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      opened = false;
+    }
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Impossible d’ouvrir Stripe. Reprenez le paiement depuis cette page.')));
@@ -270,7 +281,9 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
       DropdownButtonFormField<OuQuality>(
         key: ValueKey('ouPreset-${controller.quality.name}'),
         initialValue: controller.quality == OuQuality.advanced ?
-            OuQuality.balanced : controller.quality,
+            null : controller.quality,
+        hint: controller.quality == OuQuality.advanced
+            ? const Text('Avancé (personnalisé)') : null,
         decoration: const InputDecoration(labelText: 'Préréglage'),
         items: const [
           DropdownMenuItem(value: OuQuality.economical,
@@ -461,11 +474,14 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
             OutlinedButton(onPressed: controller.busy ? null : _check,
               child: const Text('Vérifier le paiement')),
             TextButton(onPressed: controller.busy ? null : () async {
-              final accepted = await _confirm('Abandonner le suivi ?',
-                'Si Stripe a déjà encaissé le paiement, abandonner peut rendre '
-                'la clé impossible à récupérer. N’abandonnez qu’un paiement non effectué.');
-              if (accepted) await controller.abandonPending();
-            }, child: const Text('Abandonner le suivi local')),
+              final accepted = await _confirm('Suspendre les vérifications ?',
+                'Le jeton de récupération et la session seront conservés '
+                'dans le coffre sécurisé. Vous pourrez reprendre le suivi à tout moment.');
+              if (accepted) {
+                _stopPoller();
+                await controller.abandonPending();
+              }
+            }, child: const Text('Suspendre les vérifications')),
           ],
           if (controller.hasEmergencyKey) ...[
             const Divider(),
