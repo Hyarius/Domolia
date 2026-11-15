@@ -27,6 +27,14 @@ class ChatGptResponsesProvider implements AiChatProvider, AiStreamingChatProvide
       throw const AiProviderException('Connectez d’abord votre compte ChatGPT.');
     }
     validatedAiModel(configuration.model);
+    if (maxTokens < 1 || maxTokens > 32768) {
+      throw const AiProviderException('Budget de sortie IA invalide.');
+    }
+    if (configuration.reasoningEffort != null &&
+        !const ['none', 'low', 'medium', 'high', 'xhigh', 'max']
+            .contains(configuration.reasoningEffort)) {
+      throw const AiProviderException('Niveau de raisonnement invalide.');
+    }
     if (messages.isEmpty ||
         messages.any((message) =>
             !{'user', 'assistant', 'system'}.contains(message.role) ||
@@ -47,6 +55,8 @@ class ChatGptResponsesProvider implements AiChatProvider, AiStreamingChatProvide
         'store': false,
         'stream': true,
         'max_output_tokens': maxTokens,
+        if (configuration.reasoningEffort != null)
+          'reasoning': {'effort': configuration.reasoningEffort},
       });
 
     final exchange = diagnostics?.begin(
