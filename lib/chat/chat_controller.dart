@@ -15,9 +15,11 @@ import '../books/lore_context_builder.dart';
 import '../books/lore_context_optimizer.dart';
 
 class NarrativeAiEndpoint {
-  const NarrativeAiEndpoint({required this.provider, required this.configuration});
+  const NarrativeAiEndpoint({required this.provider, required this.configuration,
+    this.maxOutputTokens});
   final AiChatProvider provider;
   final AiConfiguration configuration;
+  final int? maxOutputTokens;
 }
 
 class _Cancelled implements Exception {}
@@ -532,7 +534,8 @@ class NarrativeChatController extends ChangeNotifier {
     String summary = '';
     try {
       final raw = await _requestText(
-        endpoint, optimizer.request(lore), token, 2400,
+        endpoint, optimizer.request(lore), token,
+        endpoint.maxOutputTokens ?? 2400,
       );
       _check(token);
       final validated = optimizer.validate(lore, raw);
@@ -599,7 +602,8 @@ class NarrativeChatController extends ChangeNotifier {
         Object? failed;
         try {
           final response = await _requestText(
-              endpoint, buildNarratorContext(), token, 2400);
+              endpoint, buildNarratorContext(), token,
+              endpoint.maxOutputTokens ?? 2400);
           _check(token);
           if (response.trim().isEmpty) {
             throw const FormatException('Le narrateur a répondu sans texte.');
@@ -636,7 +640,8 @@ class NarrativeChatController extends ChangeNotifier {
       List<ChatTimelineEvent> additions = const [];
       try {
         final formatted = await _requestText(
-            formatterEndpoint, _jsonifierContext(rawRecord.rawText), token, 2400);
+            formatterEndpoint, _jsonifierContext(rawRecord.rawText), token,
+            formatterEndpoint.maxOutputTokens ?? 2400);
         _check(token);
         final known = _timeline.whereType<ChatEntry>()
             .where((e) => e.speaker == ChatSpeaker.character)
