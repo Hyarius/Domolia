@@ -2,6 +2,7 @@ import '../chat/raw_generation.dart';
 import 'package:flutter/foundation.dart';
 
 import '../ai/ai_diagnostics.dart';
+import '../ai/ai_task_generation.dart';
 import '../logging/app_logger.dart';
 import '../chat/narrator_settings.dart';
 import 'book_definition.dart';
@@ -171,6 +172,22 @@ class BookLibraryController extends ChangeNotifier {
         : current.copyWith(optimizerProfileId: profileId,
             clearOptimizerProfile: profileId == null);
     await store.putSession(next);
+    _notify();
+  }
+
+  Future<void> setSessionGenerationOverride(String sessionId,
+      AiNarrativeTask task, AiTaskGenerationOverride override) async {
+    override.validate();
+    final current = await store.findSession(sessionId);
+    if (current == null) throw StateError('Partie introuvable.');
+    final next = Map<AiNarrativeTask, AiTaskGenerationOverride>.of(
+        current.generationOverrides);
+    if (override.isEmpty) {
+      next.remove(task);
+    } else {
+      next[task] = override;
+    }
+    await store.putSession(current.copyWith(generationOverrides: next));
     _notify();
   }
 
