@@ -116,6 +116,7 @@ class BackupRepository {
     final db = await store.database;
     final books = await db.query('books');
     final sessions = await db.query('sessions');
+    final cols = await _sessionColumns(db);
     final bookMap = {
       for (final r in books) r['id'] as String: r['definition_json'] as String,
     };
@@ -131,6 +132,9 @@ class BackupRepository {
         return row != null &&
             (row['book_id'] != s.session.bookId ||
               row['title'] != s.session.title ||
+              row['updated_at'] != s.updatedAtMicros ||
+              (cols.contains('profile_id') &&
+                  row['profile_id'] != s.aiProfileId) ||
               _canonicalTimeline(row['timeline_json'] as String) !=
                   s.session.encodeTimeline());
       }).length,
@@ -225,6 +229,7 @@ class BackupRepository {
           row['id'] as String: jsonEncode([
             row['book_id'], row['title'],
             _canonicalTimeline(row['timeline_json'] as String),
+            row['updated_at'],
             if (cols.contains('profile_id')) row['profile_id'],
           ]),
       };
@@ -235,6 +240,7 @@ class BackupRepository {
             ? null : profileIdMap[record.aiProfileId];
         String signature(String id) => jsonEncode([
           targetBookId, source.title, source.encodeTimeline(),
+          record.updatedAtMicros,
           if (cols.contains('profile_id')) targetProfile,
         ]);
         var target = source.id;

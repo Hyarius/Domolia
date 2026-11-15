@@ -720,4 +720,76 @@ void main() {
     expect(utf8.decode(saved.encode()),
         isNot(contains('ONLY-ON-THIS-DEVICE')));
   });
+
+  test('merge preserves both versions when only session timestamp differs',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('domolia-dates-');
+    final store = SqliteBookStore(
+      factory: databaseFactoryFfi,
+      databasePath: path.join(dir.path, 'date.db'),
+    );
+    addTearDown(() async {
+      await store.close();
+      await dir.delete(recursive: true);
+    });
+    final incoming = archive();
+    await store.putBook(incoming.books.single);
+    await store.putSession(incoming.sessions.single.session);
+    // Exact same text and title, different modification time.
+    final db = await store.database;
+    final localDate = incoming.sessions.single.updatedAtMicros + 1000000;
+    await db.update('sessions', {'updated_at': localDate},
+      where: 'id = ?', whereArgs: ['session1']);
+    final svc = BackupService(
+      books: store, profileStore: _MemoryProfiles(local),
+    );
+    expect((await svc.preview(incoming, BackupRestoreMode.merge))
+      .sessionConflicts, 1);
+    await svc.restore(incoming, BackupRestoreMode.merge);
+    final sessionRows = await db.query('sessions',
+      where: 'book_id = ?', whereArgs: ['book1']);
+    expect(sessionRows, hasLength(2));
+    expect(sessionRows.map((row) => row['updated_at']).toSet(),
+      {localDate, incoming.sessions.single.updatedAtMicros});
+    final imported = sessionRows.singleWhere(
+      (row) => row['id'] != 'session1');
+    expect(imported['title'], incoming.sessions.single.session.title);
+    expect(BookSession.decodeTimeline(imported['timeline_json'] as String),
+      hasLength(incoming.sessions.single.session.timeline.length));
+    await svc.restore(incoming, BackupRestoreMode.merge);
+    expect(await store.listSessions('book1'), hasLength(2));
+  });
+
+  test('merge keeps v3 sessions separate if only their AI binding differs',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('domolia-binding-');
+    final store = SqliteBookStore(
+      factory: databaseFactoryFfi,
+      databasePath: path.join(dir.path, 'binding.db'),
+    );
+    addTearDown(() async {
+      await store.close();
+      await dir.delete(recursive: true);
+    });
+    final db = await store.database;
+    await db.execute('ALTER TABLE sessions ADD COLUMN profile_id TEXT');
+    final incoming = archive();
+    await store.putBook(incoming.books.single);
+    await store.putSession(incoming.sessions.single.session);
+    await db.update('sessions', {
+      'updated_at': incoming.sessions.single.updatedAtMicros,
+      'profile_id': 'local-profile',
+    }, where: 'id = ?', whereArgs: ['session1']);
+    final svc = BackupService(
+      books: store, profileStore: _MemoryProfiles(local),
+    );
+    expect((await svc.preview(incoming, BackupRestoreMode.merge))
+      .sessionConflicts, 1);
+    await svc.restore(incoming, BackupRestoreMode.merge);
+    final rows = await db.query('sessions',
+      where: 'book_id = ?', whereArgs: ['book1']);
+    expect(rows, hasLength(2));
+    expect(rows.map((r) => r['profile_id']).toSet(),
+      {'local-profile', null});
+  });
 }
