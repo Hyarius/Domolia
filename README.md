@@ -208,6 +208,7 @@ Dans **Paramètres → Configurations IA → IA par tâche**, trois fonctions in
 
 - **Narrateur RAW** : écrit librement la scène. Par défaut, reprend le profil déjà associé au Livre.
 - **JSONificateur** : convertit la réponse RAW en bulles. Il peut utiliser un modèle rapide distinct ; par défaut, il suit le narrateur.
+  Domolia découpe désormais le RAW en paragraphes numérotés et conserve leur texte exact. L'IA identifie le locuteur de chaque bloc et, si nécessaire, les transitions de scène ; elle **ne calcule plus les positions UTF-16**. Le découpage et la reconstruction restent déterministes dans Dart, avec vérification stricte de l'ordre et de la couverture. Les anciens diagnostics avec intervalles restent interprétables. Une JSONification refusée garde le RAW en attente : on peut retenter uniquement cette phase, sans redemander la scène au narrateur.
 - **Optimiseur de Lore** : étape facultative qui produit un résumé compact des fiches canoniques avant la **première génération RAW** de la Partie. L’absence de profil optimise zéro token et garde le sélecteur déterministe.
 
 Dans **Paramètres de la conversation**, chaque tâche peut être surchargée pour cette Partie seulement. Le JSONificateur peut être explicitement forcé à utiliser le narrateur, et l’optimiseur peut être désactivé pour cette Partie même si sa configuration générale est active. Les valeurs restent locales à cette installation et sont exclues des exports de Livre.
