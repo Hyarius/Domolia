@@ -13,6 +13,10 @@ on:
       - 'test/**'
       - '.github/workflows/web-check.yml'
 
+concurrency:
+  group: web-validation-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -20,6 +24,7 @@ jobs:
   web:
     name: Compiler Flutter Web
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -33,6 +38,7 @@ jobs:
       - name: Analyse statique
         run: flutter analyze
       - name: Tests Dart et widgets
+        timeout-minutes: 8
         run: flutter test
       - name: Test SQLite IndexedDB dans Chrome
         timeout-minutes: 6
