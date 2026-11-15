@@ -144,8 +144,8 @@ Map<String, dynamic> exportAiPipelineTrace(
   return {
     'format': 'domolia-ai-pipeline-trace-v1',
     'exportedAtUtc': DateTime.now().toUtc().toIso8601String(),
-    if (bookTitle != null) 'bookTitle': bookTitle,
-    if (sessionTitle != null) 'sessionTitle': sessionTitle,
+    'bookTitle': ?bookTitle,
+    'sessionTitle': ?sessionTitle,
     'diagnosticsRetentionNotice': 'Seuls les échanges encore conservés '
         'localement sont disponibles. Les échanges désactivés, purgés, '
         'écrasés par la limite de conservation ou jamais capturés '
