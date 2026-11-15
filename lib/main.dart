@@ -252,11 +252,20 @@ class _HomePageState extends State<HomePage> {
       await _taskRouting.initialize();
       if (!mounted) return;
       if (_ownsChat) {
-        Future<NarrativeAiEndpoint> endpointForId(String id) async {
+        Future<NarrativeAiEndpoint> endpointForId(
+            String id, AiNarrativeTask task) async {
           final binding = await _ai.connectionForProfile(id);
+          final current = await _books.session(session.id);
+          final settings = _taskRouting.generationFor(task)
+              .merged(current?.generationOverrides[task]);
+          settings.validate();
+          final reasoning = binding.provider is ChatGptResponsesProvider
+              ? settings.effectiveEffort(task, binding.configuration.model)
+              : null;
           return NarrativeAiEndpoint(
             provider: binding.provider,
-            configuration: binding.configuration,
+            configuration: binding.configuration.withReasoning(reasoning),
+            maxOutputTokens: settings.maxOutputTokens,
           );
         }
 
@@ -285,22 +294,24 @@ class _HomePageState extends State<HomePage> {
           initialOptimizedLore: session.optimizedLore,
           initialOptimizedLoreHash: session.optimizedLoreHash,
           resolveConnection: () async =>
-              endpointForId(await narratorProfileId()),
+              endpointForId(
+                  await narratorProfileId(), AiNarrativeTask.narrator),
           resolveFormatterConnection: () async {
             final current = await _books.session(session.id);
             final chosen = current?.formatterProfileId ??
                 _taskRouting.profileFor(AiNarrativeTask.jsonifier);
             if (chosen == null || chosen == '#narrator') {
-              return endpointForId(await narratorProfileId());
+              return endpointForId(
+                  await narratorProfileId(), AiNarrativeTask.jsonifier);
             }
-            return endpointForId(chosen);
+            return endpointForId(chosen, AiNarrativeTask.jsonifier);
           },
           resolveOptimizerConnection: () async {
             final current = await _books.session(session.id);
             final chosen = current?.optimizerProfileId ??
                 _taskRouting.profileFor(AiNarrativeTask.optimizer);
             if (chosen == null || chosen == '#disabled') return null;
-            return endpointForId(chosen);
+            return endpointForId(chosen, AiNarrativeTask.optimizer);
           },
           onOptimizedLore: (hash, compact) {
             final pending = writes.then((_) =>
