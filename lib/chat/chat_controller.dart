@@ -103,6 +103,7 @@ class NarrativeChatController extends ChangeNotifier {
   StreamSubscription<AiStreamChunk>? _subscription;
   Completer<void>? _done;
   bool _optimizationChecked = false;
+  bool _forceOptimization = false;
   String? _optimizedLore;
   String? _optimizedHash;
 
@@ -117,6 +118,18 @@ class NarrativeChatController extends ChangeNotifier {
     lastExchange = null;
     diagnostics?.last = null;
     _notify();
+  }
+
+  /// Rebuild on the next RAW generation without changing the author's Lore.
+  /// Never interrupt an unfinished RAW or a pending JSONifier retry.
+  bool requestLoreRecompilation() {
+    if (_closed || busy || pendingRaw != null) return false;
+    _optimizationChecked = false;
+    _forceOptimization = true;
+    _optimizedLore = null;
+    _optimizedHash = null;
+    _notify();
+    return true;
   }
 
   void restoreTimeline(List<ChatTimelineEvent> events, {
@@ -497,11 +510,22 @@ class NarrativeChatController extends ChangeNotifier {
     if (lore == null) return;
     const optimizer = LoreContextOptimizer();
     final hash = optimizer.sourceHash(lore);
-    if (_optimizedHash == hash) return;
-    if (!optimizer.canOptimize(lore)) return;
+    // A disabled or inaccessible task must never use a previously cached
+    // summary: prefer the canonical deterministic Lore selector.
     final endpoint = await resolveOptimizerConnection!();
     _check(token);
-    if (endpoint == null || endpoint.configuration.apiKey.isEmpty) return;
+    if (endpoint == null || endpoint.configuration.apiKey.isEmpty) {
+      _optimizedLore = null;
+      _optimizedHash = null;
+      return;
+    }
+    if (!_forceOptimization && _optimizedHash == hash) return;
+    _forceOptimization = false;
+    if (!optimizer.canOptimize(lore)) {
+      _optimizedLore = null;
+      _optimizedHash = null;
+      return;
+    }
 
     final before = diagnostics?.last;
     Object? failed;
