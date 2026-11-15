@@ -18,6 +18,7 @@ class ConversationSettingsPage extends StatefulWidget {
     required this.chat, required this.bookId, required this.sessionId,
     this.bookTitle, this.sessionTitle, required this.onBack,
     this.onExportBookJson, this.onLoadAiDiagnostics, this.onExportAiTrace,
+    this.onPurgeAiDiagnostics,
   });
   final BookLibraryController library;
   final AiConnectionController ai;
@@ -33,6 +34,7 @@ class ConversationSettingsPage extends StatefulWidget {
   final Future<List<StoredAiDiagnostic>> Function()? onLoadAiDiagnostics;
   /// Test adapter; production saves through Android's file picker.
   final Future<void> Function(String fileName, Uint8List bytes)? onExportAiTrace;
+  final Future<void> Function()? onPurgeAiDiagnostics;
   @override
   State<ConversationSettingsPage> createState() => _ConversationSettingsPageState();
 }
@@ -187,6 +189,33 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     }
   }
 
+  Future<void> _purgeAiDiagnostics() async {
+    if (widget.chat.busy || widget.onPurgeAiDiagnostics == null) return;
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Purger les diagnostics ?'),
+        content: const Text('Supprimer définitivement les requêtes '
+          'et réponses IA de cette Partie ? Le récit et les RAW '
+          'sauvegardés seront conservés.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annuler')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Purger')),
+        ],
+      ),
+    );
+    if (approved != true || !mounted) return;
+    try {
+      await widget.onPurgeAiDiagnostics!();
+      widget.chat.forgetLastExchange();
+      _notify('Diagnostics de cette Partie supprimés.');
+    } catch (_) {
+      _notify('Impossible de purger les diagnostics.');
+    }
+  }
+
   Future<void> _exportAiTrace() async {
     try {
       final diagnostics = widget.onLoadAiDiagnostics == null
@@ -306,6 +335,14 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
             label: const Text('Exporter les échanges IA'),
           ),
         ]),
+        const SizedBox(height: 18),
+        OutlinedButton.icon(
+          key: const ValueKey('conversationPurgeDiagnostics'),
+          onPressed: widget.chat.busy || widget.onPurgeAiDiagnostics == null
+              ? null : _purgeAiDiagnostics,
+          icon: const Icon(Icons.delete_outline),
+          label: const Text('Purger les diagnostics de cette Partie'),
+        ),
         const SizedBox(height: 10),
         const Text(
           'Le Livre contient son Lore et ses paramètres narratifs. '
