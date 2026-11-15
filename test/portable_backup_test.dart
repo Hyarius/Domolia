@@ -25,6 +25,17 @@ class _MemoryProfiles implements AiProfileStore {
   Future<void> write(AiProfilesState updated) async => state = updated;
 }
 
+class _RejectWrites implements AiProfileStore {
+  _RejectWrites(this.current);
+  final AiProfilesState current;
+  @override
+  Future<AiProfilesState?> read() async => current;
+  @override
+  Future<void> write(AiProfilesState state) async {
+    throw StateError('simulated secure storage failure');
+  }
+}
+
 void main() {
   sqfliteFfiInit();
   const cover = 'UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAAAdQrXrUqP+BiOh/AAA=';
@@ -536,5 +547,78 @@ void main() {
     expect(await store.findSession('session1'), isNull);
     expect(profiles.state!.profiles, hasLength(1));
     expect(profiles.state!.profiles.single.apiKey, sensitive);
+  });
+
+  test('decoder rejects invalid format, dates, duplicate parts and credentials',
+      () {
+    final source = jsonDecode(utf8.decode(archive().encode()))
+        as Map<String, dynamic>;
+    Uint8List encodeChanged(Map<String, dynamic> value) =>
+        Uint8List.fromList(utf8.encode(jsonEncode(value)));
+    Map<String, dynamic> clone() =>
+        jsonDecode(jsonEncode(source)) as Map<String, dynamic>;
+
+    final futureVersion = clone()..['version'] = 2;
+    expect(() => PortableBackup.decode(encodeChanged(futureVersion)),
+        throwsFormatException);
+    final wrongDate = clone()..['createdAtUtc'] = 'not-a-date';
+    expect(() => PortableBackup.decode(encodeChanged(wrongDate)),
+        throwsFormatException);
+    final unknownTopLevel = clone()..['oauthToken'] = 'PRIVATE_SECRET';
+    expect(() => PortableBackup.decode(encodeChanged(unknownTopLevel)),
+        throwsFormatException);
+    final duplicatePart = clone();
+    (duplicatePart['sessions'] as List).add(
+        (duplicatePart['sessions'] as List).first);
+    expect(() => PortableBackup.decode(encodeChanged(duplicatePart)),
+        throwsFormatException);
+    final duplicateProfile = clone();
+    (duplicateProfile['aiProfiles'] as List).add(
+        (duplicateProfile['aiProfiles'] as List).first);
+    expect(() => PortableBackup.decode(encodeChanged(duplicateProfile)),
+        throwsFormatException);
+    final orphanBinding = clone();
+    (orphanBinding['bookBindings'] as List).first['aiProfileId'] = 'missing';
+    expect(() => PortableBackup.decode(encodeChanged(orphanBinding)),
+        throwsFormatException);
+    final coverMismatch = clone();
+    (coverMismatch['books'] as List).first['cover']['mime'] = 'image/png';
+    expect(() => PortableBackup.decode(encodeChanged(coverMismatch)),
+        throwsFormatException);
+    final credentialsInUrl = clone();
+    (credentialsInUrl['aiProfiles'] as List).first['baseUrl'] =
+        'https://password@example.org/v1';
+    expect(() => PortableBackup.decode(encodeChanged(credentialsInUrl)),
+        throwsFormatException);
+    final repeatedEvent = clone();
+    (repeatedEvent['sessions'] as List).first['timeline'][1]['id'] = 0;
+    expect(() => PortableBackup.decode(encodeChanged(repeatedEvent)),
+        throwsFormatException);
+    expect(
+      () => PortableBackup.decode(Uint8List.fromList([0xc3, 0x28])),
+      throwsFormatException,
+    );
+  });
+
+  test('failed secure profile write does not touch SQLite data', () async {
+    final directory = await Directory.systemTemp.createTemp('domolia-keys-');
+    final store = SqliteBookStore(
+      factory: databaseFactoryFfi,
+      databasePath: path.join(directory.path, 'keys.db'),
+    );
+    addTearDown(() async {
+      await store.close();
+      await directory.delete(recursive: true);
+    });
+    await store.putBook(const BookDefinition(
+      id: 'existing', title: 'Livre à ne pas perdre',
+    ));
+    await expectLater(
+      BackupService(books: store, profileStore: _RejectWrites(local))
+          .restore(archive(), BackupRestoreMode.replace),
+      throwsStateError,
+    );
+    expect((await store.listBooks()).single.id, 'existing');
+    expect(await store.findBook('book1'), isNull);
   });
 }
