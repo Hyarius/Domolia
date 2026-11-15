@@ -369,6 +369,8 @@ class _HomePageState extends State<HomePage> {
                 _activeSessionId = null;
                 _activeSessionTitle = null;
                 _activeBookTitle = null;
+                _selectedBookId = null;
+                _aiReturnPage = _Page.settings;
                 _awaitSessionWrites = null;
               },
             )

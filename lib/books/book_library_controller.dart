@@ -56,6 +56,9 @@ class BookLibraryController extends ChangeNotifier {
   Future<void> reload() async {
     _loading = _load();
     await _loading;
+    // Restored IDs are allowed to receive future autosaves. The UI awaits
+    // all pre-restore writes before calling this method.
+    _deletedSessions.clear();
   }
 
   Future<BookDefinition> create([String title = 'Nouveau Livre']) async {
