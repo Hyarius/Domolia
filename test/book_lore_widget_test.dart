@@ -236,6 +236,8 @@ void main() {
     expect(find.byKey(const ValueKey('loreItem-c2')), findsOneWidget);
     expect(find.byKey(const ValueKey('loreItem-c1')), findsNothing);
 
+    await tester.ensureVisible(find.byKey(const ValueKey('loreDelete-c2')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('loreDelete-c2')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Supprimer et détacher'));
