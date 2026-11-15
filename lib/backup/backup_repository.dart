@@ -126,7 +126,9 @@ class BackupRepository {
       };
       final bookIds = <String, String>{};
       var bookConflicts = 0;
-      for (final book in backup.books) {
+      // listBooks() is newest-first by SQLite rowid. Insert in reverse
+      // archive order so a new device displays the same library ordering.
+      for (final book in backup.books.reversed) {
         final json = book.exportJson();
         var target = book.id;
         if (bookContent.containsKey(target) &&

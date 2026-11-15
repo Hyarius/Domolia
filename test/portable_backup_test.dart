@@ -404,6 +404,11 @@ void main() {
     );
     await service.restore(decoded, BackupRestoreMode.merge);
     expect(await target.listBooks(), hasLength(3));
+    expect(
+      (await target.listBooks()).map((book) => book.id).toList(),
+      decoded.books.map((book) => book.id).toList(),
+      reason: 'La restauration ne doit pas inverser la grille des Livres.',
+    );
     for (final book in definitions) {
       expect((await target.findBook(book.id))!.toPortableJson(),
           book.toPortableJson());

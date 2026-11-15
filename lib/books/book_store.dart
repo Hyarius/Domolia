@@ -147,7 +147,7 @@ class SqliteBookStore implements BookStore {
   @override
   Future<List<BookSession>> listSessions(String bookId) async {
     final rows = await (await database).query('sessions',
-      where: 'book_id = ?', whereArgs: [bookId], orderBy: 'updated_at DESC',
+      where: 'book_id = ?', whereArgs: [bookId], orderBy: 'updated_at DESC, id',
     );
     return rows.map(_session).toList(growable: false);
   }
