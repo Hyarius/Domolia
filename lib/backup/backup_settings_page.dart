@@ -121,6 +121,12 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
               Text('${backup.books.length} Livres, '
                 '${backup.sessions.length} Parties et '
                 '${backup.aiProfiles.length} profils IA.'),
+              if (backup.aiProfiles.any((profile) =>
+                  profile.requiresReconfiguration))
+                Text('${backup.aiProfiles.where((p) =>
+                    p.requiresReconfiguration).length} profil(s) IA '
+                  'introuvable(s) dans l’appareil source : '
+                  'ils devront être reconfigurés.'),
               const SizedBox(height: 10),
               Text('${collisions.bookConflicts} conflit(s) de Livres et '
                 '${collisions.sessionConflicts} conflit(s) de Parties à examiner.'),

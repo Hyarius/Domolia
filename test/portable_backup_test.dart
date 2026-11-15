@@ -3,6 +3,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:domolia/ai/ai_provider.dart';
+import 'package:domolia/ai/ai_diagnostics.dart';
+import 'package:path/path.dart' as path;
 import 'package:domolia/backup/backup_service.dart';
 import 'package:domolia/backup/portable_backup.dart';
 import 'package:domolia/books/book_definition.dart';
@@ -240,5 +242,185 @@ void main() {
     expect(await store.findBook('book1'), isNull);
     expect(profiles.state!.profiles, hasLength(1));
     expect(profiles.state!.profiles.single.apiKey, sensitive);
+  });
+
+  test('snapshot includes exact fields of three books, three cover types, '
+      'several conversations, profile metadata, dates; excludes diagnostics',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('domolia-full-');
+    final original = SqliteBookStore(
+      factory: databaseFactoryFfi,
+      databasePath: path.join(directory.path, 'source.db'),
+    );
+    final target = SqliteBookStore(
+      factory: databaseFactoryFfi,
+      databasePath: path.join(directory.path, 'target.db'),
+    );
+    addTearDown(() async {
+      await original.close();
+      await target.close();
+      await directory.delete(recursive: true);
+    });
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ'
+        'AAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==';
+    final jpeg = base64Encode([0xff, 0xd8, 0xff, 0xe0, 0, 1, 2, 3]);
+    final definitions = [
+      const BookDefinition(
+        id: 'book-a', title: 'Épopée de l’Aube',
+        coverMime: 'image/webp', coverBase64: cover,
+        tags: {'nsfw'}, narrativeStyle: 'Récit : forêt, épée, été.',
+        detailLevel: 5,
+        openingMessages: ['Bienvenue, héroïne.', 'Que choisis-tu ?'],
+      ),
+      const BookDefinition(
+        id: 'book-b', title: 'Couverture PNG',
+        coverMime: 'image/png', coverBase64: png,
+        narrativeStyle: 'Clair et précis', detailLevel: 1,
+      ),
+      BookDefinition(
+        id: 'book-c', title: 'Couverture JPEG',
+        coverMime: 'image/jpeg', coverBase64: jpeg,
+        narrativeStyle: 'Dramatique', detailLevel: 2,
+      ),
+    ];
+    for (final book in definitions) {
+      await original.putBook(book);
+    }
+    await original.bindProfile('book-a', 'profile');
+    await original.bindProfile('book-b', 'profile-2');
+    await original.bindProfile('book-c', null);
+    const first = BookSession(
+      id: 'part-a1', bookId: 'book-a', title: 'Chapitre I',
+      timeline: [
+        ChatEntry(id: 0, speaker: ChatSpeaker.player,
+          name: 'Joueur', text: 'Bonjour'),
+        ChatEntry(id: 1, speaker: ChatSpeaker.character,
+          name: 'Ariane', text: 'Texte avec accents et émojis ✨'),
+        ChatSceneChange(id: 2),
+        ChatEntry(id: 3, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'La nuit approche.'),
+      ],
+    );
+    const second = BookSession(
+      id: 'part-a2', bookId: 'book-a', title: 'Chapitre II',
+      timeline: [ChatSceneChange(id: 0)],
+    );
+    const third = BookSession(
+      id: 'part-b', bookId: 'book-b', title: 'Autre histoire',
+    );
+    for (final part in [first, second, third]) {
+      await original.putSession(part);
+    }
+    final timestamp = DateTime.utc(2023, 4, 5, 6, 7, 8, 9, 321)
+        .microsecondsSinceEpoch;
+    await (await original.database).update(
+      'sessions', {'updated_at': timestamp},
+      where: 'id = ?', whereArgs: ['part-a1'],
+    );
+    await original.putDiagnostic(StoredAiDiagnostic(
+      id: 'raw-exchange', sessionId: 'part-a1',
+      createdAtUtc: DateTime.utc(2026, 1, 1),
+      content: 'PRIVATE_HTTP_DIAGNOSTIC_DO_NOT_EXPORT',
+    ), 10);
+    final profiles = _MemoryProfiles(AiProfilesState(
+      selectedId: 'profile',
+      profiles: [
+        local.profiles.single,
+        const AiProfile(
+          id: 'profile-2', name: 'Autre IA',
+          kind: AiProviderKind.chatGpt,
+          baseUrl: 'https://example.org/v1',
+          model: 'chat-model', apiKey: 'SECOND-SECRET-TOKEN',
+          nsfwCompatibility: AiNsfwCompatibility.unsupported,
+        ),
+      ],
+    ));
+    final snapshot = await BackupService(
+      books: original, profileStore: profiles,
+    ).capture();
+    expect(snapshot.books, hasLength(3));
+    expect(snapshot.sessions, hasLength(3));
+    expect(snapshot.bookBindings, hasLength(3));
+    expect(snapshot.aiProfiles, hasLength(2));
+    final bytes = snapshot.encode();
+    final raw = utf8.decode(bytes);
+    expect(raw, isNot(contains('PRIVATE_HTTP_DIAGNOSTIC_DO_NOT_EXPORT')));
+    expect(raw, isNot(contains('SECOND-SECRET-TOKEN')));
+    expect(raw, isNot(contains(sensitive)));
+    expect(raw, isNot(contains('apiKey')));
+    final decoded = PortableBackup.decode(bytes);
+    final booksById = {for (final b in decoded.books) b.id: b};
+    for (final book in definitions) {
+      expect(booksById[book.id]!.toPortableJson(), book.toPortableJson());
+    }
+    final partsById = {
+      for (final record in decoded.sessions) record.session.id: record,
+    };
+    for (final part in [first, second, third]) {
+      expect(partsById[part.id]!.session.encodeTimeline(), part.encodeTimeline());
+    }
+    expect(partsById['part-a1']!.updatedAtMicros, timestamp);
+    final names = {for (final p in decoded.aiProfiles) p.id: p};
+    expect(names['profile-2']!.name, 'Autre IA');
+    expect(names['profile-2']!.kind, AiProviderKind.chatGpt);
+    expect(names['profile-2']!.nsfwCompatibility,
+        AiNsfwCompatibility.unsupported);
+    final bindings = {
+      for (final binding in decoded.bookBindings)
+        binding.bookId: binding.aiProfileId,
+    };
+    expect(bindings, {
+      'book-a': 'profile', 'book-b': 'profile-2', 'book-c': null,
+    });
+
+    final importedProfiles = _MemoryProfiles(local);
+    final service = BackupService(
+      books: target, profileStore: importedProfiles,
+    );
+    await service.restore(decoded, BackupRestoreMode.merge);
+    expect(await target.listBooks(), hasLength(3));
+    for (final book in definitions) {
+      expect((await target.findBook(book.id))!.toPortableJson(),
+          book.toPortableJson());
+    }
+    for (final part in [first, second, third]) {
+      expect((await target.findSession(part.id))!.encodeTimeline(),
+          part.encodeTimeline());
+    }
+    expect(await target.profileIdForBook('book-a'), startsWith('imported-'));
+    expect(await target.profileIdForBook('book-b'), startsWith('imported-'));
+    expect(await target.profileIdForBook('book-c'), isNull);
+    expect(await target.listDiagnostics('part-a1'), isEmpty);
+    expect((await service.capture()).sessions.singleWhere(
+        (record) => record.session.id == 'part-a1').updatedAtMicros,
+        timestamp);
+  });
+
+  test('deleted AI profile leaves a portable, credential-free placeholder',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('domolia-orphan-');
+    final store = SqliteBookStore(
+      factory: databaseFactoryFfi,
+      databasePath: path.join(directory.path, 'orphan.db'),
+    );
+    addTearDown(() async {
+      await store.close();
+      await directory.delete(recursive: true);
+    });
+    await store.putBook(const BookDefinition(
+      id: 'bound-book', title: 'Livre avec profil IA supprimé',
+    ));
+    await store.bindProfile('bound-book', 'deleted-profile');
+    final snapshot = await BackupService(
+      books: store, profileStore: _MemoryProfiles(local),
+    ).capture();
+    expect(snapshot.aiProfiles, hasLength(2));
+    final missing = snapshot.aiProfiles.singleWhere(
+        (p) => p.id == 'deleted-profile');
+    expect(missing.requiresReconfiguration, true);
+    expect(missing.toAi(importedId: 'imported-profile').apiKey, isEmpty);
+    final roundtrip = PortableBackup.decode(snapshot.encode());
+    expect(roundtrip.bookBindings.single.aiProfileId, 'deleted-profile');
+    expect(roundtrip.aiProfiles.last.requiresReconfiguration, true);
   });
 }

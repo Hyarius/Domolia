@@ -22,6 +22,24 @@ class BackupRepository {
       final books = await txn.query('books', orderBy: 'rowid DESC');
       final bindings = await txn.query('book_bindings', orderBy: 'book_id');
       final sessions = await txn.query('sessions', orderBy: 'updated_at DESC, id');
+      // A profile can be deleted without clearing book/session references.
+      // Preserve those references with credential-free placeholders so a
+      // single dangling binding cannot prevent a complete user backup.
+      final fullProfiles = List<BackupProfile>.of(profiles);
+      final known = {for (final p in profiles) p.id};
+      void preserveReference(String? id) {
+        if (id != null && known.add(id)) {
+          fullProfiles.add(BackupProfile.unresolved(id));
+        }
+      }
+      for (final row in bindings) {
+        preserveReference(row['profile_id'] as String?);
+      }
+      if (cols.contains('profile_id')) {
+        for (final row in sessions) {
+          preserveReference(row['profile_id'] as String?);
+        }
+      }
       return PortableBackup(
         createdAtUtc: DateTime.now().toUtc(),
         books: [
@@ -43,7 +61,7 @@ class BackupRepository {
               row['book_id'] as String, row['profile_id'] as String?,
             ),
         ],
-        aiProfiles: profiles,
+        aiProfiles: fullProfiles,
       );
     });
     result.validate();
@@ -115,7 +133,11 @@ class BackupRepository {
 
   static bool _sameJson(String a, String b) {
     try {
-      return jsonEncode(jsonDecode(a)) == jsonEncode(jsonDecode(b));
+      // The exported JSON is canonical for BookDefinition: sorted tags,
+      // fixed key order and normalized nested values. Whitespace and source
+      // key insertion order must never trigger duplicate books on merge.
+      return BookDefinition.importJson(a).exportJson() ==
+          BookDefinition.importJson(b).exportJson();
     } catch (_) {
       return false;
     }

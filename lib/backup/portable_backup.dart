@@ -31,6 +31,23 @@ class BackupProfile {
     nsfwCompatibility: profile.nsfwCompatibility,
   );
 
+  /// A missing local profile must not make the entire user backup impossible.
+  /// The original binding ID is kept, but no credentials or provider type are
+  /// guessed. The restored placeholder must be configured before use.
+  factory BackupProfile.unresolved(String id) => BackupProfile(
+    id: id,
+    name: 'Profil IA à reconfigurer '
+        '(${id.length > 24 ? id.substring(0, 24) : id})',
+    kind: AiProviderKind.customAi,
+    baseUrl: 'https://example.invalid/v1',
+    model: 'non-configure',
+    nsfwCompatibility: AiNsfwCompatibility.unknown,
+  );
+
+  bool get requiresReconfiguration =>
+      baseUrl == 'https://example.invalid/v1' &&
+      model == 'non-configure';
+
   AiProfile toAi({required String importedId}) => AiProfile(
     id: importedId, name: name, kind: kind, baseUrl: baseUrl,
     model: model, nsfwCompatibility: nsfwCompatibility, apiKey: '',
