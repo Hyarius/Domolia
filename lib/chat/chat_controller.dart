@@ -237,6 +237,23 @@ class NarrativeChatController extends ChangeNotifier {
     return true;
   }
 
+  /// Return the origin of a structured reply for diagnostics, not its
+  /// positional index (manual scene edits preserve original message IDs).
+  int? playerIdForAiMessage(int id) {
+    final index = _timeline.indexWhere((event) => event.id == id);
+    if (index < 0 || _timeline[index] is! ChatEntry ||
+        (_timeline[index] as ChatEntry).speaker == ChatSpeaker.player) {
+      return null;
+    }
+    for (var i = index - 1; i >= 0; i--) {
+      final event = _timeline[i];
+      if (event is ChatEntry && event.speaker == ChatSpeaker.player) {
+        return event.id;
+      }
+    }
+    return null;
+  }
+
   bool canRegenerateFromAiMessage(int id) {
     if (_closed || busy) return false;
     final index = _timeline.indexWhere(
@@ -397,6 +414,7 @@ class NarrativeChatController extends ChangeNotifier {
     final current = diagnostics?.last;
     if (current == null || identical(before, current)) return;
     current.stage = stage;
+    current.playerEventId = _playerEventId;
     current.complete(
       promptTokens: promptTokens, completionTokens: completionTokens,
       error: failure?.toString(),
