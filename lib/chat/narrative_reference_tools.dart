@@ -150,9 +150,11 @@ class NarrativeReferenceTools {
     if (value is List) {
       return value.take(40).map(_short).toList();
     }
-    if (value is Map) return {
-      for (final e in value.entries) e.key.toString(): _short(e.value),
-    };
+    if (value is Map) {
+      return {
+        for (final e in value.entries) e.key.toString(): _short(e.value),
+      };
+    }
     return value;
   }
 
