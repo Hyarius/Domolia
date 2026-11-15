@@ -189,4 +189,14 @@ void main() {
     expect(trace['turns'], isEmpty);
   });
 
+  test('Conversation export includes optional emotion on character messages', () {
+    final exported = exportConversation(const [
+      ChatEntry(id: 2, speaker: ChatSpeaker.character,
+          name: 'Liv', text: 'Quoi ?!', status: 'étonnée'),
+    ]);
+    final events = exported['events'] as List;
+    expect(events.single['status'], 'étonnée');
+    expect(events.single['text'], 'Quoi ?!');
+  });
+
 }
