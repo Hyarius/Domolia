@@ -32,11 +32,15 @@ class _BookLoreTabState extends State<BookLoreTab> {
           const SnackBar(content: Text('Lore enregistré.')));
       }
     } on FormatException catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)));
+      }
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Échec de sauvegarde du Lore.')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Échec de sauvegarde du Lore.')));
+      }
     }
   }
 
@@ -85,27 +89,27 @@ class _BookLoreTabState extends State<BookLoreTab> {
       ..._baseFields(record),
       if (category == 'characters') ...[
         _Field('appearance','Apparence',(record as LoreCharacter?)?.appearance ?? ''),
-        _Field('personality','Personnalité',(record as LoreCharacter?)?.personality ?? ''),
-        _Field('background','Histoire personnelle',(record as LoreCharacter?)?.background ?? ''),
-        _Field('role','Rôle ou catégorie',(record as LoreCharacter?)?.role ?? '',max:150),
-        _Field('motivations','Motivations',(record as LoreCharacter?)?.motivations ?? ''),
-        _Field('values','Valeurs et comportements',(record as LoreCharacter?)?.values ?? ''),
+        _Field('personality','Personnalité',record?.personality ?? ''),
+        _Field('background','Histoire personnelle',record?.background ?? ''),
+        _Field('role','Rôle ou catégorie',record?.role ?? '',max:150),
+        _Field('motivations','Motivations',record?.motivations ?? ''),
+        _Field('values','Valeurs et comportements',record?.values ?? ''),
       ],
       if (category == 'places') ...[
         _Field('type','Type de lieu',(record as LorePlace?)?.type ?? '',max:150),
-        _Field('atmosphere','Atmosphère',(record as LorePlace?)?.atmosphere ?? ''),
-        _Field('history','Histoire',(record as LorePlace?)?.history ?? ''),
-        _Field('features','Caractéristiques importantes',(record as LorePlace?)?.features ?? ''),
+        _Field('atmosphere','Atmosphère',record?.atmosphere ?? ''),
+        _Field('history','Histoire',record?.history ?? ''),
+        _Field('features','Caractéristiques importantes',record?.features ?? ''),
       ],
       if (category == 'scenarios') ...[
         _Field('summary','Synopsis',(record as LoreScenario?)?.summary ?? ''),
         _Field('importance','Importance',
-            (record as LoreScenario?)?.importance.name ?? 'secondary',
+            record?.importance.name ?? 'secondary',
             choices: const {'main':'Principal','secondary':'Secondaire'}),
-        _Field('initialContext','Contexte initial',(record as LoreScenario?)?.initialContext ?? ''),
-        _Field('objectives','Objectifs narratifs',(record as LoreScenario?)?.objectives ?? ''),
+        _Field('initialContext','Contexte initial',record?.initialContext ?? ''),
+        _Field('objectives','Objectifs narratifs',record?.objectives ?? ''),
         _Field('introduction','Conditions d’introduction',
-            (record as LoreScenario?)?.introduction ?? ''),
+            record?.introduction ?? ''),
       ],
       if (category == 'events') ...[
         _Field('trigger','Catégorie de déclenchement',
@@ -116,15 +120,15 @@ class _BookLoreTabState extends State<BookLoreTab> {
               'optional':'Facultatif',
             }),
         _Field('mandatory','Comportement attendu',
-            (record as LoreEvent?)?.mandatory == true ? 'true' : 'false',
+            record?.mandatory == true ? 'true' : 'false',
             choices: const {'false':'Facultatif','true':'Obligatoire'}),
         _Field('condition','Condition narrative (si applicable)',
-            (record as LoreEvent?)?.condition ?? ''),
-        _Field('timing','Moment souhaité',(record as LoreEvent?)?.timing ?? ''),
+            record?.condition ?? ''),
+        _Field('timing','Moment souhaité',record?.timing ?? ''),
         _Field('consequences','Conséquences possibles',
-            (record as LoreEvent?)?.consequences ?? ''),
+            record?.consequences ?? ''),
         _Field('priority','Priorité',
-            ((record as LoreEvent?)?.priority ?? 0).toString(),
+            (record?.priority ?? 0).toString(),
             choices: {for(var i=0;i<=10;i++) '$i':'$i'}),
       ],
     ];
