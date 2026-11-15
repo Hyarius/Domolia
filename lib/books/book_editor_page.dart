@@ -347,19 +347,34 @@ class _BookEditorPageState extends State<BookEditorPage> {
             ),
           ),
           const SizedBox(height: 10),
-          Expanded(child: ListView(
-            key: ValueKey('bookTab-$_tab'),
-            padding: const EdgeInsets.fromLTRB(18, 10, 18, 26),
-            children: switch (_tab) {
-              0 => _bookTab(),
-              1 => [BookLoreTab(
-                key: const ValueKey('bookLoreTab'),
-                lore: _book.lore,
-                onSave: _saveLore,
-              )],
-              2 => _narratorTab(),
-              _ => _systemTab(),
-            },
+          Expanded(child: IndexedStack(
+            index: _tab,
+            children: [
+              ListView(
+                key: const ValueKey('bookTab-0'),
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 26),
+                children: _bookTab(),
+              ),
+              ListView(
+                key: const ValueKey('bookTab-1'),
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 26),
+                children: [BookLoreTab(
+                  key: const ValueKey('bookLoreTab'),
+                  lore: _book.lore,
+                  onSave: _saveLore,
+                )],
+              ),
+              ListView(
+                key: const ValueKey('bookTab-2'),
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 26),
+                children: _narratorTab(),
+              ),
+              ListView(
+                key: const ValueKey('bookTab-3'),
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 26),
+                children: _systemTab(),
+              ),
+            ],
           )),
         ]),
       ),
