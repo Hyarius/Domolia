@@ -227,7 +227,7 @@ class _BookLoreTabState extends State<BookLoreTab> {
             'scenarioIds':refs('scenarioIds'),
           }));
         default:
-          return;
+          return false;
       }
       return await _commit(next);
     } on FormatException catch (e) {
