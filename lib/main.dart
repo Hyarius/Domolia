@@ -1,3 +1,4 @@
+import 'chat/raw_generation.dart';
 import 'dart:async';
 import 'dart:ui';
 
@@ -268,6 +269,19 @@ class _HomePageState extends State<HomePage> {
               configuration: binding.configuration,
             );
           },
+          onPersistState: (events, List<RawGeneration> generations) {
+            final pending = writes.then((_) => _books.saveSessionState(
+              session.copyWith(timeline: events), generations,
+            ));
+            // Keep the next autosave queue usable after a failed transaction,
+            // but propagate the actual failure to the active generation.
+            writes = pending.then((_) {}, onError: (
+                Object failure, StackTrace trace) {
+              AppLogger.error('Snapshot narratif non enregistré',
+                  component: 'books', error: failure, stackTrace: trace);
+            });
+            return pending;
+          },
           onTimelineChanged: (events) {
             // Serialize writes, so a slower prior write cannot override
             // the latest conversation snapshot.
@@ -300,7 +314,9 @@ class _HomePageState extends State<HomePage> {
           },
         );
       }
-      _chat.restoreTimeline(session.timeline);
+      final rawGenerations = await _books.rawGenerations(session.id);
+      if (!mounted) return;
+      _chat.restoreTimeline(session.timeline, rawGenerations: rawGenerations);
       _chat.beginConversation();
       setState(() {
         _selectedBookId = book.id;
