@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -296,7 +295,7 @@ class NarrativeChatController extends ChangeNotifier {
         } else if (event is ChatEntry) {
           history.add(AiMessage(role: 'assistant',
               content: event.speaker == ChatSpeaker.narrator
-                  ? event.text : event.name + ' : ' + event.text));
+                  ? event.text : '${event.name} : ${event.text}'));
         } else {
           history.add(const AiMessage(role: 'assistant',
               content: 'Une nouvelle scène commence.'));
@@ -307,7 +306,9 @@ class NarrativeChatController extends ChangeNotifier {
     var used = 0;
     for (final entry in history.reversed) {
       if (selected.length >= 24 || used + entry.content.length > 16000 &&
-          selected.isNotEmpty) break;
+          selected.isNotEmpty) {
+        break;
+      }
       selected.add(entry);
       used += entry.content.length;
     }
@@ -323,13 +324,13 @@ class NarrativeChatController extends ChangeNotifier {
         .take(6).toList().reversed;
     final context = [
       for (final entry in previous)
-        entry.name + ' : ' + entry.text,
+        '${entry.name} : ${entry.text}',
     ].join('\n');
     return [
       const AiMessage(role: 'system', content: jsonifierSystemPrompt),
       AiMessage(role: 'user',
-          content: 'Contexte précédent (ne pas convertir) :\n' +
-              context + '\n\nTexte RAW à convertir :\n' + raw),
+          content: 'Contexte précédent (ne pas convertir) :\n' 
+              '$context\n\nTexte RAW à convertir :\n$raw'),
     ];
   }
 
@@ -472,7 +473,7 @@ class NarrativeChatController extends ChangeNotifier {
       List<ChatTimelineEvent> additions = const [];
       try {
         final formatted = await _requestText(
-            endpoint, _jsonifierContext(rawRecord!.rawText), token, 2400);
+            endpoint, _jsonifierContext(rawRecord.rawText), token, 2400);
         _check(token);
         final known = _timeline.whereType<ChatEntry>()
             .where((e) => e.speaker == ChatSpeaker.character)
