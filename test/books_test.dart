@@ -159,7 +159,7 @@ void main() {
     expect(await store.findBook(b.id), isNotNull);
   });
 
-  test('Five distinct detail prompts preserve the NDJSON contract', () {
+  test('Five distinct detail prompts preserve literary rules without JSON', () {
     for (var level = 1; level <= 5; level++) {
       final book = BookDefinition(
         id: 'book-level-$level', title: 'Niveau $level',
@@ -167,7 +167,7 @@ void main() {
       );
       expect(book.narrator.systemPrompt,
         contains(BookDefinition.detailInstructions[level - 1]));
-      expect(book.narrator.systemPrompt, contains('"type":"scene_change"'));
+      expect(book.narrator.systemPrompt, isNot(contains('"type":"scene_change"')));
       expect(book.narrator.protocolPrompt, defaultNarratorProtocolPrompt);
       expect(book.narrator.systemPrompt,
         isNot(contains('Niveau de détail ${level == 5 ? 1 : level + 1} :')));
