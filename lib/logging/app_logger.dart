@@ -165,7 +165,7 @@ class AppLogger {
         'Bearer [REDACTED]');
     safe = safe.replaceAll(RegExp(r'sk-[A-Za-z0-9_-]{8,}'), '[REDACTED]');
     safe = safe.replaceAll(RegExp(r'ou-[A-Za-z0-9_-]{8,}'), '[REDACTED]');
-    safe = safe.replaceAll(RegExp(r'claim[_-]?token\\s*[:=]\\s*\\S+', caseSensitive: false), 'claim_token=[REDACTED]');
+    safe = safe.replaceAll(RegExp(r'claim[_-]?token\s*[:=]\s*\S+', caseSensitive: false), 'claim_token=[REDACTED]');
     safe = safe.replaceAll(
       RegExp(r'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]*)?'),
       '[REDACTED]');
