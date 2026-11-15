@@ -65,7 +65,7 @@ void main() {
 
   void attach() {
     final api = OpenUncensoredApi(client: MockClient((request) async {
-      if (offline) throw const http.ClientException('offline: secret');
+      if (offline) throw http.ClientException('offline: secret');
       final uri = request.url;
       if (uri.path == '/v1/credits') {
         final key = request.headers['Authorization']!.substring(7);
