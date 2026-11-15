@@ -1,0 +1,55 @@
+name: Publier préversion Web sur GitHub Pages
+
+on:
+  push:
+    branches:
+      - impl/web/02-indexeddb-bootstrap
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: domolia-pages-preview
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Compiler la préversion statique
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Installer les dépendances
+        run: flutter pub get
+      - name: Préparer SQLite WebAssembly
+        run: dart run sqflite_common_ffi_web:setup --force
+      - name: Construire la préversion
+        run: flutter build web --release --base-href /Domolia/
+      - name: Vérifier les fichiers nécessaires
+        run: |
+          test -s build/web/index.html
+          test -s build/web/main.dart.js
+          test -s build/web/sqlite3.wasm
+          test -s build/web/sqflite_sw.js
+          touch build/web/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    name: Publier la préversion
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Déployer sur GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
