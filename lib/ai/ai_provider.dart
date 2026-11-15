@@ -630,9 +630,9 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
         await for (final bytes in response.stream.timeout(
             const Duration(seconds: 8))) {
           exchange?.addRawResponse(bytes);
-          if (body.length < 16384) body.addAll(
-            bytes.take(16384 - body.length),
-          );
+          if (body.length < 16384) {
+            body.addAll(bytes.take(16384 - body.length));
+          }
           if (body.length >= 16384) break;
         }
       } catch (_) { /* The status is still authoritative. */ }

@@ -622,11 +622,11 @@ class NarrativeChatController extends ChangeNotifier {
         failed = error;
         rethrow;
       } finally {
-        _capture('narrator_tool_round_' + round.toString(), before,
+        _capture('narrator_tool_round_$round', before,
             failure: failed, stagePromptTokens: turn?.promptTokens,
             stageCompletionTokens: turn?.completionTokens);
       }
-      final complete = turn!;
+      final complete = turn;
       totalPrompt += complete.promptTokens ?? 0;
       totalCompletion += complete.completionTokens ?? 0;
       _check(token);
@@ -661,7 +661,9 @@ class NarrativeChatController extends ChangeNotifier {
       int? stagePromptTokens, int? stageCompletionTokens}) {
     final current = diagnostics?.last;
     if (current == null || identical(before, current) ||
-        current.completedAtUtc != null) return;
+        current.completedAtUtc != null) {
+      return;
+    }
     current.stage = stage;
     current.playerEventId = _playerEventId;
     current.complete(
