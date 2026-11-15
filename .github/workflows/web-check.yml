@@ -37,6 +37,9 @@ jobs:
       - name: Test SQLite IndexedDB dans Chrome
         timeout-minutes: 6
         run: flutter test -d chrome test/web_indexeddb_browser_test.dart
+      - name: Test sauvegarde/restauration IndexedDB dans Chrome
+        timeout-minutes: 6
+        run: flutter test -d chrome test/web_backup_browser_test.dart
       - name: Compiler le site pour GitHub Pages
         run: flutter build web --release --base-href /Domolia/
       - name: Vérifier les ressources nécessaires
