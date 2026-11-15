@@ -93,7 +93,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Opening is a narrator bubble before the player, without API',
+  testWidgets('Opening shows narrator text only, without API',
       (tester) async {
     tester.view.physicalSize = const Size(400, 900);
     tester.view.devicePixelRatio = 1;
@@ -124,9 +124,10 @@ void main() {
       )),
     ));
     await tester.pumpAndSettle();
-    expect(find.text('Narrateur'), findsOneWidget);
+    expect(find.text('Narrateur'), findsNothing);
     expect(find.text('La salle est silencieuse.'), findsOneWidget);
-    expect(find.byKey(const ValueKey('chatNarratorAvatar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chatNarratorAvatar')), findsNothing);
+    expect(find.byKey(const ValueKey('chatNarrationText')), findsOneWidget);
     expect(fake.calls, 0);
     expect(chat.timeline.whereType<ChatEntry>(), hasLength(1));
 

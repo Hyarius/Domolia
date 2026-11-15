@@ -1,0 +1,163 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:domolia/logging/app_logger.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test('writes all levels in order with UTC timestamps', () async {
+    final storage = MemoryAppLogStorage();
+    final logger = AppLogger(storage: storage);
+    for (final level in AppLogLevel.values) {
+      logger.log(level, level.name, component: 'unit');
+    }
+    await logger.flush();
+    final entries = await logger.entries();
+    expect(entries.map((entry) => entry.level), AppLogLevel.values);
+    expect(entries.map((entry) => entry.message), AppLogLevel.values.map((level) => level.name));
+    expect(entries.every((entry) => entry.timestamp.isUtc), true);
+    expect(storage.lines.every((line) => jsonDecode(line) is Map), true);
+  });
+
+  test('concurrent calls are serialized and clearing allows further writes', () async {
+    final logger = AppLogger(storage: MemoryAppLogStorage());
+    for (var i = 0; i < 500; i++) {
+      logger.log(AppLogLevel.info, 'event-$i');
+    }
+    await logger.flush();
+    expect((await logger.entries()).length, 500);
+    await logger.clear();
+    expect(await logger.entries(), isEmpty);
+    logger.log(AppLogLevel.info, 'after clear');
+    await logger.flush();
+    expect((await logger.entries()).single.message, 'after clear');
+  });
+
+  test('file storage persists through recreation and rotates oldest files', () async {
+    final directory = await Directory.systemTemp.createTemp('domolia-logging-');
+    addTearDown(() async { await directory.delete(recursive: true); });
+    final first = AppLogger(storage: FileAppLogStorage(
+      directory, maxFiles: 3, maxFileBytes: 300));
+    for (var i = 0; i < 30; i++) {
+      first.log(AppLogLevel.debug, 'line $i');
+    }
+    await first.flush();
+    final second = AppLogger(storage: FileAppLogStorage(
+      directory, maxFiles: 3, maxFileBytes: 300));
+    final entries = await second.entries();
+    expect(entries, isNotEmpty);
+    expect(entries.last.message, 'line 29');
+    expect(entries.length, lessThan(30));
+    final files = directory.listSync().whereType<File>().toList();
+    expect(files.length, lessThanOrEqualTo(3));
+    for (final file in files) {
+      expect(await file.length(), lessThanOrEqualTo(300));
+    }
+    await second.clear();
+    expect(await second.entries(), isEmpty);
+  });
+
+  test('secrets are redacted from messages and metadata by key', () async {
+    final logger = AppLogger(storage: MemoryAppLogStorage());
+    logger.log(AppLogLevel.error, 'Authorization: Bearer sk-verysecret12345',
+      details: const {'password': 'hard-to-guess', 'accessToken': 'opaque-token', 'count': 5},
+      error: Exception('never include this exception body'));
+    await logger.flush();
+    final snapshot = await logger.snapshot();
+    expect(snapshot, isNot(contains('verysecret12345')));
+    expect(snapshot, isNot(contains('hard-to-guess')));
+    expect(snapshot, isNot(contains('opaque-token')));
+    expect(snapshot, isNot(contains('never include this exception body')));
+    expect(snapshot, contains('[REDACTED]'));
+  });
+
+  test('one rotating file remains within the byte cap', () async {
+    final directory = await Directory.systemTemp.createTemp('domolia-log-cap-');
+    addTearDown(() async { await directory.delete(recursive: true); });
+    final logger = AppLogger(storage: FileAppLogStorage(
+      directory, maxFiles: 1, maxFileBytes: 160));
+    for (var i = 0; i < 30; i++) {
+      logger.log(AppLogLevel.info, 'record-$i');
+    }
+    await logger.flush();
+    final snapshot = await logger.snapshot();
+    expect(snapshot, contains('record-29'));
+    expect(snapshot, isNot(contains('record-0')));
+    expect(await File('${directory.path}/domolia-0.jsonl').length(),
+      lessThanOrEqualTo(160));
+  });
+
+  test('oversized entries fail safely without breaking subsequent writes', () async {
+    final directory = await Directory.systemTemp.createTemp('domolia-log-size-');
+    addTearDown(() async { await directory.delete(recursive: true); });
+    final logger = AppLogger(storage: FileAppLogStorage(
+      directory, maxFiles: 2, maxFileBytes: 140));
+    logger.log(AppLogLevel.error, 'x' * 500);
+    await logger.flush();
+    expect(logger.failedOperations, 1);
+    expect(await logger.entries(), isEmpty);
+    logger.log(AppLogLevel.info, 'Recovered');
+    await logger.flush();
+    expect((await logger.entries()).single.message, 'Recovered');
+  });
+
+  test('failed snapshot read returns safely and queue recovers', () async {
+    final storage = _FailingReadStorage();
+    final logger = AppLogger(storage: storage);
+    expect(await logger.snapshot(), isEmpty);
+    expect(logger.failedOperations, 1);
+    logger.log(AppLogLevel.info, 'after failure');
+    await logger.flush();
+    expect(storage.lines, hasLength(1));
+    expect(await logger.snapshot(), contains('after failure'));
+  });
+
+  test('quoted JSON credentials are scrubbed in messages and details', () async {
+    final logger = AppLogger(storage: MemoryAppLogStorage());
+    logger.log(
+      AppLogLevel.warning,
+      '{"password":"secret-phrase-123",'
+      '"api_key":"private-api-456",'
+      '"cookie":"session-cookie-789"}',
+      details: const {
+        'debugPayload': '{"access_token":"private-access-987"}',
+      },
+    );
+    await logger.flush();
+    final snapshot = await logger.snapshot();
+    for (final secret in [
+      'secret-phrase-123',
+      'private-api-456',
+      'session-cookie-789',
+      'private-access-987',
+    ]) {
+      expect(snapshot, isNot(contains(secret)));
+    }
+    expect(snapshot, contains('[REDACTED]'));
+  });
+
+  test('bearer tokens are fully redacted after an Authorization prefix', () async {
+    final logger = AppLogger(storage: MemoryAppLogStorage());
+    logger.log(AppLogLevel.warning,
+        'Authorization: Bearer privateBearerCredentialAlpha');
+    await logger.flush();
+    final saved = await logger.snapshot();
+    expect(saved, isNot(contains('privateBearerCredentialAlpha')));
+    expect(saved, contains('[REDACTED]'));
+  });
+
+}
+
+class _FailingReadStorage extends MemoryAppLogStorage {
+  bool failNextRead = true;
+
+  @override
+  Future<List<String>> readLines() {
+    if (failNextRead) {
+      failNextRead = false;
+      throw StateError('temporary read failure');
+    }
+    return super.readLines();
+  }
+
+
+}

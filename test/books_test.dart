@@ -10,6 +10,7 @@ import 'package:domolia/books/book_library_page.dart';
 import 'package:domolia/books/book_session.dart';
 import 'package:domolia/books/book_store.dart';
 import 'package:domolia/chat/chat_controller.dart';
+import 'package:domolia/chat/conversation_settings_page.dart';
 import 'package:domolia/chat/chat_protocol.dart';
 import 'package:domolia/chat/narrator.dart';
 import 'package:domolia/chat/narrator_settings.dart';
@@ -424,6 +425,127 @@ void main() {
     await library.saveSession(session.copyWith(title: 'Écriture tardive'));
     expect(await library.session(session.id), isNull);
     expect(await store.findBook(book.id), isNotNull);
+  });
+
+
+  test('Recent sessions include every Book and are sorted newest first', () async {
+    final store = _MemoryBooks();
+    final library = BookLibraryController(store: store);
+    addTearDown(library.dispose);
+    await library.initialize();
+    final one = await library.create('Book One');
+    final two = await library.create('Book Two');
+    await store.putSession(BookSession(
+      id: 'old', bookId: one.id, title: 'Old',
+      updatedAtUtc: DateTime.utc(2026, 11, 1),
+    ));
+    await store.putSession(BookSession(
+      id: 'new', bookId: two.id, title: 'New',
+      updatedAtUtc: DateTime.utc(2026, 11, 14),
+    ));
+    await store.putSession(BookSession(
+      id: 'mid', bookId: one.id, title: 'Middle',
+      updatedAtUtc: DateTime.utc(2026, 11, 10),
+    ));
+    expect((await library.recentSessions()).map((s) => s.id),
+      ['new', 'mid', 'old']);
+    expect((await library.recentSessions(limit: 2)).map((s) => s.id),
+      ['new', 'mid']);
+  });
+
+  testWidgets('Conversation settings only select existing profiles and export',
+      (tester) async {
+    tester.view.physicalSize = const Size(420, 950);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final store = _MemoryBooks();
+    final library = BookLibraryController(store: store);
+    addTearDown(library.dispose);
+    await library.initialize();
+    final book = await library.create('Aventure');
+    final session = await library.newSession(book);
+    final ai = AiConnectionController(
+      store: _Profiles(const AiProfilesState(
+        profiles: [_profile], selectedId: 'profile-1',
+      )), provider: _NoNetwork(),
+    );
+    addTearDown(ai.dispose);
+    final chat = NarrativeChatController(
+      provider: _NoNetwork(), configuration: () => null,
+    );
+    addTearDown(chat.dispose);
+    chat.restoreTimeline(const [
+      ChatEntry(id: 0, speaker: ChatSpeaker.narrator,
+        name: 'Narrateur', text: 'Prologue'),
+      ChatEntry(id: 1, speaker: ChatSpeaker.player,
+        name: 'Vous', text: 'Je suis prêt'),
+    ]);
+    var returned = false;
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: Scaffold(body: ConversationSettingsPage(
+        library: library, ai: ai, chat: chat,
+        bookId: book.id, sessionId: session.id,
+        bookTitle: book.title, sessionTitle: session.title,
+        onBack: () => returned = true,
+      )),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('conversationSettings')), findsOneWidget);
+    expect(find.text('Paramètres de la conversation'), findsOneWidget);
+    expect(find.text('Créer une configuration'), findsNothing);
+    expect(find.text('Profil par défaut du Livre'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('conversationDefaultProfile')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Connexion de test').last);
+    await tester.pumpAndSettle();
+    expect((await library.session(session.id))!.aiProfileId, 'profile-1');
+    expect(ai.profiles, hasLength(1));
+
+    await tester.tap(find.byKey(const ValueKey('conversationExport')));
+    await tester.pumpAndSettle();
+    expect(find.text('Toute la conversation'), findsOneWidget);
+    expect(find.text('Portée de l’export'), findsOneWidget);
+    await tester.tap(find.text('Annuler'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Retour à la conversation'));
+    expect(returned, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Conversation settings warn about a deleted AI profile',
+      (tester) async {
+    final store = _MemoryBooks();
+    final library = BookLibraryController(store: store);
+    addTearDown(library.dispose);
+    await library.initialize();
+    final book = await library.create('Livre');
+    final session = await library.newSession(book);
+    await library.setSessionProfile(session.id, 'removed-profile');
+    final ai = AiConnectionController(
+      store: _Profiles(const AiProfilesState(
+        profiles: [_profile], selectedId: 'profile-1',
+      )), provider: _NoNetwork(),
+    );
+    addTearDown(ai.dispose);
+    final chat = NarrativeChatController(
+      provider: _NoNetwork(), configuration: () => null,
+    );
+    addTearDown(chat.dispose);
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: Scaffold(body: ConversationSettingsPage(
+        library: library, ai: ai, chat: chat, bookId: book.id,
+        sessionId: session.id, onBack: () {},
+      )),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('La configuration précédente a été supprimée.'),
+      findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
 }

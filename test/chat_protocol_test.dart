@@ -128,4 +128,56 @@ void main() {
     expect(parser.finish().single, isA<ChatSceneChangeOutput>());
   });
 
+
+  test('French narrator alias is parsed and progressively previewed', () {
+    final decoder = ChatLineDecoder();
+    decoder.add('{"speaker":"narrateur","name":"Quelqu’un","text":"La ');
+    expect(decoder.preview?.speaker, ChatSpeaker.narrator);
+    expect(decoder.preview?.name, 'Narrateur');
+    expect(decoder.preview?.text, 'La ');
+    final result = decoder.add('porte s’ouvre."}\n');
+    expect(result, hasLength(1));
+    expect((result.single as ChatLine).speaker, ChatSpeaker.narrator);
+    expect((result.single as ChatLine).name, 'Narrateur');
+    expect((result.single as ChatLine).text, 'La porte s’ouvre.');
+  });
+
+  test('Valid NDJSON prefix survives a malformed line in the same chunk', () {
+    final decoder = ChatLineDecoder();
+    final first = jsonEncode({
+      'speaker': 'narrator', 'name': 'Narrateur', 'text': 'Message valide',
+    });
+    final second = jsonEncode({
+      'speaker': 'character', 'name': 'Lina', 'text': 'Toujours valide',
+    });
+    expect(
+      () => decoder.add('$first\n$second\nnot-json\n'),
+      throwsA(isA<ChatProtocolException>().having(
+        (e) => e.problem, 'problem', ChatProtocolProblem.malformedJson,
+      )),
+    );
+    final saved = decoder.takeAcceptedBeforeError().whereType<ChatLine>().toList();
+    expect(saved.map((event) => event.text),
+        ['Message valide', 'Toujours valide']);
+    expect(decoder.takeAcceptedBeforeError(), isEmpty);
+  });
+
+  test('Unknown speaker and malformed structures remain distinguishable', () {
+    final unknown = ChatLineDecoder();
+    expect(
+      () => unknown.add(
+          '{"speaker":"observer","name":"Ombre","text":"Bonjour"}\n'),
+      throwsA(isA<ChatProtocolException>().having(
+        (e) => e.problem, 'problem', ChatProtocolProblem.unknownSpeaker,
+      )),
+    );
+    final invalid = ChatLineDecoder();
+    expect(
+      () => invalid.add('{"speaker":"narrateur","text":"Bonjour"}\n'),
+      throwsA(isA<ChatProtocolException>().having(
+        (e) => e.problem, 'problem', ChatProtocolProblem.invalidStructure,
+      )),
+    );
+  });
+
 }

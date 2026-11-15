@@ -146,8 +146,10 @@ class BookDefinition {
         final jpg = bytes.length >= 3 &&
             bytes[0] == 0xff && bytes[1] == 0xd8 && bytes[2] == 0xff;
         final webp = bytes.length >= 12 &&
-            ascii.decode(bytes.sublist(0, 4)) == 'RIFF' &&
-            ascii.decode(bytes.sublist(8, 12)) == 'WEBP';
+            bytes[0] == 0x52 && bytes[1] == 0x49 &&
+            bytes[2] == 0x46 && bytes[3] == 0x46 &&
+            bytes[8] == 0x57 && bytes[9] == 0x45 &&
+            bytes[10] == 0x42 && bytes[11] == 0x50;
         if (!(coverMime == 'image/png' && png ||
             coverMime == 'image/jpeg' && jpg ||
             coverMime == 'image/webp' && webp)) {

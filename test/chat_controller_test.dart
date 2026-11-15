@@ -422,4 +422,36 @@ void main() {
     expect(current.timeline, hasLength(1));
   });
 
+
+  test('Streaming keeps valid messages before an invalid line', () async {
+    provider.pipe = StreamController<AiStreamChunk>.broadcast();
+    final pending = chat.send('Je regarde.');
+    provider.pipe!.add(AiStreamChunk(
+      text: '${line('narrateur', 'Narrateur', 'Une lumière apparaît.')}\n'
+          'not-json\n',
+    ));
+    await pending;
+    expect(chat.error, isNotNull);
+    expect(chat.messages.map((m) => m.speaker),
+        [ChatSpeaker.player, ChatSpeaker.narrator]);
+    expect(chat.messages.last.text, 'Une lumière apparaît.');
+    expect(chat.preview, isNull);
+    expect(chat.busy, false);
+  });
+
+  test('Non-streaming keeps valid messages before an invalid line', () async {
+    final simple = SimpleProvider()
+      ..text = '${line('narrateur', 'Narrateur', 'Un bruit retentit.')}\n'
+          'not-json\n';
+    final local = NarrativeChatController(
+      provider: simple, configuration: () => credentials,
+    );
+    addTearDown(local.dispose);
+    await local.send('J’avance.');
+    expect(local.error, isNotNull);
+    expect(local.messages.map((m) => m.speaker),
+        [ChatSpeaker.player, ChatSpeaker.narrator]);
+    expect(local.messages.last.text, 'Un bruit retentit.');
+  });
+
 }

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
@@ -7,6 +6,8 @@ import 'package:material_ui/material_ui.dart';
 import '../ai/ai_controller.dart';
 import '../ai/ai_provider.dart';
 import '../theme/domolia_theme.dart';
+import '../logging/app_logger.dart';
+import 'book_cover_loader.dart';
 import 'book_definition.dart';
 import 'book_library_controller.dart';
 import 'book_library_page.dart';
@@ -90,42 +91,42 @@ class _BookEditorPageState extends State<BookEditorPage> {
     } on FormatException catch (error) {
       _show(error.message);
       return false;
-    } catch (_) {
+    } catch (failure, stackTrace) {
+      AppLogger.error('Échec de sauvegarde dans l’éditeur', component: 'books',
+          error: failure, stackTrace: stackTrace);
       _show('Impossible de sauvegarder ce Livre.');
       return false;
     }
   }
 
   Future<void> _chooseCover() async {
+    AppLogger.info('Ouverture du sélecteur de couverture', component: 'cover');
     try {
       final chosen = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['png', 'jpg', 'jpeg', 'webp'],
         withData: true,
       );
-      if (chosen == null) return;
-      final file = chosen.files.single;
-      final bytes = file.bytes;
-      if (bytes == null || bytes.isEmpty ||
-          bytes.length > BookDefinition.maxCoverBytes) {
-        throw const FormatException('Image inaccessible ou supérieure à 1 Mo.');
+      if (chosen == null || chosen.files.isEmpty) {
+        AppLogger.info('Sélection de couverture annulée', component: 'cover');
+        return;
       }
-      final suffix = file.extension?.toLowerCase();
-      final mime = switch (suffix) {
-        'png' => 'image/png',
-        'jpg' || 'jpeg' => 'image/jpeg',
-        'webp' => 'image/webp',
-        _ => throw const FormatException('Type d’image invalide.'),
-      };
+      final data = await BookCoverLoader.load(chosen.files.single);
       final next = _book.copyWith(
-        coverBase64: base64Encode(bytes), coverMime: mime,
+        coverBase64: data.base64, coverMime: data.mime,
       );
+      AppLogger.debug('Sauvegarde de la couverture', component: 'cover');
       await widget.library.save(next);
       if (mounted) setState(() => _book = next);
-    } on FormatException catch (error) {
-      _show(error.message);
-    } catch (_) {
-      _show('Impossible de charger la couverture.');
+      AppLogger.info('Couverture enregistrée', component: 'cover');
+    } on FormatException catch (failure) {
+      AppLogger.warning('Couverture rejetée', component: 'cover',
+        details: {'reason': failure.message});
+      _show(failure.message);
+    } catch (failure, stackTrace) {
+      AppLogger.error('Chargement de couverture échoué', component: 'cover',
+        error: failure, stackTrace: stackTrace);
+      _show('Impossible de charger la couverture. Consultez Paramètres → Logs.');
     }
   }
 

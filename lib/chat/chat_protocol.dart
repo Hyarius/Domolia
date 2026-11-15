@@ -2,6 +2,14 @@ import 'dart:convert';
 
 enum ChatSpeaker { player, narrator, character }
 
+enum ChatProtocolProblem { malformedJson, invalidStructure, unknownSpeaker, playerImpersonation }
+
+class ChatProtocolException extends FormatException {
+  const ChatProtocolException(this.problem, String message) : super(message);
+  final ChatProtocolProblem problem;
+}
+
+
 sealed class ChatTimelineEvent {
   const ChatTimelineEvent(this.id);
   final int id;
@@ -47,6 +55,13 @@ class ChatLine extends ChatOutputEvent {
 class ChatLineDecoder {
   String _pending = '';
   int _parsed = 0;
+  final List<ChatOutputEvent> _acceptedBeforeError = [];
+
+  List<ChatOutputEvent> takeAcceptedBeforeError() {
+    final result = List<ChatOutputEvent>.of(_acceptedBeforeError);
+    _acceptedBeforeError.clear();
+    return result;
+  }
 
   List<ChatOutputEvent> add(String fragment) {
     _pending += fragment;
@@ -59,7 +74,16 @@ class ChatLineDecoder {
       if (end < 0) break;
       final raw = _pending.substring(0, end).trim();
       _pending = _pending.substring(end + 1);
-      if (raw.isNotEmpty) lines.add(_parse(raw));
+      if (raw.isNotEmpty) {
+        try {
+          lines.add(_parse(raw));
+        } on FormatException {
+          // A chunk can contain valid lines followed by an invalid one.
+          // Preserve the accepted prefix for the caller without salvaging JSON.
+          _acceptedBeforeError.addAll(lines);
+          rethrow;
+        }
+      }
     }
     return lines;
   }
@@ -78,16 +102,17 @@ class ChatLineDecoder {
     try {
       decoded = jsonDecode(line);
     } catch (_) {
-      throw const FormatException('Le modèle n’a pas respecté le format des messages.');
+      throw const ChatProtocolException(ChatProtocolProblem.malformedJson,
+          'Le modèle n’a pas respecté le format JSON des messages.');
     }
     if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Événement IA structuré invalide.');
+      throw const ChatProtocolException(ChatProtocolProblem.invalidStructure,
+          'Événement IA structuré invalide.');
     }
     if (decoded['type'] == 'scene_change') {
       if (decoded.length != 1) {
-        throw const FormatException(
-          'Un changement de scène ne contient ni titre ni métadonnées.',
-        );
+        throw const ChatProtocolException(ChatProtocolProblem.invalidStructure,
+          'Un changement de scène ne contient ni titre ni métadonnées.');
       }
       _parsed++;
       return const ChatSceneChangeOutput();
@@ -96,15 +121,17 @@ class ChatLineDecoder {
         decoded['speaker'] is! String ||
         decoded['name'] is! String ||
         decoded['text'] is! String) {
-      throw const FormatException('Message IA structuré invalide.');
+      throw const ChatProtocolException(ChatProtocolProblem.invalidStructure,
+          'Message IA structuré invalide.');
     }
     final speaker = decoded['speaker'] as String;
     final text = (decoded['text'] as String).trim();
     final proposed = (decoded['name'] as String).trim();
     if (text.isEmpty || text.length > 6000 || proposed.isEmpty || proposed.length > 50) {
-      throw const FormatException('Nom ou texte de message IA invalide.');
+      throw const ChatProtocolException(ChatProtocolProblem.invalidStructure,
+          'Nom ou texte de message IA invalide.');
     }
-    if (speaker == 'narrator') {
+    if (speaker == 'narrator' || speaker == 'narrateur') {
       _parsed++;
       return ChatLine(speaker: ChatSpeaker.narrator, name: 'Narrateur', text: text);
     }
@@ -115,7 +142,20 @@ class ChatLineDecoder {
       _parsed++;
       return ChatLine(speaker: ChatSpeaker.character, name: proposed, text: text);
     }
-    throw const FormatException('L’IA ne peut pas parler à la place du joueur.');
+    if (speaker == 'player' ||
+        (speaker == 'character' &&
+            (proposed.toLowerCase() == 'vous' ||
+             proposed.toLowerCase() == 'narrateur'))) {
+      throw const ChatProtocolException(ChatProtocolProblem.playerImpersonation,
+          'L’IA ne peut pas parler à la place du joueur ou du narrateur.');
+    }
+    if (speaker == 'character') {
+      throw const ChatProtocolException(ChatProtocolProblem.invalidStructure,
+          'Nom de personnage IA invalide.');
+    }
+    throw const ChatProtocolException(ChatProtocolProblem.unknownSpeaker,
+        'Locuteur IA inconnu.');
+
   }
 
   /// A partial scene boundary must not appear as a character bubble.
@@ -126,7 +166,7 @@ class ChatLineDecoder {
   ChatLine? get preview {
     if (isPendingSceneChange) return null;
     final speakerMatch =
-        RegExp(r'"speaker"\s*:\s*"(narrator|character)"').firstMatch(_pending);
+        RegExp(r'"speaker"\s*:\s*"(narrator|narrateur|character)"').firstMatch(_pending);
     final nameMatch =
         RegExp(r'"name"\s*:\s*"((?:\\.|[^"\\])*)"').firstMatch(_pending);
     if (speakerMatch == null || nameMatch == null) return null;
@@ -170,8 +210,8 @@ class ChatLineDecoder {
     }
     if (text == null) return null;
     return ChatLine(
-      speaker: speaker == 'narrator' ? ChatSpeaker.narrator : ChatSpeaker.character,
-      name: speaker == 'narrator' ? 'Narrateur' : name.trim(),
+      speaker: speaker == 'narrator' || speaker == 'narrateur' ? ChatSpeaker.narrator : ChatSpeaker.character,
+      name: speaker == 'narrator' || speaker == 'narrateur' ? 'Narrateur' : name.trim(),
       text: text,
     );
   }

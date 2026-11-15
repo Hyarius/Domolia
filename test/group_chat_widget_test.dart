@@ -89,15 +89,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Vous'), findsOneWidget);
-    expect(find.text('Narrateur'), findsOneWidget);
+    expect(find.text('Narrateur'), findsNothing);
     expect(find.text('Lina'), findsOneWidget);
     expect(find.text('Marc'), findsOneWidget);
     expect(find.text('Je pousse la porte.'), findsOneWidget);
     expect(find.text('Bienvenue chez nous !'), findsOneWidget);
     expect(find.byKey(const ValueKey('chatPlayerAvatar')), findsOneWidget);
-    expect(find.byKey(const ValueKey('chatNarratorAvatar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chatNarratorAvatar')), findsNothing);
+    expect(find.byKey(const ValueKey('chatNarrationText')), findsOneWidget);
     expect(find.byKey(const ValueKey('chatCharacterAvatar')), findsNWidgets(2));
-    expect(find.byKey(const ValueKey('chatBubbleText')), findsNWidgets(4));
+    expect(find.byKey(const ValueKey('chatBubbleText')), findsNWidgets(3));
     expect(tester.takeException(), isNull);
   });
 
@@ -195,7 +196,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('groupChatSend')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('chatSceneDivider')), findsOneWidget);
-    expect(find.byKey(const ValueKey('chatBubbleText')), findsNWidgets(3));
+    expect(find.byKey(const ValueKey('chatBubbleText')), findsNWidgets(2));
     expect(find.text('Scène 2'), findsNothing);
     expect(find.text('Changement de scène'), findsNothing);
     final divider = tester.widget<Container>(
@@ -208,33 +209,28 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('The conversation menu keeps scoped exports and purge only',
-      (tester) async {
+  testWidgets('Conversation export moved to conversation settings', (tester) async {
     final controller = NarrativeChatController(
       provider: ScriptedProvider(), configuration: () => config,
     );
     addTearDown(controller.dispose);
+    var openedSettings = false;
     await tester.pumpWidget(MaterialApp(
       theme: DomoliaTheme.dark,
       home: Scaffold(body: GroupChatPage(
-        controller: controller, onOpenSettings: () {},
+        controller: controller,
+        onOpenSettings: () => openedSettings = true,
       )),
     ));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('chatExportMenu')));
     await tester.pumpAndSettle();
-    expect(find.text('Exporter la conversation'), findsOneWidget);
-    expect(find.text('Requête IA + réponse brute'), findsNothing);
-    await tester.tap(find.text('Exporter la conversation'));
+    expect(find.text('Exporter la conversation'), findsNothing);
+    expect(find.text('Purger les diagnostics'), findsOneWidget);
+    await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
-    expect(find.text('Toute la conversation'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('chatExportScope')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('X derniers messages').last);
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('chatExportCount')), findsOneWidget);
-    await tester.tap(find.text('Annuler'));
-    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Paramètres de la conversation'));
+    expect(openedSettings, true);
   });
 
   testWidgets('Long press exposes player edits and resumes from edited text',
