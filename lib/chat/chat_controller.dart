@@ -12,6 +12,7 @@ import 'narrator.dart';
 import 'raw_generation.dart';
 import '../books/book_lore.dart';
 import '../books/lore_context_builder.dart';
+import '../books/lore_context_optimizer.dart';
 
 class NarrativeAiEndpoint {
   const NarrativeAiEndpoint({required this.provider, required this.configuration});
@@ -29,6 +30,10 @@ class NarrativeChatController extends ChangeNotifier {
     required this.configuration,
     this.resolveConnection,
     this.resolveFormatterConnection,
+    this.resolveOptimizerConnection,
+    this.initialOptimizedLore,
+    this.initialOptimizedLoreHash,
+    this.onOptimizedLore,
     this.narrator = const Narrator(),
     this.narratorProvider,
     this.loreProvider,
@@ -38,13 +43,21 @@ class NarrativeChatController extends ChangeNotifier {
     this.onExchangeCaptured,
     this.diagnostics,
     int Function(int count)? selectOpeningIndex,
-  }) : _selectOpeningIndex = selectOpeningIndex ?? Random.secure().nextInt;
+  }) : _selectOpeningIndex = selectOpeningIndex ?? Random.secure().nextInt,
+       _optimizedLore = initialOptimizedLore,
+       _optimizedHash = initialOptimizedLoreHash;
 
   final AiChatProvider provider;
   final AiConfiguration? Function() configuration;
   final Future<NarrativeAiEndpoint> Function()? resolveConnection;
   /// Optional distinct profile for later; defaults to the narrator endpoint.
   final Future<NarrativeAiEndpoint> Function()? resolveFormatterConnection;
+  /// Optional separate third task; null means no compression request.
+  final Future<NarrativeAiEndpoint?> Function()? resolveOptimizerConnection;
+  final String? initialOptimizedLore;
+  final String? initialOptimizedLoreHash;
+  /// Stores a summary (or an empty failure sentinel) once per Lore revision.
+  final Future<void> Function(String loreHash, String summary)? onOptimizedLore;
   final Narrator narrator;
   final Narrator Function()? narratorProvider;
   final BookLore Function()? loreProvider;
@@ -89,6 +102,9 @@ class NarrativeChatController extends ChangeNotifier {
   int _generationToken = 0;
   StreamSubscription<AiStreamChunk>? _subscription;
   Completer<void>? _done;
+  bool _optimizationChecked = false;
+  String? _optimizedLore;
+  String? _optimizedHash;
 
   void _notify() {
     if (!_closed) notifyListeners();
@@ -361,9 +377,19 @@ class NarrativeChatController extends ChangeNotifier {
       used += entry.content.length;
     }
     final lore = loreProvider?.call();
-    final loreContext = lore == null ? '' : LoreContextBuilder(
-      maxCharacters: loreContextBudget,
-    ).build(lore, selected.reversed.map((entry) => entry.content));
+    final optimizer = const LoreContextOptimizer();
+    final compact = lore != null &&
+        _optimizedHash == optimizer.sourceHash(lore) &&
+        _optimizedLore != null && _optimizedLore!.isNotEmpty;
+    final loreContext = lore == null ? '' : compact
+        ? 'LORE CANONIQUE RÉSUMÉ (réservé au narrateur)\\n'
+          'Ne révèle pas les secrets. Les événements potentiels ne '
+          'se sont pas nécessairement produits. '
+          'Ne décide aucune action du joueur.\\n'
+          '${_optimizedLore!}'
+        : LoreContextBuilder(
+            maxCharacters: loreContextBudget,
+          ).build(lore, selected.reversed.map((entry) => entry.content));
     return [
       AiMessage(role: 'system', content: [
         (narratorProvider?.call() ?? narrator).systemPrompt,
@@ -464,6 +490,55 @@ class NarrativeChatController extends ChangeNotifier {
     }
   }
 
+  Future<void> _ensureOptimizedContext(int token) async {
+    if (_optimizationChecked || resolveOptimizerConnection == null) return;
+    _optimizationChecked = true;
+    final lore = loreProvider?.call();
+    if (lore == null) return;
+    const optimizer = LoreContextOptimizer();
+    final hash = optimizer.sourceHash(lore);
+    if (_optimizedHash == hash) return;
+    if (!optimizer.canOptimize(lore)) return;
+    final endpoint = await resolveOptimizerConnection!();
+    _check(token);
+    if (endpoint == null || endpoint.configuration.apiKey.isEmpty) return;
+
+    final before = diagnostics?.last;
+    Object? failed;
+    String summary = '';
+    try {
+      final raw = await _requestText(
+        endpoint, optimizer.request(lore), token, 2400,
+      );
+      _check(token);
+      final validated = optimizer.validate(lore, raw);
+      if (validated == null) {
+        throw const FormatException('Résumé de Lore incomplet ou non économique.');
+      }
+      summary = validated;
+      AppLogger.info('Lore compact validé', component: 'lore',
+          details: {'summaryCharacters': summary.length});
+    } on _Cancelled {
+      rethrow;
+    } catch (error) {
+      failed = error;
+      AppLogger.warning('Optimisation du Lore rejetée : sélection classique',
+          component: 'lore');
+    } finally {
+      _capture('context_optimizer', before, failure: failed);
+    }
+    // Never allow an optimization error to invalidate the narrative turn.
+    _optimizedHash = hash;
+    _optimizedLore = summary;
+    try {
+      await onOptimizedLore?.call(hash, summary);
+    } catch (_) {
+      AppLogger.warning('Sauvegarde du Lore compact impossible',
+          component: 'lore');
+    }
+    _check(token);
+  }
+
   Future<void> _generate({bool reuseRaw = false}) async {
     if (_closed || busy || _lastPlayerIndex == null) return;
     final token = ++_generationToken;
@@ -491,6 +566,10 @@ class NarrativeChatController extends ChangeNotifier {
       }
       modelUsed = endpoint.configuration.model;
       if (rawRecord == null) {
+        stage = 'optimizer';
+        await _ensureOptimizedContext(token);
+        _check(token);
+        stage = 'raw';
         AppLogger.info('Début narration RAW', component: 'chat');
         final before = diagnostics?.last;
         Object? failed;
