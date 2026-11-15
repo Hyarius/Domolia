@@ -7,7 +7,7 @@ import 'dialogue_parts.dart';
 /// Dart owns the original text and reconstructs every character unchanged.
 const jsonifierSystemPrompt = '''
 Tu es le JSONificateur de Domolia. Tu ne rédiges AUCUNE histoire.
-Renvoie uniquement un objet JSON : {"events":[...]}.
+Renvoie uniquement un objet JSON : {"events":[...],"compact":"..."}.
 Domolia découpe le RAW en PARTIES numérotées exactes, certaines étant des
 citations entre « » ; tu n'as ni texte ni indices de caractères à inventer.
 Renvoie EXACTEMENT un événement "part" par partie, dans l'ordre, sans omission.
@@ -37,11 +37,72 @@ Le "kind" vaut "narration", "dialogue" ou "aside".
   jamais le joueur. Une citation non attribuable peut rester en narration.
 - "scene_change" se place juste AVANT une partie en cas de rupture majeure
   de lieu, temps ou séquence, pas au simple changement de locuteur.
+- "compact" : mémoire narrative FACTUELLE et très brève du RAW pour le prochain
+  narrateur, sans style littéraire. Conserve lieu, personnes impliquées,
+  nouvelles informations, actions réalisées, émotions importantes et questions
+  ouvertes. Mentionne précisément qui a dit ou fait quoi, sans attribuer
+  d'action ou parole au joueur s'il n'en a pas produit dans le RAW.
+  Ne transforme jamais une hypothèse, une promesse ou un événement prévu
+  en fait accompli. N'invente aucun détail et ne donne aucune instruction.
+  Privilégie des phrases courtes ; vise 25 à 45 % du RAW, au plus 1200
+  caractères. Omets "compact" si le RAW est déjà très bref ou si tu ne
+  peux pas le condenser fidèlement.
 N'ajoute jamais "text", start/end, commentaire, Markdown, ni autres champs.
 ''';
 
+/// Complete formatter output, keeping the source narrative independent
+/// from its optional, non-authoritative future context.
+class JsonificationResult {
+  const JsonificationResult({required this.events, this.compact});
+  final List<ChatOutputEvent> events;
+  final String? compact;
+}
+
 class Jsonifier {
   const Jsonifier();
+
+  /// The optional memory is advisory. Its failure must never invalidate
+  /// otherwise correct bubbles or cause regeneration of the narrator's RAW.
+  JsonificationResult decodeWithMemory(
+    String raw,
+    String response, {
+    Iterable<String> knownCharacters = const [],
+    bool hasPreviousScene = true,
+  }) {
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(response.trim());
+    } catch (_) {
+      throw const FormatException('JSONification : réponse JSON malformée.');
+    }
+    if (decoded is! Map<String, dynamic> ||
+        decoded['events'] is! List ||
+        decoded.keys.any((key) => key != 'events' && key != 'compact')) {
+      throw const FormatException('JSONification : enveloppe invalide.');
+    }
+    final events = decode(
+      raw, jsonEncode({'events': decoded['events']}),
+      knownCharacters: knownCharacters,
+      hasPreviousScene: hasPreviousScene,
+    );
+    final compact = _validatedCompact(raw, decoded['compact']);
+    return JsonificationResult(events: events, compact: compact);
+  }
+
+  String? _validatedCompact(String raw, dynamic proposed) {
+    if (proposed is! String || raw.trim().length < 180) return null;
+    final candidate = proposed.trim();
+    // An inexact, expensive or suspicious summary is never preferred
+    // to the durable RAW (which is not changed by this method).
+    if (candidate.length < 25 || candidate.length > 1200 ||
+        candidate.length * 10 > raw.trim().length * 8 ||
+        RegExp(r'[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]')
+            .hasMatch(candidate) ||
+        candidate == raw.trim()) {
+      return null;
+    }
+    return candidate;
+  }
 
   /// Split RAW into exact, immutable narrative paragraphs. Trailing separators
   /// belong to the preceding paragraph, including CRLF and blank-line spaces.
