@@ -28,6 +28,7 @@ class _Provider implements AiChatProvider {
   String? structured;
   int rawCalls = 0;
   int formatCalls = 0;
+  final outputBudgets = <int>[];
   bool failRaw = false;
   bool failFormat = false;
   List<AiMessage>? narrativeContext;
@@ -42,6 +43,7 @@ class _Provider implements AiChatProvider {
   Future<String> complete(AiConfiguration config, {
     required List<AiMessage> messages, int maxTokens = 1200,
   }) async {
+    outputBudgets.add(maxTokens);
     if (messages.first.content.contains('JSONificateur')) {
       formatCalls++;
       formatterContext = messages;
@@ -84,6 +86,7 @@ class _ContextProvider implements AiChatProvider {
   _ContextProvider(this.summary);
   String summary;
   int calls = 0;
+  final outputBudgets = <int>[];
   @override
   Future<List<AiModel>> listModels(AiConfiguration config) async => const [];
   @override
@@ -91,6 +94,7 @@ class _ContextProvider implements AiChatProvider {
     required List<AiMessage> messages, int maxTokens = 1200,
   }) async {
     calls++;
+    outputBudgets.add(maxTokens);
     expect(messages.first.content, contains('compresseur'));
     return summary;
   }
@@ -579,6 +583,48 @@ void main() {
       contains('CANON DU MONDE'));
     expect(provider.narrativeContext!.first.content,
       isNot(contains('LORE CANONIQUE RÉSUMÉ')));
+  });
+
+  test('All three real pipeline stages use independent output budgets', () async {
+    final source = _largeLore();
+    final summary = 'Skogheim Astrid. ' +
+        List.filled(80, 'Vie quotidienne').join(' ');
+    final optimizer = _ContextProvider(summary);
+    final formatter = _Provider()..structured = format(provider.raw);
+    const config = AiConfiguration(
+      baseUrl: defaultAiBaseUrl, model: 'gpt-5.6-luna',
+      apiKey: 'test-only',
+    );
+    final local = NarrativeChatController(
+      provider: provider, configuration: () => config,
+      loreProvider: () => source,
+      resolveConnection: () async => NarrativeAiEndpoint(
+        provider: provider,
+        configuration: config.withReasoning('low'),
+        maxOutputTokens: 8192,
+      ),
+      resolveFormatterConnection: () async => NarrativeAiEndpoint(
+        provider: formatter,
+        configuration: config.withReasoning('none'),
+        maxOutputTokens: 4096,
+      ),
+      resolveOptimizerConnection: () async => NarrativeAiEndpoint(
+        provider: optimizer,
+        configuration: config.withReasoning('low'),
+        maxOutputTokens: 16384,
+      ),
+    );
+    addTearDown(local.dispose);
+    await local.send('Bonjour');
+    expect(optimizer.outputBudgets, [16384]);
+    expect(provider.outputBudgets, [8192]);
+    expect(formatter.outputBudgets, [4096]);
+    expect(local.messages.last.text, provider.raw);
+    await local.send('Encore');
+    expect(optimizer.outputBudgets, [16384],
+      reason: 'Never redo a successful compilation per scene.');
+    expect(provider.outputBudgets, [8192, 8192]);
+    expect(formatter.outputBudgets, [4096, 4096]);
   });
 
 }
