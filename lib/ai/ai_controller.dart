@@ -447,6 +447,67 @@ class AiConnectionController extends ChangeNotifier {
     }
   }
 
+  /// Managed OpenUncensored profiles have stable IDs so existing Books and
+  /// Parts can keep their references. Legacy profiles are never deleted.
+  static const ouNarratorProfileId = 'openuncensored-managed-narrator';
+  static const ouJsonifierProfileId = 'openuncensored-managed-jsonifier';
+  static const ouOptimizerProfileId = 'openuncensored-managed-optimizer';
+
+  Future<bool> configureOpenUncensored(
+    String key, {
+    required String narratorModel,
+    required String jsonifierModel,
+    required String optimizerModel,
+  }) async {
+    if (_closed || busy || !initialized ||
+        !key.startsWith('ou-') || key.length < 11) return false;
+    busy = true;
+    _notify();
+    try {
+      final selectedModels = <String, String>{
+        ouNarratorProfileId: validatedAiModel(narratorModel),
+        ouJsonifierProfileId: validatedAiModel(jsonifierModel),
+        ouOptimizerProfileId: validatedAiModel(optimizerModel),
+      };
+      final next = List<AiProfile>.of(_profiles);
+      for (final entry in selectedModels.entries) {
+        final replacement = AiProfile(
+          id: entry.key,
+          name: switch (entry.key) {
+            ouNarratorProfileId => 'OpenUncensored · Narrateur',
+            ouJsonifierProfileId => 'OpenUncensored · JSONificateur',
+            _ => 'OpenUncensored · Optimiseur',
+          },
+          baseUrl: defaultAiBaseUrl,
+          model: entry.value,
+          apiKey: key,
+          nsfwCompatibility: AiNsfwCompatibility.supported,
+        );
+        final index = next.indexWhere((profile) => profile.id == entry.key);
+        if (index < 0) {
+          next.add(replacement);
+        } else {
+          next[index] = replacement;
+        }
+      }
+      await store.write(AiProfilesState(
+        profiles: next, selectedId: ouNarratorProfileId));
+      _profiles = next;
+      _selectedId = ouNarratorProfileId;
+      for (final id in selectedModels.keys) {
+        _invalidate(id);
+      }
+      message = null;
+      return true;
+    } catch (_) {
+      message = 'Impossible d’enregistrer les modèles OpenUncensored.';
+      return false;
+    } finally {
+      busy = false;
+      _notify();
+    }
+  }
+
   Future<void> removeKey() async {
     if (_closed || busy) return;
     busy = true;
