@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 BookLore sampleLore({bool changed = false}) => BookLore(
   global: LoreGlobal(
     universe: 'Skogheim',
-    overview: List.filled(850, 'Abbaye, fjord, bois et froid').join(' '),
+    overview: List.filled(650, 'Abbaye, fjord, bois et froid').join(' '),
     rules: changed ? 'La neige est tombée' : 'La neige approche',
   ),
   characters: const [
