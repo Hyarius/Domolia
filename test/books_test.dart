@@ -4,6 +4,7 @@ import 'package:domolia/ai/ai_controller.dart';
 import 'package:domolia/ai/ai_diagnostics.dart';
 import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/books/book_definition.dart';
+import 'package:domolia/books/book_lore.dart';
 import 'package:domolia/books/book_editor_page.dart';
 import 'package:domolia/books/book_library_controller.dart';
 import 'package:domolia/books/book_library_page.dart';
@@ -545,6 +546,122 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('La configuration précédente a été supprimée.'),
       findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+
+  testWidgets('Session settings export the current canonical Book JSON beside chat export',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 780);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final store = _MemoryBooks();
+    final library = BookLibraryController(store: store);
+    addTearDown(library.dispose);
+    await library.initialize();
+    final book = await library.create('Skogheim');
+    final session = await library.newSession(book);
+    await library.setProfile(book.id, 'secret-local-profile-id');
+    await library.save(book.copyWith(lore: const BookLore(
+      global: LoreGlobal(universe: 'Skogheim', rules: 'La paix du foyer.'),
+      characters: [LoreCharacter(id: 'astrid', name: 'Astrid')],
+    )));
+    final ai = AiConnectionController(
+      store: _Profiles(const AiProfilesState(
+        profiles: [_profile], selectedId: 'profile-1',
+      )), provider: _NoNetwork(),
+    );
+    addTearDown(ai.dispose);
+    final chat = NarrativeChatController(
+      provider: _NoNetwork(), configuration: () => null,
+    );
+    addTearDown(chat.dispose);
+    chat.restoreTimeline(const [
+      ChatEntry(id: 0, speaker: ChatSpeaker.player,
+        name: 'Vous', text: 'Conversation privée'),
+    ]);
+    String? savedName;
+    String? exported;
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: Scaffold(body: ConversationSettingsPage(
+        library: library, ai: ai, chat: chat,
+        bookId: book.id, sessionId: session.id,
+        onBack: () {},
+        onExportBookJson: (name, bytes) async {
+          savedName = name;
+          exported = utf8.decode(bytes);
+        },
+      )),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('conversationExport')), findsOneWidget);
+    expect(find.byKey(const ValueKey('bookRawExport')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('bookRawExport')));
+    await tester.tap(find.byKey(const ValueKey('bookRawExport')));
+    await tester.pumpAndSettle();
+
+    expect(savedName, 'Skogheim.json');
+    final restored = BookDefinition.importJson(exported!);
+    expect(restored.title, 'Skogheim');
+    expect(restored.lore.global.universe, 'Skogheim');
+    expect(restored.lore.characters.single.name, 'Astrid');
+    expect(exported!, isNot(contains('secret-local-profile-id')));
+    expect(exported!, isNot(contains('private-api-secret')));
+    expect(exported!, isNot(contains('Conversation privée')));
+    expect(exported!, isNot(contains(session.id)));
+    expect(tester.takeException(), isNull);
+
+    // The active Book may have changed since this settings screen opened.
+    await library.save(library.byId(book.id)!.copyWith(
+      lore: const BookLore(global: LoreGlobal(universe: 'Skogheim renouvelé')),
+    ));
+    await tester.tap(find.byKey(const ValueKey('bookRawExport')));
+    await tester.pumpAndSettle();
+    expect(BookDefinition.importJson(exported!).lore.global.universe,
+      'Skogheim renouvelé');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Session export of a deleted Book fails safely',
+      (tester) async {
+    final store = _MemoryBooks();
+    final library = BookLibraryController(store: store);
+    addTearDown(library.dispose);
+    await library.initialize();
+    final book = await library.create('Supprimé');
+    final session = await library.newSession(book);
+    final ai = AiConnectionController(
+      store: _Profiles(const AiProfilesState(
+        profiles: [_profile], selectedId: 'profile-1',
+      )), provider: _NoNetwork(),
+    );
+    addTearDown(ai.dispose);
+    final chat = NarrativeChatController(
+      provider: _NoNetwork(), configuration: () => null,
+    );
+    addTearDown(chat.dispose);
+    var called = false;
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: Scaffold(body: ConversationSettingsPage(
+        library: library, ai: ai, chat: chat,
+        bookId: book.id, sessionId: session.id,
+        onBack: () {},
+        onExportBookJson: (_, _) async { called = true; },
+      )),
+    ));
+    await tester.pumpAndSettle();
+    await library.remove(book.id);
+    await tester.ensureVisible(find.byKey(const ValueKey('bookRawExport')));
+    await tester.tap(find.byKey(const ValueKey('bookRawExport')));
+    await tester.pumpAndSettle();
+    expect(called, false);
+    expect(find.text('Livre introuvable.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
