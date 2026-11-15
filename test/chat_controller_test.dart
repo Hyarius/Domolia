@@ -650,8 +650,8 @@ void main() {
     expect(provider.rawCalls, 1);
     expect(provider.formatCalls, 1);
     final formattedRequest = provider.formatterContext![1].content;
-    expect(formattedRequest, contains('Bloc 0 :'));
-    expect(formattedRequest, contains('Bloc 3 :'));
+    expect(formattedRequest, contains('Partie 0 (prose)'));
+    expect(formattedRequest, contains('Partie 6 (citation)'));
     expect(formattedRequest, isNot(contains('UTF-16')));
     expect(chat.pendingRaw, isNull);
   });
@@ -681,6 +681,31 @@ void main() {
     expect(provider.rawCalls, 1);
     expect(provider.formatCalls, 2);
     expect(chat.messages.skip(1).map((e) => e.text).join(), provider.raw);
+  });
+
+  test('Pipeline persists clean split dialogue, emotion and original RAW',
+      () async {
+    provider.raw = 'Liv, étonnée : « Quoi ?! » ajouta-t-elle. '
+        '« Ce n’est pas possible ! »';
+    provider.structured = jsonEncode({'events': [
+      {'type': 'part', 'part': 0, 'kind': 'aside'},
+      {'type': 'part', 'part': 1, 'kind': 'dialogue',
+        'name': 'Liv', 'status': 'étonnée'},
+      {'type': 'part', 'part': 2, 'kind': 'aside'},
+      {'type': 'part', 'part': 3, 'kind': 'dialogue',
+        'name': 'Liv', 'status': 'incrédule'},
+    ]});
+    await chat.send('Que se passe-t-il ?');
+    expect(chat.error, isNull);
+    final speeches = chat.messages.skip(1).toList();
+    expect(speeches.map((e) => e.name), ['Liv', 'Liv']);
+    expect(speeches.map((e) => e.text),
+        ['Quoi ?!', 'Ce n’est pas possible !']);
+    expect(speeches.map((e) => e.status), ['étonnée', 'incrédule']);
+    expect(chat.rawGenerations.single.rawText, provider.raw);
+    expect(chat.rawGenerations.single.isStructured, isTrue);
+    expect(provider.formatterContext![1].content,
+        contains('Partie 1 (citation)'));
   });
 
 }
