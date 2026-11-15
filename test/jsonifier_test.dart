@@ -226,4 +226,78 @@ void main() {
     }
   });
 
+  test('Dart splits paragraphs and preserves all whitespace and Unicode', () {
+    const raw = '  🌧️ La porte.\\r\\n\\r\\n'
+        'Astrid : « Bienvenue ! »\\n  \\n'
+        'Liv sourit.\\n\\n'
+        'Runa : « Bonjour. »  ';
+    final blocks = decoder.blocks(raw);
+    expect(blocks, hasLength(4));
+    expect(blocks.join(), raw);
+    expect(blocks.first, startsWith('  🌧️'));
+    expect(decoder.blocksForPrompt(raw), contains('Bloc 2'));
+    expect(decoder.blocksForPrompt(raw), contains('\\\\r\\\\n'));
+  });
+
+  test('Numbered block response reproduces the RAW, not AI text offsets', () {
+    const raw = 'Les pierres sont froides.\\n\\n'
+        'Astrid : « Entrez. »\\n\\n'
+        'La cheminée fume.\\n\\n'
+        'Runa : « Un peu de thé ? »';
+    expect(decoder.blocks(raw), hasLength(4));
+    final converted = decoder.decode(raw, response([
+      {'type': 'message', 'block': 0,
+       'speaker': 'narrator', 'name': 'Narrateur'},
+      {'type': 'message', 'block': 1,
+       'speaker': 'character', 'name': 'Astrid'},
+      {'type': 'scene_change', 'before': 2},
+      {'type': 'message', 'block': 2,
+       'speaker': 'narrator', 'name': 'Narrateur'},
+      {'type': 'message', 'block': 3,
+       'speaker': 'character', 'name': 'Runa'},
+    ]));
+    expect(converted.whereType<ChatLine>().map((e) => e.text).join(), raw);
+    expect(converted.whereType<ChatSceneChangeOutput>(), hasLength(1));
+    expect(converted.whereType<ChatLine>().map((e) => e.name),
+      ['Narrateur', 'Astrid', 'Narrateur', 'Runa']);
+  });
+
+  test('Block references reject invented IDs, gaps, repeats and scene errors', () {
+    const raw = 'Un couloir.\\n\\nUne porte.';
+    Map<String, dynamic> msg(int block, {String name = 'Narrateur',
+        String role = 'narrator'}) => {
+      'type': 'message', 'block': block, 'speaker': role, 'name': name,
+    };
+    for (final items in <List<Map<String, dynamic>>>[
+      [msg(1), msg(0)],
+      [msg(0)],
+      [msg(0), msg(0), msg(1)],
+      [msg(-1), msg(1)],
+      [msg(0), msg(999)],
+      [msg(0), {'type': 'scene_change', 'before': 1},
+       {'type': 'scene_change', 'before': 1}, msg(1)],
+      [msg(0), msg(1), {'type': 'scene_change', 'before': 1}],
+      [{'type': 'message', 'block': 0, 'start': 0,
+        'speaker': 'narrator', 'name': 'Narrateur'}, msg(1)],
+      [msg(0, role: 'character', name: 'Inconnu'), msg(1)],
+    ]) {
+      expect(() => decoder.decode(raw, response(items)),
+        throwsFormatException);
+    }
+  });
+
+  test('Very many short RAW paragraphs are grouped to a bounded block count',
+      () {
+    final raw = List.filled(250, 'Une phrase.').join('\\n\\n');
+    final blocks = decoder.blocks(raw);
+    expect(blocks.length, lessThanOrEqualTo(80));
+    expect(blocks.join(), raw);
+    final rendered = decoder.decode(raw, response([
+      for (var i = 0; i < blocks.length; i++)
+        {'type': 'message', 'block': i,
+         'speaker': 'narrator', 'name': 'Narrateur'},
+    ]));
+    expect(rendered.whereType<ChatLine>().map((e) => e.text).join(), raw);
+  });
+
 }
