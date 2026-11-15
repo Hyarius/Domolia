@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:domolia/ai/ai_controller.dart';
 import 'package:domolia/ai/ai_diagnostics.dart';
 import 'package:domolia/ai/ai_provider.dart';
+import 'package:domolia/ai/ai_task_generation.dart';
 import 'package:domolia/books/book_definition.dart';
 import 'package:domolia/books/book_lore.dart';
 import 'package:domolia/books/book_editor_page.dart';
@@ -861,6 +862,68 @@ void main() {
     expect(exported, isNot(contains('#disabled')));
     expect(exported, isNot(contains('fmt')));
     expect(exported, isNot(contains(session.id)));
+  });
+
+  testWidgets('A Party overrides JSONifier token and reasoning independently',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 950);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final library = BookLibraryController(store: _MemoryBooks());
+    addTearDown(library.dispose);
+    await library.initialize();
+    final book = await library.create('Lune du Nord');
+    final session = await library.newSession(book);
+    final ai = AiConnectionController(
+      store: _Profiles(const AiProfilesState(
+        profiles: [_profile], selectedId: 'profile-1',
+      )), provider: _NoNetwork(),
+    );
+    addTearDown(ai.dispose);
+    final chat = NarrativeChatController(
+      provider: _NoNetwork(), configuration: () => null,
+    );
+    addTearDown(chat.dispose);
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: Scaffold(body: ConversationSettingsPage(
+        library: library, ai: ai, chat: chat, bookId: book.id,
+        sessionId: session.id, onBack: () {},
+      )),
+    ));
+    await tester.pumpAndSettle();
+
+    final token = find.byKey(
+        const ValueKey('conversationTokens-jsonifier-0'));
+    await tester.scrollUntilVisible(token, 230);
+    await tester.ensureVisible(token);
+    await tester.pumpAndSettle();
+    await tester.tap(token);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('8192 tokens').last);
+    await tester.pumpAndSettle();
+    var stored = (await library.session(session.id))!;
+    expect(stored.generationOverrides[AiNarrativeTask.jsonifier]!
+        .maxOutputTokens, 8192);
+    expect(stored.generationOverrides[AiNarrativeTask.narrator], isNull);
+
+    final reasoning = find.byKey(
+      const ValueKey('conversationReasoning-jsonifier-'));
+    await tester.scrollUntilVisible(reasoning, 200);
+    await tester.ensureVisible(reasoning);
+    await tester.pumpAndSettle();
+    await tester.tap(reasoning);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('NONE').last);
+    await tester.pumpAndSettle();
+    stored = (await library.session(session.id))!;
+    expect(stored.generationOverrides[AiNarrativeTask.jsonifier]!
+        .reasoningEffort, 'none');
+    expect(stored.generationOverrides[AiNarrativeTask.narrator], isNull);
+    expect(tester.takeException(), isNull);
   });
 
 }
