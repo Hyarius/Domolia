@@ -221,6 +221,26 @@ class _BookLoreTabState extends State<BookLoreTab> {
     await _commit(next);
   }
 
+  Future<void> _duplicate(String category, LoreRecord record) async {
+    final source = switch (record) {
+      LoreCharacter c => c.toJson(),
+      LorePlace p => p.toJson(),
+      LoreScenario s => s.toJson(),
+      LoreEvent e => e.toJson(),
+      _ => <String, Object?>{},
+    };
+    final copy = {...source, 'id': newLoreId(),
+      'name': '${record.name} (copie)'};
+    final next = switch (category) {
+      'characters' => widget.lore.putCharacter(LoreCharacter.fromJson(copy)),
+      'places' => widget.lore.putPlace(LorePlace.fromJson(copy)),
+      'scenarios' => widget.lore.putScenario(LoreScenario.fromJson(copy)),
+      'events' => widget.lore.putEvent(LoreEvent.fromJson(copy)),
+      _ => widget.lore,
+    };
+    await _commit(next);
+  }
+
   Future<void> _delete(String category, LoreRecord record) async {
     final incoming = widget.lore.referencesTo(record.id);
     final confirmed = await showDialog<bool>(context: context,
@@ -337,12 +357,20 @@ class _BookLoreTabState extends State<BookLoreTab> {
                     .where((s)=>s.isNotEmpty).join(' · '),
                     maxLines:2,overflow:TextOverflow.ellipsis),
                   onTap:() => _edit(key,record),
-                  trailing:IconButton(
-                    key:ValueKey('loreDelete-${record.id}'),
-                    icon:const Icon(Icons.delete_outline),
-                    tooltip:'Supprimer ${record.name}',
-                    onPressed:() => _delete(key,record),
-                  ),
+                  trailing:Row(mainAxisSize:MainAxisSize.min,children:[
+                    IconButton(
+                      key:ValueKey('loreDuplicate-${record.id}'),
+                      icon:const Icon(Icons.copy_outlined),
+                      tooltip:'Dupliquer ${record.name}',
+                      onPressed:() => _duplicate(key,record),
+                    ),
+                    IconButton(
+                      key:ValueKey('loreDelete-${record.id}'),
+                      icon:const Icon(Icons.delete_outline),
+                      tooltip:'Supprimer ${record.name}',
+                      onPressed:() => _delete(key,record),
+                    ),
+                  ]),
                 );
               },
             )),
