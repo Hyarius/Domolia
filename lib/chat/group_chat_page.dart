@@ -773,7 +773,7 @@ class _ChatBubble extends StatelessWidget {
 /// already-clean speeches; the literary RAW is always available separately.
 String _characterText(String text, String name) {
   var visible = text.trim();
-  final prefix = RegExp('^' + RegExp.escape(name) + r'\s*[:：]\s*',
+  final prefix = RegExp('^${RegExp.escape(name)}' r'\s*[:：]\s*',
       caseSensitive: false);
   visible = visible.replaceFirst(prefix, '');
   return visible.replaceAll('«', '').replaceAll('»', '').trim();
