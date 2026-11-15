@@ -156,8 +156,10 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
     try {
       balance = await widget.controller.api.balance(key);
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Impossible de vérifier cette clé. Rien n’a été modifié.')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Impossible de vérifier cette clé. Rien n’a été modifié.')));
+      }
       return;
     }
     if (!mounted) return;
@@ -182,7 +184,9 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
   Future<void> _showKey(String id) async {
     if (!await _confirm('Afficher la clé privée ?',
         'Quiconque possède cette clé peut dépenser ses crédits. '
-        'Évitez les captures d’écran et ne la partagez pas.')) return;
+        'Évitez les captures d’écran et ne la partagez pas.')) {
+      return;
+    }
     final key = widget.controller.revealKey(id);
     if (!mounted || key == null) return;
     await showDialog<void>(context: context, builder: (ctx) => AlertDialog(
@@ -287,9 +291,11 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
       const SizedBox(height: 12),
       OutlinedButton(onPressed: controller.busy ? null : () async {
         await controller.loadModels();
-        if (mounted) setState(() {
-          _advanced = Map.of(controller.taskModels);
-        });
+        if (mounted) {
+          setState(() {
+            _advanced = Map.of(controller.taskModels);
+          });
+        }
       }, child: const Text('Actualiser les modèles')),
       ExpansionTile(title: const Text('Modèles avancés'), children: [
         if (options.isEmpty) const Padding(
@@ -469,9 +475,13 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
               'Copiez-la maintenant avant de fermer l’application.'),
             FilledButton(onPressed: () async {
               if (!await _confirm('Copier la clé de secours ?',
-                'Copiez la clé uniquement dans un emplacement sécurisé.')) return;
+                'Copiez la clé uniquement dans un emplacement sécurisé.')) {
+                return;
+              }
               final secret = controller.emergencyKeyForManualRecovery();
-              if (secret != null) await Clipboard.setData(ClipboardData(text: secret));
+              if (secret != null) {
+                await Clipboard.setData(ClipboardData(text: secret));
+              }
             }, child: const Text('Copier la clé de secours')),
           ],
           const SizedBox(height: 10),
