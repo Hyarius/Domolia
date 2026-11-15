@@ -62,7 +62,8 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
     await db.execute(
       'CREATE TABLE raw_generations ('
       'session_id TEXT NOT NULL, player_event_id INTEGER NOT NULL, '
-      'raw_text TEXT NOT NULL, first_event_id INTEGER, last_event_id INTEGER, '
+      'raw_text TEXT NOT NULL, compact_text TEXT, '
+      'first_event_id INTEGER, last_event_id INTEGER, '
       'PRIMARY KEY(session_id, player_event_id), '
       'FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE)',
     );
@@ -79,6 +80,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
         RawGeneration(
           playerEventId: row['player_event_id'] as int,
           rawText: row['raw_text'] as String,
+          compactText: row['compact_text'] as String?,
           firstEventId: row['first_event_id'] as int?,
           lastEventId: row['last_event_id'] as int?,
         ),
@@ -107,6 +109,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
           'session_id': session.id,
           'player_event_id': raw.playerEventId,
           'raw_text': raw.rawText,
+          'compact_text': raw.compactText,
           'first_event_id': raw.firstEventId,
           'last_event_id': raw.lastEventId,
         });
@@ -133,7 +136,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
     return _db ??= await (_factoryOverride ?? databaseFactory).openDatabase(
       location,
       options: OpenDatabaseOptions(
-      version: 6,
+      version: 7,
       onConfigure: (db) async =>
           db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, version) async {
@@ -174,6 +177,11 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
         }
         if (oldVersion < 6) {
           await db.execute('ALTER TABLE sessions ADD COLUMN generation_options_json TEXT');
+        }
+        // Older migrations (<4) create the table using the new schema.
+        if (oldVersion >= 4 && oldVersion < 7) {
+          await db.execute(
+            'ALTER TABLE raw_generations ADD COLUMN compact_text TEXT');
         }
       },
       ),
