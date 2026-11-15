@@ -49,6 +49,7 @@ class NarrativeReferenceTools {
         'player_event_id': {'type': 'integer'},
         'event_id': {'type': 'integer'},
         'count': {'type': 'integer', 'minimum': 1, 'maximum': 3},
+        'raw_offset': {'type': 'integer', 'minimum': 0, 'maximum': 131072},
       },
     }),
   ];
@@ -272,7 +273,9 @@ class NarrativeReferenceTools {
   String _getHistory(Map<String, dynamic> input) {
     final id = input['player_event_id'] ?? input['event_id'];
     final count = input['count'] ?? 1;
-    if (id is! int || id < 0 || count is! int || count < 1 || count > 3) {
+    final rawOffset = input['raw_offset'] ?? 0;
+    if (id is! int || id < 0 || count is! int || count < 1 || count > 3 ||
+        rawOffset is! int || rawOffset < 0 || rawOffset > 131072) {
       throw const FormatException('Invalid turn ID or count (maximum 3)');
     }
     final turns = _turns();
@@ -298,7 +301,17 @@ class NarrativeReferenceTools {
           {
             'player_event_id': t.player.id,
             'player_message': _short(t.player.text),
-            if (t.raw != null) 'raw_original': _short(t.raw!.rawText),
+            if (t.raw != null) ...{
+              'raw_total_characters': t.raw!.rawText.length,
+              'raw_offset': rawOffset,
+              'raw_original': t.raw!.rawText.substring(
+                rawOffset.clamp(0, t.raw!.rawText.length),
+                (rawOffset + (count == 1 ? 4500 : 1250))
+                    .clamp(0, t.raw!.rawText.length),
+              ),
+              'raw_truncated': rawOffset +
+                  (count == 1 ? 4500 : 1250) < t.raw!.rawText.length,
+            },
             if (t.raw?.compactText != null)
               'compact': _short(t.raw!.compactText),
             if (t.raw == null)
