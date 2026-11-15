@@ -56,9 +56,13 @@ class BackupProfile {
     final name = m['name'] as String;
     final base = m['baseUrl'] as String;
     final model = m['model'] as String;
+    final uri = Uri.tryParse(base);
     if (!_identifier.hasMatch(id) || name.trim().isEmpty ||
-        name.length > 60 || base.length > 2048 || model.isEmpty ||
-        model.length > 250 || base.contains('@')) {
+        name.length > 60 || name.contains(RegExp(r'[\r\n]')) ||
+        base.length > 2048 || model.isEmpty || model.length > 250 ||
+        uri == null || !uri.hasAuthority || uri.host.isEmpty ||
+        (uri.scheme != 'https' && uri.scheme != 'http') ||
+        uri.userInfo.isNotEmpty || uri.hasQuery || uri.hasFragment) {
       throw const FormatException('Profil IA de sauvegarde invalide.');
     }
     final kind = AiProviderKind.values
@@ -121,6 +125,20 @@ class BackupSession {
       date = DateTime.parse(m['updatedAtUtc'] as String).toUtc();
     } catch (_) {
       throw const FormatException('Date de Partie invalide.');
+    }
+    // Unknown nested fields might hide data that must not be transported.
+    for (final entry in m['timeline'] as List) {
+      if (entry is! Map<String, dynamic>) {
+        throw const FormatException('Événement de Partie invalide.');
+      }
+      final type = entry['type'];
+      if (type == 'scene_change') {
+        _object(entry, {'id', 'type'});
+      } else if (type == 'message') {
+        _object(entry, {'id', 'type', 'speaker', 'name', 'text'});
+      } else {
+        throw const FormatException('Événement de Partie inconnu.');
+      }
     }
     final timeline = BookSession.decodeTimeline(jsonEncode(m['timeline']));
     return BackupSession(

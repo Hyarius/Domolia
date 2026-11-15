@@ -113,6 +113,18 @@ void main() {
     preferences['preferences'] = {'apiKey': sensitive};
     expect(() => PortableBackup.decode(corrupt(preferences)),
         throwsFormatException);
+
+    final tokenInUrl = jsonDecode(jsonEncode(source)) as Map<String, dynamic>;
+    (tokenInUrl['aiProfiles'] as List).first['baseUrl'] =
+        'https://example.org/v1?token=SECRET';
+    expect(() => PortableBackup.decode(corrupt(tokenInUrl)),
+        throwsFormatException);
+
+    final unknownEvent = jsonDecode(jsonEncode(source)) as Map<String, dynamic>;
+    (unknownEvent['sessions'] as List).first['timeline'][0]['refreshToken'] =
+        sensitive;
+    expect(() => PortableBackup.decode(corrupt(unknownEvent)),
+        throwsFormatException);
   });
 
   test('export and restore cross-device; import idempotent and secret-free',
