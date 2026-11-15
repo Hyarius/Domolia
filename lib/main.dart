@@ -419,6 +419,12 @@ class _HomePageState extends State<HomePage> {
                   sessionId: _activeSessionId!,
                   bookTitle: _activeBookTitle,
                   sessionTitle: _activeSessionTitle,
+                  onLoadAiDiagnostics: () async {
+                    final id = _activeSessionId;
+                    if (id == null) return <StoredAiDiagnostic>[];
+                    await _awaitSessionWrites?.call();
+                    return _books.diagnostics(id);
+                  },
                   onBack: () => setState(() => _page = _Page.chat),
                 )
           : _page == _Page.about ? _buildAbout()
