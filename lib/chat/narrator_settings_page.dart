@@ -131,7 +131,7 @@ class _NarratorSettingsPageState extends State<NarratorSettingsPage> {
                   height: 1.4,
                 ),
               ),
-              const SizedBox(height: 22),
+              const SizedBox(height: DomoliaSpacing.section),
               FilledButton.icon(
                 key: const ValueKey('narratorSave'),
                 onPressed: settings.busy ? null : _save,

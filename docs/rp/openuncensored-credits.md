@@ -116,3 +116,9 @@ et la persistance fictives, jamais un prélèvement réel.
 Les formulaires actifs utilisent les constantes `DomoliaSpacing` :
 `compact=12`, `field=16`, `section=24` points logiques. Les champs des
 budgets, des livres, du lore et des réglages ont des séparations cohérentes.
+
+L'harmonisation est étendue aux pages actives : paramètres généraux,
+éditeur de Livre, bibliothèque, Lore, conversation, gestion des crédits,
+configuration IA historique, journal et mises à jour. Les espaces sont
+appliqués entre les groupes et les champs sans agrandir la zone de saisie
+du chat ni les contrôles de navigation compacte.

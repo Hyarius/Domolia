@@ -278,11 +278,12 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
           if (active) const Text('ACTIVE', style: TextStyle(color: DomoliaColors.gold)),
         ]),
         if (item.name.isNotEmpty) Text(item.masked),
-        const SizedBox(height: 8),
+        const SizedBox(height: DomoliaSpacing.compact),
         Text('Solde : ${_usd(item.lastBalance?.remainingUsd)}'),
         Text('Dernière vérification : ${item.lastChecked?.toLocal().toString().split(".").first ?? "Jamais"}',
           style: const TextStyle(color: DomoliaColors.muted)),
-        Wrap(spacing: 3, runSpacing: 0, children: [
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: [
           TextButton(onPressed: widget.controller.busy ? null :
             () => widget.controller.refresh(item.id),
             child: const Text('Actualiser')),
@@ -306,7 +307,7 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const Text('Qualité narrative', style: TextStyle(
         color: DomoliaColors.goldLight, fontSize: 18)),
-      const SizedBox(height: 10),
+      const SizedBox(height: DomoliaSpacing.field),
       DropdownButtonFormField<OuQuality>(
         key: ValueKey('ouPreset-${controller.quality.name}'),
         initialValue: controller.quality == OuQuality.advanced ?
@@ -326,11 +327,11 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
           if (value != null) unawaited(controller.setPreset(value));
         },
       ),
-      const SizedBox(height: 8),
+      const SizedBox(height: DomoliaSpacing.compact),
       const Text('Le mode Économique désactive l’optimiseur facultatif. '
         'Les prix et modèles sont consultés auprès du fournisseur.',
         style: TextStyle(color: DomoliaColors.muted)),
-      const SizedBox(height: 12),
+      const SizedBox(height: DomoliaSpacing.field),
       OutlinedButton(onPressed: controller.busy ? null : () async {
         await controller.loadModels();
         if (mounted) {
@@ -339,6 +340,7 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
           });
         }
       }, child: const Text('Actualiser les modèles')),
+      const SizedBox(height: DomoliaSpacing.compact),
       ExpansionTile(title: const Text('Modèles avancés'), children: [
         if (options.isEmpty) const Padding(
           padding: EdgeInsets.all(12),
@@ -349,7 +351,7 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
                 task != 'narrator' || model.toolCompatible).toList();
             final selected = _advanced[task];
             return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
               child: eligible.isEmpty ?
                 Text(task == 'narrator'
                   ? 'Aucun narrateur déclaré compatible tool calling par le catalogue.'
@@ -375,7 +377,7 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
                   ),
             );
           }),
-        const SizedBox(height: 8),
+        const SizedBox(height: DomoliaSpacing.field),
         FilledButton(
           onPressed: !enabled || !['narrator','jsonifier','optimizer']
             .every((task) => _advanced.containsKey(task)) ? null :
@@ -476,7 +478,7 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
             if (active.lastBalance != null)
               Text('Consommation en attente : ${_usd(active.lastBalance!.pendingUsd)}'),
             Text('Actualisé : ${active.lastChecked?.toLocal().toString().split(".").first ?? "Jamais"}'),
-            const SizedBox(height: 8),
+            const SizedBox(height: DomoliaSpacing.compact),
             OutlinedButton(onPressed: controller.busy ? null :
               () => controller.refresh(active.id),
               child: const Text('Actualiser le solde')),
@@ -489,7 +491,7 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
             ? 'Montants et soldes fictifs. Aucun paiement ne sera lancé.'
             : 'Montants en USD avant taxes éventuelles. '
               'Le prix affiché dans Stripe fait autorité.'),
-          const SizedBox(height: 10),
+          const SizedBox(height: DomoliaSpacing.field),
           DropdownButtonFormField<int>(
             key: const ValueKey('ouAmount'),
             initialValue: _amount,
@@ -504,7 +506,7 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
               if (amount != null) setState(() => _amount = amount);
             },
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: DomoliaSpacing.field),
           FilledButton(
             key: const ValueKey('ouCheckout'),
             onPressed: kIsWeb || controller.busy ||
@@ -595,12 +597,14 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
             _keyCard(item, item.id == active?.id),
             const SizedBox(height: DomoliaSpacing.compact),
           ],
-          const SizedBox(height: 20),
+          const SizedBox(height: DomoliaSpacing.section),
           _models(),
           if (widget.sandbox == null && controller.ai.profiles.any((p) =>
               !p.id.startsWith('openuncensored-managed-') &&
               p.apiKey.isNotEmpty)) ...[
+            const SizedBox(height: DomoliaSpacing.section),
             const Divider(),
+            const SizedBox(height: DomoliaSpacing.compact),
             const Text('Anciens profils IA conservés dans le stockage sécurisé. '
               'Ils ne sont pas supprimés par cette configuration. '
               'Les Livres et Parties avec d’anciennes références restent lisibles.',

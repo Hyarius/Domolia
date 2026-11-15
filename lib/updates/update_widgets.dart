@@ -86,9 +86,9 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
       ],
       const Text('Mises à jour',style:TextStyle(
         color:DomoliaColors.goldLight,fontSize:25,fontWeight:FontWeight.bold)),
-      const SizedBox(height:20),
+      const SizedBox(height:DomoliaSpacing.section),
       Text('Version installée : ${version == null ? 'inconnue' : '${version.versionName} (build ${version.versionCode})'}'),
-      const SizedBox(height: 14),
+      const SizedBox(height: DomoliaSpacing.field),
       FilledButton.icon(
         onPressed:checking || downloading ? null : widget.onCheckManually ?? updater.checkNow,
         icon:const Icon(Icons.refresh),
@@ -97,7 +97,7 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
       if(downloading) TextButton.icon(
         onPressed:updater.cancelDownload,
         icon:const Icon(Icons.close),label:const Text('Annuler le téléchargement')),
-      const SizedBox(height:18),
+      const SizedBox(height:DomoliaSpacing.section),
       SwitchListTile(
         title:const Text('Vérifier automatiquement au démarrage'),
         subtitle:const Text('Télécharger sans bloquer la navigation.'),
@@ -105,7 +105,7 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
         activeTrackColor:DomoliaColors.goldDark,
         onChanged:(enabled) => updater.changeAutomatic(enabled),
       ),
-      const SizedBox(height:20),
+      const SizedBox(height:DomoliaSpacing.section),
       TextField(
         controller:_channelInput,
         decoration:const InputDecoration(
@@ -121,10 +121,10 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
       ),
       TextButton(onPressed:()=>_saveChannel('dev-latest'),
         child:const Text('Revenir au canal dev-latest')),
-      const SizedBox(height:20),
+      const SizedBox(height:DomoliaSpacing.section),
       Text('Dernière vérification : ${updater.lastCheck?.toLocal() ?? 'jamais'}',
         style:const TextStyle(color:DomoliaColors.muted)),
-      const SizedBox(height:8),
+      const SizedBox(height:DomoliaSpacing.compact),
       Text('État : ${switch(updater.phase) {
         UpdatePhase.idle => 'en attente',
         UpdatePhase.checking => 'vérification en cours',

@@ -105,7 +105,7 @@ class _AiDiagnosticsSettingsPageState extends State<AiDiagnosticsSettingsPage> {
             'Les clés API et les jetons sont masqués. Les données de narration '
             'restent sensibles : ne partagez un export que volontairement.',
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: DomoliaSpacing.section),
           DropdownButtonFormField<int>(
             key: const ValueKey('diagnosticsRetention'),
             initialValue: _limit,

@@ -443,9 +443,13 @@ class _BookLoreTabState extends State<BookLoreTab> {
             icon:const Icon(Icons.edit),label:const Text('Modifier le Lore global')),
         ],
       )),
+      const SizedBox(height: DomoliaSpacing.compact),
       _section('characters','Personnages',widget.lore.characters),
+      const SizedBox(height: DomoliaSpacing.compact),
       _section('places','Lieux',widget.lore.places),
+      const SizedBox(height: DomoliaSpacing.compact),
       _section('scenarios','Scénarios',widget.lore.scenarios),
+      const SizedBox(height: DomoliaSpacing.compact),
       _section('events','Événements',widget.lore.events),
     ],
   );

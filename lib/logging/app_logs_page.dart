@@ -123,6 +123,7 @@ class _AppLogsPageState extends State<AppLogsPage> {
               label: const Text('Effacer les logs')),
         ]),
       ),
+      const SizedBox(height: DomoliaSpacing.compact),
       Padding(padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(children: [
           Expanded(child: TextField(key: const ValueKey('logsSearch'),
@@ -139,6 +140,7 @@ class _AppLogsPageState extends State<AppLogsPage> {
             ],
             onChanged: (value) => setState(() => _filter = value)),
         ])),
+      const SizedBox(height: DomoliaSpacing.compact),
       if (_logger.failedOperations > 0)
         const Text('Des opérations du journal ont échoué.',
             style: TextStyle(color: DomoliaColors.goldLight)),

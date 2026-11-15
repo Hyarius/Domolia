@@ -136,7 +136,7 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -144,8 +144,8 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                       fontSize: 26, fontWeight: FontWeight.bold,
                       color: DomoliaColors.goldLight,
                     )),
-                    const SizedBox(height: 12),
-                    Wrap(spacing: 8, runSpacing: 8, children: [
+                    const SizedBox(height: DomoliaSpacing.field),
+                    Wrap(spacing: 12, runSpacing: 12, children: [
                       FilledButton.icon(
                         key: const ValueKey('bookCreate'),
                         onPressed: _create,
@@ -159,7 +159,8 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                         label: const Text('Importer JSON'),
                       ),
                     ]),
-                    if (widget.library.legacyAvailable)
+                    if (widget.library.legacyAvailable) ...[
+                      const SizedBox(height: DomoliaSpacing.compact),
                       ListTile(
                         leading: const Icon(Icons.auto_stories_outlined),
                         title: const Text('Récupérer mon ancien narrateur'),
@@ -168,6 +169,7 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                         ),
                         onTap: _migrateLegacy,
                       ),
+                    ],
                   ],
                 ),
               ),

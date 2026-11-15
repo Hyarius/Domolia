@@ -157,4 +157,22 @@ void main() {
     expect(requests, 0);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('Narrative token fields have consistent vertical spacing',
+      (tester) async {
+    await showCredits(tester, screen: const Size(480, 2200));
+    final narrator = find.byKey(const ValueKey('ouTokens-narrator'));
+    final jsonifier = find.byKey(const ValueKey('ouTokens-jsonifier'));
+    final optimizer = find.byKey(const ValueKey('ouTokens-optimizer'));
+    expect(narrator, findsOneWidget);
+    expect(jsonifier, findsOneWidget);
+    expect(optimizer, findsOneWidget);
+    final firstGap = tester.getTopLeft(jsonifier).dy -
+        tester.getBottomLeft(narrator).dy;
+    final secondGap = tester.getTopLeft(optimizer).dy -
+        tester.getBottomLeft(jsonifier).dy;
+    expect(firstGap, greaterThanOrEqualTo(DomoliaSpacing.field - 1));
+    expect(secondGap, greaterThanOrEqualTo(DomoliaSpacing.field - 1));
+    expect(tester.takeException(), isNull);
+  });
 }
