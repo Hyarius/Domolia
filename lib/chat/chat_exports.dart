@@ -68,6 +68,7 @@ Map<String, dynamic> exportConversation(
             'speaker': event.speaker.name,
             'name': event.name,
             'text': event.text,
+            if (event.status != null) 'status': event.status,
           },
     ],
   };
