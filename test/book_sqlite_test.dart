@@ -5,6 +5,7 @@ import 'package:domolia/books/book_definition.dart';
 import 'package:domolia/books/book_session.dart';
 import 'package:domolia/books/book_store.dart';
 import 'package:domolia/chat/chat_protocol.dart';
+import 'package:domolia/chat/raw_generation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -161,6 +162,107 @@ void main() {
       createdAtUtc: DateTime.utc(2026), content: '{"format":"test"}',
     ), 5);
     expect(await migrated.listDiagnostics('legacy-session'), hasLength(1));
+  });
+
+
+  test('RAW pending survives restart and a retry commits events atomically',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('domolia-raw-');
+    final file = '${dir.path}/raw.sqlite';
+    final first = SqliteBookStore(factory: databaseFactoryFfi, databasePath: file);
+    addTearDown(() async {
+      await first.close();
+      await dir.delete(recursive: true);
+    });
+    await first.putBook(const BookDefinition(id: 'b', title: 'Livre'));
+    const session = BookSession(id: 's', bookId: 'b', title: 'Partie', timeline: [
+      ChatEntry(id: 0, speaker: ChatSpeaker.player,
+          name: 'Vous', text: 'Je quitte la grotte'),
+    ]);
+    await first.putSession(session);
+    await first.saveNarrativeSnapshot(session, const [
+      RawGeneration(playerEventId: 0, rawText: 'Le temple apparaît.'),
+    ]);
+    await first.close();
+
+    final second = SqliteBookStore(factory: databaseFactoryFfi, databasePath: file);
+    addTearDown(second.close);
+    final pending = await second.listRawGenerations('s');
+    expect(pending.single.rawText, 'Le temple apparaît.');
+    expect(pending.single.isStructured, false);
+    expect((await second.findSession('s'))!.timeline, hasLength(1));
+
+    final committed = session.copyWith(timeline: [
+      ...session.timeline,
+      const ChatSceneChange(id: 1),
+      const ChatEntry(id: 2, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Le temple apparaît.'),
+    ]);
+    await second.saveNarrativeSnapshot(committed, [
+      pending.single.structured(1, 2),
+    ]);
+    await second.close();
+
+    final third = SqliteBookStore(factory: databaseFactoryFfi, databasePath: file);
+    addTearDown(third.close);
+    expect((await third.findSession('s'))!.timeline, hasLength(3));
+    expect((await third.listRawGenerations('s')).single.isStructured, true);
+    await third.saveNarrativeSnapshot(session, const []);
+    expect(await third.listRawGenerations('s'), isEmpty);
+    expect((await third.findSession('s'))!.timeline, hasLength(1));
+  });
+
+  test('Invalid RAW insert rolls back timeline and preserves diagnostics',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('domolia-raw-txn-');
+    final file = '${dir.path}/txn.sqlite';
+    final db = SqliteBookStore(factory: databaseFactoryFfi, databasePath: file);
+    addTearDown(() async {
+      await db.close();
+      await dir.delete(recursive: true);
+    });
+    await db.putBook(const BookDefinition(id: 'b', title: 'Livre'));
+    const session = BookSession(id: 's', bookId: 'b', title: 'Partie', timeline: [
+      ChatEntry(id: 10, speaker: ChatSpeaker.player,
+          name: 'Vous', text: 'Une action'),
+    ]);
+    await db.putSession(session);
+    await db.putDiagnostic(StoredAiDiagnostic(
+      id: 'trace', sessionId: 's', createdAtUtc: DateTime.utc(2026),
+      content: '{"format":"test"}',
+    ), 5);
+    final changed = session.copyWith(timeline: [
+      ...session.timeline,
+      const ChatEntry(id: 11, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Réponse'),
+    ]);
+    await expectLater(db.saveNarrativeSnapshot(changed, const [
+      RawGeneration(playerEventId: 10, rawText: 'Réponse'),
+      RawGeneration(playerEventId: 10, rawText: 'Conflit'),
+    ]), throwsA(isA<Exception>()));
+    expect((await db.findSession('s'))!.timeline, hasLength(1));
+    expect(await db.listRawGenerations('s'), isEmpty);
+    expect(await db.listDiagnostics('s'), hasLength(1));
+
+    await db.deleteSession('s');
+    expect(await db.listRawGenerations('s'), isEmpty);
+    expect(await db.listDiagnostics('s'), isEmpty);
+    await expectLater(db.saveNarrativeSnapshot(changed, const []),
+        throwsStateError);
+  });
+
+  test('Manual scene insertion can be reloaded with stable nonmonotonic IDs', () {
+    const original = BookSession(id: 's', bookId: 'b', title: 'Partie', timeline: [
+      ChatEntry(id: 1, speaker: ChatSpeaker.player, name: 'Vous', text: 'Oui'),
+      ChatSceneChange(id: 7),
+      ChatEntry(id: 3, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Un temple'),
+    ]);
+    final restored = BookSession.decodeTimeline(original.encodeTimeline());
+    expect(restored.map((e) => e.id), [1, 7, 3]);
+    expect(() => BookSession.decodeTimeline(
+      '[{"id":1,"type":"scene_change"},{"id":1,"type":"scene_change"}]'),
+      throwsFormatException);
   });
 
 }
