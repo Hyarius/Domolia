@@ -30,7 +30,6 @@ class OuCreditsController extends ChangeNotifier {
   String? error;
   String? notice;
   String? _emergencyKey;
-  int _generation = 0;
 
   List<StoredOuKey> get keys => List.unmodifiable(_state.keys);
   StoredOuKey? get active => _state.find(_state.activeKeyId);
@@ -211,6 +210,9 @@ class OuCreditsController extends ChangeNotifier {
       throw const OpenUncensoredFailure('Format de clé OpenUncensored invalide.');
     }
     final balance = await api.balance(key);
+    if (_catalogue.isEmpty) {
+      try { _catalogue = await api.models(); } catch (_) { /* Use documented fallback. */ }
+    }
     final id = ouKeyId(key);
     final existing = _state.find(id);
     final record = (existing ?? StoredOuKey(
@@ -353,10 +355,21 @@ class OuCreditsController extends ChangeNotifier {
       throw const OpenUncensoredFailure(
         'Paiement confirmé : sauvegarde impossible. Copiez immédiatement la clé de secours.');
     }
+    if (_catalogue.isEmpty) {
+      try { _catalogue = await api.models(); } catch (_) { /* Offline fallback. */ }
+    }
     if (!await _configure(next)) {
       throw const OpenUncensoredFailure(
         'Clé sauvegardée dans l’historique, mais configuration IA indisponible.');
     }
+    try {
+      final balance = await api.balance(newKey);
+      await _write(_state.copyWith(keys: [
+        for (final item in _state.keys)
+          item.id == id ? item.copyWith(balance: balance,
+            checked: DateTime.now().toUtc()) : item,
+      ]));
+    } catch (_) { /* Verified key remains durably stored. */ }
     notice = 'Paiement confirmé et clé sauvegardée.';
     return result.status;
   });
@@ -409,7 +422,6 @@ class OuCreditsController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _generation++;
     super.dispose();
   }
 }
