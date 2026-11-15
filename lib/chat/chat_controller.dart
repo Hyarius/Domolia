@@ -352,7 +352,7 @@ class NarrativeChatController extends ChangeNotifier {
   }
 
   /// The last 24 conversational turns / 16k UTF-16 units are retained.
-  /// Original RAW replaces only the generated events of its own turn.
+  /// Compact narration replaces that turn's RAW when available; RAW is the fallback.
   /// Legacy sessions without RAW fall back to their structured history.
   List<AiMessage> buildNarratorContext() {
     final history = <AiMessage>[];
@@ -368,7 +368,13 @@ class NarrativeChatController extends ChangeNotifier {
       } else if (event is ChatEntry || event is ChatSceneChange) {
         if (active != null) {
           if (!rawEmitted) {
-            history.add(AiMessage(role: 'assistant', content: active.rawText));
+            history.add(AiMessage(
+              role: 'assistant',
+              content: active.compactText == null
+                  ? active.rawText
+                  : 'Résumé narratif factuel du tour :\\n'
+                    '${active.compactText}',
+            ));
             rawEmitted = true;
           }
         } else if (event is ChatEntry) {
@@ -652,13 +658,13 @@ class NarrativeChatController extends ChangeNotifier {
         final known = _timeline.whereType<ChatEntry>()
             .where((e) => e.speaker == ChatSpeaker.character)
             .map((e) => e.name);
-        final decoded = const Jsonifier().decode(
+        final jsonified = const Jsonifier().decodeWithMemory(
           rawRecord.rawText, formatted, knownCharacters: known,
           hasPreviousScene: _timeline.isNotEmpty,
         );
         final prepared = <ChatTimelineEvent>[];
         var id = _nextId;
-        for (final entry in decoded) {
+        for (final entry in jsonified.events) {
           if (entry is ChatSceneChangeOutput) {
             if (prepared.isNotEmpty && prepared.last is ChatSceneChange ||
                 prepared.isEmpty && _timeline.isNotEmpty &&
@@ -676,7 +682,8 @@ class NarrativeChatController extends ChangeNotifier {
         }
         final updated = [
           ..._generations.where((g) => g.playerEventId != playerId),
-          rawRecord.structured(_nextId, id - 1),
+          rawRecord.structured(_nextId, id - 1,
+              compactText: jsonified.compact),
         ];
         // Once the final transaction starts, stopping cannot safely undo it.
         // Keep the UI busy until its success/failure is reconciled in memory.
