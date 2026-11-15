@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Tasks are routed to existing named AI profiles, never to raw credentials.
-enum AiNarrativeTask { narrator, jsonifier }
+enum AiNarrativeTask { narrator, jsonifier, optimizer }
 
 /// Optional application-wide defaults. A null task profile preserves the
 /// previous routing behavior (selected AI for the narrator, same AI for JSON).
@@ -14,15 +14,18 @@ class AiTaskRouting extends ChangeNotifier {
 
   static const _narratorKey = 'aiTaskNarratorProfileId';
   static const _jsonifierKey = 'aiTaskJsonifierProfileId';
+  static const _optimizerKey = 'aiTaskOptimizerProfileId';
   final Future<SharedPreferences> Function() _preferences;
   Future<void>? _loading;
   String? _narratorId;
   String? _jsonifierId;
+  String? _optimizerId;
   bool initialized = false;
 
   String? profileFor(AiNarrativeTask task) => switch (task) {
     AiNarrativeTask.narrator => _narratorId,
     AiNarrativeTask.jsonifier => _jsonifierId,
+    AiNarrativeTask.optimizer => _optimizerId,
   };
 
   Future<void> initialize() => _loading ??= _load();
@@ -32,6 +35,7 @@ class AiTaskRouting extends ChangeNotifier {
       final prefs = await _preferences();
       _narratorId = prefs.getString(_narratorKey);
       _jsonifierId = prefs.getString(_jsonifierKey);
+      _optimizerId = prefs.getString(_optimizerKey);
       initialized = true;
       notifyListeners();
     } catch (_) {
@@ -45,6 +49,7 @@ class AiTaskRouting extends ChangeNotifier {
     final key = switch (task) {
       AiNarrativeTask.narrator => _narratorKey,
       AiNarrativeTask.jsonifier => _jsonifierKey,
+      AiNarrativeTask.optimizer => _optimizerKey,
     };
     final prefs = await _preferences();
     final successful = profileId == null
@@ -56,6 +61,8 @@ class AiTaskRouting extends ChangeNotifier {
         _narratorId = profileId;
       case AiNarrativeTask.jsonifier:
         _jsonifierId = profileId;
+      case AiNarrativeTask.optimizer:
+        _optimizerId = profileId;
     }
     notifyListeners();
   }
