@@ -236,7 +236,7 @@ void main() {
     expect(blocks.join(), raw);
     expect(blocks.first, startsWith('  🌧️'));
     expect(decoder.blocksForPrompt(raw), contains('Bloc 2'));
-    expect(decoder.blocksForPrompt(raw), contains('\\\r\\\n'));
+    expect(decoder.blocksForPrompt(raw), contains(r'\r\n'));
   });
 
   test('Numbered block response reproduces the RAW, not AI text offsets', () {
