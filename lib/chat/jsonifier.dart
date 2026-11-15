@@ -133,7 +133,7 @@ class Jsonifier {
   /// pronoun-based speakers are left to the formatter and known cast.
   bool _matchesExplicitAttribution(String text, String proposed) {
     final label = RegExp(
-      r'^\\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9_\\-]{0,49})\\s*[:：]',
+      r'^\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9_\-]{0,49})\s*[:：]',
     ).firstMatch(text);
     return label == null ||
         label.group(1)!.toLowerCase() == proposed.toLowerCase();
