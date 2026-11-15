@@ -1,4 +1,4 @@
-// Single platform composition point for the existing Domolia application.
-// Native services remain the Android production implementation.
-export 'production_services_web.dart'
-    if (dart.library.io) 'production_services_io.dart';
+// One app, with native services unless compiling for a browser.
+// Use js_interop for both JavaScript and WebAssembly Flutter builds.
+export 'production_services_io.dart'
+    if (dart.library.js_interop) 'production_services_web.dart';
