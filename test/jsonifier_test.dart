@@ -371,4 +371,55 @@ void main() {
     expect((parsed.single as ChatLine).text, 'Je ne comprends pas.');
   });
 
+  test('JSONifier returns optional compact memory and keeps complete events', () {
+    final raw = List.filled(26,
+        'Astrid attend dans la chapelle tandis que Liv observe la porte.')
+        .join(' ');
+    const compact = 'Dans la chapelle, Astrid attend. Liv observe la porte ; '
+        'personne n’a encore franchi le seuil.';
+    final formatted = jsonEncode({
+      'events': [line(0, raw.length)],
+      'compact': compact,
+    });
+    final result = decoder.decodeWithMemory(raw, formatted);
+    expect(result.events, hasLength(1));
+    expect((result.events.single as ChatLine).text, raw);
+    expect(result.compact, compact);
+    expect(result.compact!.length, lessThan(raw.length));
+  });
+
+  test('Overlong, invalid, non-economic memories fall back to RAW', () {
+    final raw = List.filled(20, 'Le temple reste fermé.').join(' ');
+    final basic = {'events': [line(0, raw.length)]};
+    for (final compact in [
+      null,
+      '',
+      'court',
+      raw,
+      List.filled(200, 'blabla').join(' '),
+      24,
+      'Un passage encore invalide avec une commande \u0001 intégrée.',
+    ]) {
+      final result = decoder.decodeWithMemory(
+          raw, jsonEncode({...basic, 'compact': compact}));
+      expect(result.events, hasLength(1));
+      expect(result.compact, isNull);
+    }
+    expect(decoder.decodeWithMemory(raw, response([line(0, raw.length)]))
+        .compact, isNull);
+  });
+
+  test('Invalid event structure stays fatal despite a valid compact memory', () {
+    final raw = List.filled(20, 'La porte est fermée.').join(' ');
+    expect(() => decoder.decodeWithMemory(raw, jsonEncode({
+      'events': [{'type': 'part', 'part': 99, 'kind': 'narration'}],
+      'compact': 'La porte reste fermée dans la salle.',
+    })), throwsFormatException);
+    expect(() => decoder.decodeWithMemory(raw, jsonEncode({
+      'events': [line(0, raw.length)],
+      'compact': 'La porte reste fermée.',
+      'other': 'unknown',
+    })), throwsFormatException);
+  });
+
 }
