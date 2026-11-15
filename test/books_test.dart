@@ -508,11 +508,20 @@ void main() {
     expect((await library.session(session.id))!.aiProfileId, 'profile-1');
     expect(ai.profiles, hasLength(1));
 
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('conversationExport')), 250);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('conversationExport')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('conversationExport')));
     await tester.pumpAndSettle();
     expect(find.text('Toute la conversation'), findsOneWidget);
     expect(find.text('Portée de l’export'), findsOneWidget);
     await tester.tap(find.text('Annuler'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byTooltip('Retour à la conversation'), -250);
+    await tester.ensureVisible(find.byTooltip('Retour à la conversation'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Retour à la conversation'));
     expect(returned, isTrue);
