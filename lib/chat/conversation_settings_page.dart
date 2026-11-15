@@ -46,6 +46,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   String? _selected;
   String? _formatterProfile;
   String? _optimizerProfile;
+  bool _toolCallingEnabled = true;
   int _cachedLoreCharacters = 0;
   Map<AiNarrativeTask, AiTaskGenerationOverride> _generationOverrides = {};
   bool _loaded = false;
@@ -63,6 +64,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           _selected = session?.aiProfileId;
           _formatterProfile = session?.formatterProfileId;
           _optimizerProfile = session?.optimizerProfileId;
+          _toolCallingEnabled = session?.toolCallingEnabled ?? true;
           _cachedLoreCharacters = session?.optimizedLore?.length ?? 0;
           _generationOverrides = Map.of(session?.generationOverrides ?? {});
           _loaded = true;
@@ -95,6 +97,19 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       _notify('Impossible de sauvegarder cette connexion.');
     } finally {
       if (mounted) { setState(() => _saving = false); }
+    }
+  }
+
+  Future<void> _setToolCallingEnabled(bool enabled) async {
+    if (_saving || widget.chat.busy) return;
+    setState(() => _saving = true);
+    try {
+      await widget.library.setSessionToolCallingEnabled(widget.sessionId, enabled);
+      if (mounted) setState(() => _toolCallingEnabled = enabled);
+    } catch (_) {
+      _notify('Impossible de sauvegarder les consultations IA.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -512,6 +527,29 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                Builder(builder: (context) {
+                  final inherited = widget.taskRouting?.profileFor(
+                    AiNarrativeTask.narrator,
+                  );
+                  final chosen = _selected ?? inherited;
+                  final profile = [
+                    for (final p in profiles) if (p.id == chosen) p,
+                  ];
+                  final supported = profile.isNotEmpty &&
+                      profile.first.toolCallingCompatibility ==
+                          AiToolCallingCompatibility.supported;
+                  return SwitchListTile(
+                    key: const ValueKey('conversationToolCalling'),
+                    title: const Text('Consultations du Lore et de l’historique'),
+                    subtitle: Text(!supported
+                        ? 'Modèle non confirmé compatible : mode classique utilisé.'
+                        : 'Le narrateur peut consulter des souvenirs à la demande.'),
+                    value: _toolCallingEnabled,
+                    onChanged: _saving || widget.chat.busy
+                        ? null : _setToolCallingEnabled,
+                  );
+                }),
                 const SizedBox(height: 16),
                 const Divider(),
                 const SizedBox(height: DomoliaSpacing.compact),

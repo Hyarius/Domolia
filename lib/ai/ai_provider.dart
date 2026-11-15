@@ -35,6 +35,9 @@ enum AiProviderKind { chatGpt, customAi }
 /// Declared provider capability; never inferred from a model name.
 enum AiNsfwCompatibility { supported, unsupported, unknown }
 
+/// Explicit declaration for this *profile/model*, not its API provider.
+enum AiToolCallingCompatibility { supported, unsupported, unknown }
+
 class AiProfile {
   const AiProfile({
     required this.id,
@@ -44,10 +47,12 @@ class AiProfile {
     required this.apiKey,
     this.kind = AiProviderKind.customAi,
     this.nsfwCompatibility = AiNsfwCompatibility.unknown,
+    this.toolCallingCompatibility = AiToolCallingCompatibility.unknown,
   });
 
   final AiProviderKind kind;
   final AiNsfwCompatibility nsfwCompatibility;
+  final AiToolCallingCompatibility toolCallingCompatibility;
   final String id;
   final String name;
   final String baseUrl;
@@ -63,6 +68,7 @@ class AiProfile {
   AiProfile copyWith({
     AiProviderKind? kind,
     AiNsfwCompatibility? nsfwCompatibility,
+    AiToolCallingCompatibility? toolCallingCompatibility,
     String? name,
     String? baseUrl,
     String? model,
@@ -70,6 +76,7 @@ class AiProfile {
   }) => AiProfile(
         kind: kind ?? this.kind,
         nsfwCompatibility: nsfwCompatibility ?? this.nsfwCompatibility,
+        toolCallingCompatibility: toolCallingCompatibility ?? this.toolCallingCompatibility,
         id: id,
         name: name ?? this.name,
         baseUrl: baseUrl ?? this.baseUrl,

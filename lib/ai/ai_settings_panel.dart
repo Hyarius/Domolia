@@ -294,6 +294,31 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
             if (value != null) controller.setNsfwCompatibility(value);
           },
         ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<AiToolCallingCompatibility>(
+          key: ValueKey('aiToolCallingCapability-${controller.selectedProfileId}'),
+          initialValue: controller.selectedProfile.toolCallingCompatibility,
+          decoration: const InputDecoration(
+            labelText: 'Capacité Tool Calling déclarée',
+          ),
+          items: const [
+            DropdownMenuItem(
+              value: AiToolCallingCompatibility.unknown,
+              child: Text('Inconnue'),
+            ),
+            DropdownMenuItem(
+              value: AiToolCallingCompatibility.supported,
+              child: Text('Compatible'),
+            ),
+            DropdownMenuItem(
+              value: AiToolCallingCompatibility.unsupported,
+              child: Text('Incompatible'),
+            ),
+          ],
+          onChanged: controller.busy ? null : (value) {
+            if (value != null) controller.setToolCallingCompatibility(value);
+          },
+        ),
         const SizedBox(height: DomoliaSpacing.compact),
         Wrap(
           spacing: 12,

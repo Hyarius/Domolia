@@ -159,6 +159,13 @@ class BookLibraryController extends ChangeNotifier {
         details: {'hasOverride': profileId != null});
   }
 
+  Future<void> setSessionToolCallingEnabled(String id, bool enabled) async {
+    final current = await store.findSession(id);
+    if (current == null) throw StateError('Partie introuvable.');
+    await store.putSession(current.copyWith(toolCallingEnabled: enabled));
+    _notify();
+  }
+
   Future<void> setSessionTaskProfile(
       String id, String task, String? profileId) async {
     if (task != 'jsonifier' && task != 'optimizer') {
