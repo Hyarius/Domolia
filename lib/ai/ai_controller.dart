@@ -460,7 +460,9 @@ class AiConnectionController extends ChangeNotifier {
     required String optimizerModel,
   }) async {
     if (_closed || busy || !initialized ||
-        !key.startsWith('ou-') || key.length < 11) return false;
+        !key.startsWith('ou-') || key.length < 11) {
+      return false;
+    }
     busy = true;
     _notify();
     try {
