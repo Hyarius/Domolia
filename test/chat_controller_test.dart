@@ -626,4 +626,61 @@ void main() {
     expect(formatter.outputBudgets, [4096, 4096]);
   });
 
+  test('New numbered-block JSONifier preserves source and character voices',
+      () async {
+    provider.raw = 'Les pierres sont froides.\\n\\n'
+        'Astrid : « Vous êtes à Skogheim. »\\n\\n'
+        'Liv observe le plafond.\\n\\n'
+        'Liv : « Nous avons prié. »';
+    provider.structured = jsonEncode({'events': [
+      {'type': 'message', 'block': 0,
+        'speaker': 'narrator', 'name': 'Narrateur'},
+      {'type': 'message', 'block': 1,
+        'speaker': 'character', 'name': 'Astrid'},
+      {'type': 'message', 'block': 2,
+        'speaker': 'narrator', 'name': 'Narrateur'},
+      {'type': 'message', 'block': 3,
+        'speaker': 'character', 'name': 'Liv'},
+    ]});
+    await chat.send('Où suis-je ?');
+    expect(chat.error, isNull);
+    expect(chat.messages.skip(1).map((e) => e.name),
+      ['Narrateur', 'Astrid', 'Narrateur', 'Liv']);
+    expect(chat.messages.skip(1).map((e) => e.text).join(), provider.raw);
+    expect(provider.rawCalls, 1);
+    expect(provider.formatCalls, 1);
+    final formattedRequest = provider.formatterContext![1].content;
+    expect(formattedRequest, contains('Bloc 0 :'));
+    expect(formattedRequest, contains('Bloc 3 :'));
+    expect(formattedRequest, isNot(contains('UTF-16')));
+    expect(chat.pendingRaw, isNull);
+  });
+
+  test('Bad block labels keep RAW intact until retry with correct numbering',
+      () async {
+    provider.raw = 'Un couloir.\\n\\nAstrid : « Bonjour ! »';
+    provider.structured = jsonEncode({'events': [
+      {'type': 'message', 'block': 0,
+        'speaker': 'narrator', 'name': 'Narrateur'},
+      {'type': 'message', 'block': 999,
+        'speaker': 'character', 'name': 'Astrid'},
+    ]});
+    await chat.send('Bonjour');
+    expect(chat.pendingRaw!.rawText, provider.raw);
+    expect(chat.messages, hasLength(1));
+    expect(chat.error, isNotNull);
+    provider.structured = jsonEncode({'events': [
+      {'type': 'message', 'block': 0,
+        'speaker': 'narrator', 'name': 'Narrateur'},
+      {'type': 'message', 'block': 1,
+        'speaker': 'character', 'name': 'Astrid'},
+    ]});
+    await chat.retry();
+    expect(chat.error, isNull);
+    expect(chat.pendingRaw, isNull);
+    expect(provider.rawCalls, 1);
+    expect(provider.formatCalls, 2);
+    expect(chat.messages.skip(1).map((e) => e.text).join(), provider.raw);
+  });
+
 }
