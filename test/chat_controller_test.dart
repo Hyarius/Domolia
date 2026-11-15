@@ -587,8 +587,7 @@ void main() {
 
   test('All three real pipeline stages use independent output budgets', () async {
     final source = _largeLore();
-    final summary = 'Skogheim Astrid. ' +
-        List.filled(80, 'Vie quotidienne').join(' ');
+    final summary = 'Skogheim Astrid. ${List.filled(80, "Vie quotidienne").join(" ")}';
     final optimizer = _ContextProvider(summary);
     final formatter = _Provider()..structured = format(provider.raw);
     const config = AiConfiguration(
