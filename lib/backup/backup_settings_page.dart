@@ -129,6 +129,13 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
   }
 
   Future<void> _save() => _run(() async {
+    if (widget.books.legacyAvailable) {
+      throw const FormatException(
+        'Un ancien narrateur n’a pas encore été converti en Livre. '
+        'Ouvrez Livres et importez cet ancien narrateur avant de '
+        'sauvegarder, pour ne pas perdre sa configuration.',
+      );
+    }
     await widget.onBeforeCapture?.call();
     final backup = await _service.capture();
     final data = backup.encode();
