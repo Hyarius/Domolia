@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:domolia/ai/ai_controller.dart';
@@ -14,8 +13,6 @@ import 'package:domolia/books/book_store.dart';
 import 'package:domolia/chat/chat_protocol.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:path/path.dart' as path;
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class _Profiles implements AiProfileStore {
   _Profiles(this.state);
@@ -36,14 +33,19 @@ class _Provider implements AiChatProvider {
   }) async => 'test';
 }
 
+class _EmptyBooks extends Fake implements BookStore {
+  @override
+  Future<List<BookDefinition>> listBooks() async => [];
+}
+
+// UI validation uses a controlled service: actual SQLite correctness is
+// verified by portable_backup_test and web_backup_browser_test. This prevents
+// the Flutter widget fake-async clock from blocking FFI disk operations.
 class _Fixture {
-  _Fixture(this.dir)
-      : store = SqliteBookStore(
-          factory: databaseFactoryFfi,
-          databasePath: path.join(dir.path, 'ui.sqlite'),
-        ),
-        profiles = _Profiles(const AiProfilesState(
-          selectedId: 'local', profiles: [
+  _Fixture()
+      : profiles = _Profiles(const AiProfilesState(
+          selectedId: 'local',
+          profiles: [
             AiProfile(
               id: 'local', name: 'Profil local',
               baseUrl: 'https://example.org/v1',
@@ -51,10 +53,11 @@ class _Fixture {
             ),
           ],
         ));
-  final Directory dir;
-  final SqliteBookStore store;
+
   final _Profiles profiles;
-  late final books = BookLibraryController(store: store);
+  // The injected test service overrides every method and never opens it.
+  final SqliteBookStore unusedSqlite = SqliteBookStore();
+  late final books = BookLibraryController(store: _EmptyBooks());
   late final ai = AiConnectionController(
     store: profiles, provider: _Provider(),
   );
@@ -64,11 +67,9 @@ class _Fixture {
     await ai.initialize();
   }
 
-  Future<void> close() async {
+  void close() {
     books.dispose();
     ai.dispose();
-    await store.close();
-    await dir.delete(recursive: true);
   }
 }
 
@@ -101,7 +102,7 @@ PortableBackup _archive({String title = 'Livre portable'}) => PortableBackup(
 
 class _Service extends BackupService {
   _Service(_Fixture fixture, this.snapshot)
-      : super(books: fixture.store, profileStore: fixture.profiles);
+      : super(books: fixture.unusedSqlite, profileStore: fixture.profiles);
   PortableBackup snapshot;
   PortableBackup? lastImported;
   BackupRestoreMode? lastMode;
@@ -124,16 +125,8 @@ class _Service extends BackupService {
 }
 
 Future<_Fixture> _fixture(WidgetTester tester) async {
-  final directory = await tester.runAsync(
-    () => Directory.systemTemp.createTemp('domolia-backup-ui-'),
-  );
-  if (directory == null) {
-    throw StateError('Impossible de préparer le test de sauvegarde.');
-  }
-  final fixture = _Fixture(directory);
+  final fixture = _Fixture();
   addTearDown(fixture.close);
-  // FFI SQLite runs in a real isolate; initialize outside the fake-async zone
-  // used to pump widget frames.
   await tester.runAsync(fixture.init);
   return fixture;
 }
@@ -163,8 +156,6 @@ Widget _page(
 );
 
 void main() {
-  sqfliteFfiInit();
-
   testWidgets('save button writes full portable bytes after pending changes',
       (tester) async {
     final f = await _fixture(tester);
