@@ -251,7 +251,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
             key: const ValueKey('bookRawExport'),
             onPressed: _exportBook,
             icon: const Icon(Icons.menu_book_outlined),
-            label: const Text('Exporter le Livre (JSON brut)'),
+            label: const Text('Livre (JSON brut)'),
           ),
         ]),
         const SizedBox(height: 10),
