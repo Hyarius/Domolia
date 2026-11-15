@@ -180,6 +180,7 @@ class _HomePageState extends State<HomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(_updates.initialize());
+        unawaited(_credits.initialize());
         unawaited(_refreshRecent());
       }
     });
@@ -354,6 +355,14 @@ class _HomePageState extends State<HomePage> {
             });
           },
           onExchangeCaptured: (exchange) {
+            // A completed RAW→JSON turn has spent prepaid credits. Refresh
+            // once, on the final stage, without delaying narrative storage.
+            if (exchange.stage == 'jsonifier') {
+              final key = _credits.active;
+              if (key != null) {
+                unawaited(_credits.refresh(key.id));
+              }
+            }
             // Persist the already-redacted HTTP request and raw response.
             writes = writes.then((_) async {
               final retention =
