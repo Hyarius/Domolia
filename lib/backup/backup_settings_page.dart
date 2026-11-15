@@ -181,8 +181,10 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
                 'y compris les diagnostics attachés à ces Parties. '
                 'Les configurations IA et leurs secrets locaux sont conservés.'),
               const SizedBox(height: 8),
-              const Text('Aucune clé API ni session ChatGPT n’est transférée. '
-                'Il faudra reconnecter les profils importés.'),
+              const Text('Les identifiants IA enregistrés par l’application '
+                'ne sont pas transférés. Les profils importés devront être '
+                'reconnectés. Vérifiez le texte des conversations si vous y '
+                'avez saisi des informations sensibles.'),
             ],
           ),
         ),
@@ -266,8 +268,10 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
           'permet de les transférer vers un autre appareil.'),
         const SizedBox(height: 14),
         const Text('Attention : la sauvegarde contient vos conversations '
-          'en clair. Conservez le fichier dans un endroit privé. '
-          'Elle ne contient ni clés API, ni jetons, ni journaux de diagnostic.'),
+          'en clair. Les clés et jetons IA enregistrés dans les paramètres, '
+          'ainsi que les journaux de diagnostic, sont exclus. Si vous avez '
+          'écrit des secrets dans une conversation, ils seront présents '
+          'dans le texte exporté. Conservez ce fichier dans un endroit privé.'),
         const SizedBox(height: 22),
         FilledButton.icon(
           key: const ValueKey('backupSave'),

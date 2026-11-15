@@ -37,9 +37,13 @@ class BookLibraryController extends ChangeNotifier {
 
   Future<void> _load() async {
     try {
+      // Read first. An I/O failure must not erase the last successfully
+      // displayed library snapshot while the persistent data is still safe.
+      final loaded = await store.listBooks();
       _books
         ..clear()
-        ..addAll(await store.listBooks());
+        ..addAll(loaded);
+      error = null;
       legacyAvailable = legacyNarrator != null &&
           byId('legacy-narrator-v1') == null &&
           await legacyNarrator!.read() != null;
