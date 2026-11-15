@@ -114,7 +114,7 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
         ),
         onSubmitted:_saveChannel,
       ),
-      const SizedBox(height:12),
+      const SizedBox(height:DomoliaSpacing.field),
       OutlinedButton(
         onPressed:()=>_saveChannel(_channelInput.text),
         child:const Text('Enregistrer le canal'),

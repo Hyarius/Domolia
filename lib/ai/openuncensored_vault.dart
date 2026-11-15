@@ -187,14 +187,17 @@ abstract interface class OuVaultStore {
 }
 
 class SecureOuVaultStore implements OuVaultStore {
-  SecureOuVaultStore({FlutterSecureStorage? storage})
-      : _storage = storage ?? FlutterSecureStorage();
+  SecureOuVaultStore({FlutterSecureStorage? storage,
+    String storageKey = _storageKey})
+      : _storage = storage ?? FlutterSecureStorage(),
+        _key = storageKey;
   final FlutterSecureStorage _storage;
+  final String _key;
   static const _storageKey = 'domolia.openuncensored.vault.v1';
 
   @override
   Future<OuVaultState> read() async {
-    final raw = await _storage.read(key: _storageKey);
+    final raw = await _storage.read(key: _key);
     return raw == null ? const OuVaultState() :
         OuVaultState.fromJson(jsonDecode(raw));
   }
@@ -204,8 +207,8 @@ class SecureOuVaultStore implements OuVaultStore {
     final encoded = jsonEncode(state.toJson());
     // A freshly claimed key is returned once. Do not report successful
     // persistence without verifying that a subsequent read succeeds.
-    await _storage.write(key: _storageKey, value: encoded);
-    final actual = await _storage.read(key: _storageKey);
+    await _storage.write(key: _key, value: encoded);
+    final actual = await _storage.read(key: _key);
     if (actual != encoded) {
       throw const FormatException('Vérification du stockage sécurisé échouée.');
     }

@@ -478,7 +478,7 @@ class _BookEditorPageState extends State<BookEditorPage> {
     const SizedBox(height: 18),
     const Text('Configuration IA', style: TextStyle(
       color: DomoliaColors.goldLight, fontSize: 18)),
-    const SizedBox(height: 8),
+    const SizedBox(height: DomoliaSpacing.field),
     AnimatedBuilder(
       animation: widget.ai,
       builder: (context, _) {

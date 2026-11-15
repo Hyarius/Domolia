@@ -78,7 +78,7 @@ class OuCheckout {
   }
 }
 
-enum OuCheckoutStatus { pending, paid, expired }
+enum OuCheckoutStatus { pending, paid, refused, expired }
 
 class OuCheckoutResult {
   const OuCheckoutResult(this.status, {this.apiKey, this.balanceCents});
@@ -93,6 +93,7 @@ class OuCheckoutResult {
       'pending' => OuCheckoutStatus.pending,
       'paid' => OuCheckoutStatus.paid,
       'expired' => OuCheckoutStatus.expired,
+      'refused' => OuCheckoutStatus.refused,
       _ => throw const OpenUncensoredFailure('État de paiement inconnu.'),
     };
     final key = raw['api_key'];

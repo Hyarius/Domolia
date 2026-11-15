@@ -328,6 +328,11 @@ class OuCreditsController extends ChangeNotifier {
       notice = 'Paiement encore en attente.';
       return result.status;
     }
+    if (result.status == OuCheckoutStatus.refused) {
+      await _write(_state.copyWith(clearPending: true));
+      notice = 'Paiement refusé. Aucun crédit ajouté.';
+      return result.status;
+    }
     if (result.status == OuCheckoutStatus.expired) {
       await _write(_state.copyWith(clearPending: true));
       notice = 'Le lien de paiement a expiré.';

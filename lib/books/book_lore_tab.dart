@@ -631,7 +631,7 @@ class _LoreFormState extends State<_LoreForm> {
               onChanged:(value)=>setState(
                 ()=>_dropdowns[field.key]=value??field.value),
             ),
-          const SizedBox(height:12),
+          const SizedBox(height:DomoliaSpacing.field),
         ],
         for(final reference in widget.references) ...[
           OutlinedButton.icon(
@@ -640,7 +640,7 @@ class _LoreFormState extends State<_LoreForm> {
             icon:const Icon(Icons.link),
             label:Text('${reference.label} (${_references[reference.key]?.length??0})'),
           ),
-          const SizedBox(height:12),
+          const SizedBox(height:DomoliaSpacing.field),
         ],
         FilledButton.icon(
           key:const ValueKey('loreFormSaveButton'),

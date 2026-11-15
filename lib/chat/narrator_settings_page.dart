@@ -103,7 +103,7 @@ class _NarratorSettingsPageState extends State<NarratorSettingsPage> {
                   helperMaxLines: 2,
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: DomoliaSpacing.section),
               TextField(
                 key: const ValueKey('narratorOpeningsField'),
                 controller: _openings,

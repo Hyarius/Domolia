@@ -93,3 +93,26 @@ de carte bancaire n'est intégré à Domolia.
   profils anciens, noms/masquage/soldes des clés historiques.
 - Cette PR est à fusionner **avant** la branche tool calling ; relancer
   l'ensemble des tests **après** intégration de celle-ci.
+
+## Simulation des paiements dans les préversions
+
+Les APK `--debug` et les APK de prévisualisation de branche (non `main`) construits
+par GitHub Actions activent `DOMOLIA_PAYMENT_SANDBOX=true`. Le canal `dev-latest`
+et les tags de production ne l'activent jamais. Dans « Crédits IA », ouvrir
+« Tester les paiements sans payer » : la page de simulation offre les états
+réussi, refusé et expiré, la création de clés `ou-demo-`, la recharge et
+l'historique. **Aucun appel HTTP ni ouverture Stripe n'a lieu dans le
+simulateur** ; les modèles et les connexions IA y sont fictifs. L'historique
+simulé est stocké dans une entrée chiffrée distincte des vraies clés
+(`domolia.openuncensored.sandbox.v1`). Les clés de simulation ne peuvent
+pas générer de texte et ne fonctionnent pas chez OpenUncensored.
+
+L'absence de vraie transaction ne prouve pas que Stripe et OpenUncensored
+fonctionnent en production. Les tests automatisés vérifient les transitions
+et la persistance fictives, jamais un prélèvement réel.
+
+## Espacements UI
+
+Les formulaires actifs utilisent les constantes `DomoliaSpacing` :
+`compact=12`, `field=16`, `section=24` points logiques. Les champs des
+budgets, des livres, du lore et des réglages ont des séparations cohérentes.

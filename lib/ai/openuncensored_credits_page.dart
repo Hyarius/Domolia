@@ -10,6 +10,7 @@ import 'ai_task_generation.dart';
 import 'openuncensored_api.dart';
 import 'openuncensored_controller.dart';
 import 'openuncensored_vault.dart';
+import 'openuncensored_simulation.dart';
 
 /// Payments are hosted by Stripe; no card number ever enters Domolia.
 class OpenUncensoredCreditsPage extends StatefulWidget {
@@ -17,9 +18,11 @@ class OpenUncensoredCreditsPage extends StatefulWidget {
     super.key,
     required this.controller,
     required this.onBack,
+    this.sandbox,
   });
   final OuCreditsController controller;
   final VoidCallback onBack;
+  final OpenUncensoredSandbox? sandbox;
 
   @override
   State<OpenUncensoredCreditsPage> createState() =>
@@ -42,7 +45,11 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
   }
 
   Future<void> _initialize() async {
-    await widget.controller.initialize();
+    if (widget.sandbox != null) {
+      await widget.sandbox!.initialize();
+    } else {
+      await widget.controller.initialize();
+    }
     if (!mounted) return;
     _advanced = Map.of(widget.controller.taskModels);
     if (widget.controller.pending != null) {
@@ -67,7 +74,8 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
   }
 
   void _startPoller() {
-    if (widget.controller.pending == null || _poller != null || kIsWeb) return;
+    if (widget.controller.pending == null || _poller != null ||
+        kIsWeb || widget.sandbox != null) return;
     _pollCount = 0;
     _poller = Timer.periodic(const Duration(seconds: 5), (_) {
       if (!mounted || widget.controller.pending == null || ++_pollCount > 24) {
@@ -122,6 +130,7 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
     if (kIsWeb) return;
     final url = await widget.controller.startCheckout(_amount, topUpKeyId: target);
     if (url == null || !mounted) return;
+    if (widget.sandbox != null) return; // Never launch a sandbox payment URL.
     var opened = false;
     try {
       opened = await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -133,6 +142,24 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
         content: Text('Impossible d’ouvrir Stripe. Reprenez le paiement depuis cette page.')));
     }
     _startPoller();
+  }
+
+  void _openSandbox() {
+    final sandbox = OpenUncensoredSandbox();
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (ctx) => Scaffold(body: OpenUncensoredCreditsPage(
+        controller: sandbox.controller,
+        sandbox: sandbox,
+        onBack: () => Navigator.of(ctx).pop(),
+      )),
+    )).whenComplete(sandbox.dispose);
+  }
+
+  Future<void> _simulate(OuCheckoutStatus outcome) async {
+    final sandbox = widget.sandbox;
+    if (sandbox == null || widget.controller.pending == null) return;
+    sandbox.api.selectOutcome(outcome);
+    await _check();
   }
 
   Future<void> _import() async {
@@ -354,10 +381,13 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
           child: const Text('Appliquer les modèles avancés'),
         ),
       ]),
+      const SizedBox(height: DomoliaSpacing.section),
       const Divider(),
+      const SizedBox(height: DomoliaSpacing.compact),
       const Text('Limites de génération', style: TextStyle(
         color: DomoliaColors.goldLight, fontSize: 17)),
-      for (final task in AiNarrativeTask.values)
+      const SizedBox(height: DomoliaSpacing.field),
+      for (final task in AiNarrativeTask.values) ...[
         DropdownButtonFormField<int>(
           key: ValueKey('ouTokens-${task.name}'),
           initialValue: controller.routing.generationFor(task).maxOutputTokens,
@@ -381,6 +411,8 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
             }
           },
         ),
+        const SizedBox(height: DomoliaSpacing.field),
+      ],
     ]);
   }
 
@@ -402,7 +434,25 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
               fontWeight: FontWeight.bold))),
           ]),
           const SizedBox(height: 16),
-          const Text('Fournisseur : OpenUncensored'),
+          if (widget.sandbox != null) ...[
+            const Text('SIMULATION — aucun paiement ni appel IA réel.',
+              style: TextStyle(color: Colors.orangeAccent,
+                fontWeight: FontWeight.bold)),
+            const SizedBox(height: DomoliaSpacing.compact),
+            const Text('Les clés ou-demo- et leurs soldes sont fictifs. '
+              'Ils sont conservés séparément de vos vraies clés.'),
+          ] else ...[
+            const Text('Fournisseur : OpenUncensored'),
+            if (openUncensoredSimulationEnabled) ...[
+              const SizedBox(height: DomoliaSpacing.field),
+              OutlinedButton.icon(
+                key: const ValueKey('ouOpenSandbox'),
+                onPressed: _openSandbox,
+                icon: const Icon(Icons.science_outlined),
+                label: const Text('Tester les paiements sans payer'),
+              ),
+            ],
+          ],
           if (!controller.ready) const LinearProgressIndicator(),
           if (controller.busy) const LinearProgressIndicator(),
           if (controller.error != null) Text(controller.error!,
@@ -430,10 +480,13 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
               child: const Text('Actualiser le solde')),
           ],
           const Divider(),
+          const SizedBox(height: DomoliaSpacing.compact),
           const Text('Acheter des crédits', style: TextStyle(
             color: DomoliaColors.goldLight, fontSize: 18)),
-          const Text('Montants en USD avant taxes éventuelles. '
-            'Le prix affiché dans Stripe fait autorité.'),
+          Text(widget.sandbox != null
+            ? 'Montants et soldes fictifs. Aucun paiement ne sera lancé.'
+            : 'Montants en USD avant taxes éventuelles. '
+              'Le prix affiché dans Stripe fait autorité.'),
           const SizedBox(height: 10),
           DropdownButtonFormField<int>(
             key: const ValueKey('ouAmount'),
@@ -455,8 +508,9 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
             onPressed: kIsWeb || controller.busy ||
               controller.pending != null || !controller.ready
                 ? null : () => _payment(target: active?.id),
-            child: Text(active == null ? 'Acheter avec Stripe' :
-              'Recharger la clé active'),
+            child: Text(widget.sandbox != null ?
+              (active == null ? 'Créer un paiement fictif' : 'Recharger fictivement') :
+              (active == null ? 'Acheter avec Stripe' : 'Recharger la clé active')),
           ),
           if (active != null) TextButton(
             onPressed: kIsWeb || controller.busy ||
@@ -467,10 +521,31 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
             const Text('Paiement en cours', style: TextStyle(
               color: DomoliaColors.goldLight, fontSize: 18)),
             Text('Session enregistrée pour ${_usd(controller.pending!.cents / 100)}.'),
-            OutlinedButton(onPressed: controller.busy ? null :
-              () => launchUrl(controller.pending!.paymentUrl,
-                mode: LaunchMode.externalApplication),
-              child: const Text('Reprendre chez Stripe')),
+            if (widget.sandbox == null)
+              OutlinedButton(onPressed: controller.busy ? null :
+                () => launchUrl(controller.pending!.paymentUrl,
+                  mode: LaunchMode.externalApplication),
+                child: const Text('Reprendre chez Stripe')),
+            if (widget.sandbox != null) ...[
+              const SizedBox(height: DomoliaSpacing.compact),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                FilledButton(
+                  key: const ValueKey('ouSimulatePaid'),
+                  onPressed: controller.busy ? null :
+                      () => _simulate(OuCheckoutStatus.paid),
+                  child: const Text('Simuler réussite')),
+                OutlinedButton(
+                  key: const ValueKey('ouSimulateRefused'),
+                  onPressed: controller.busy ? null :
+                      () => _simulate(OuCheckoutStatus.refused),
+                  child: const Text('Simuler refus')),
+                OutlinedButton(
+                  key: const ValueKey('ouSimulateExpired'),
+                  onPressed: controller.busy ? null :
+                      () => _simulate(OuCheckoutStatus.expired),
+                  child: const Text('Simuler expiration')),
+              ]),
+            ],
             OutlinedButton(onPressed: controller.busy ? null : _check,
               child: const Text('Vérifier le paiement')),
             TextButton(onPressed: controller.busy ? null : () async {
@@ -507,16 +582,20 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
             icon: const Icon(Icons.key_outlined),
             label: const Text('J’ai déjà une clé / Changer de clé')),
           const Divider(),
+          const SizedBox(height: DomoliaSpacing.compact),
           const Text('Mes clés', style: TextStyle(
             color: DomoliaColors.goldLight, fontSize: 18)),
           const Text('Historique local chiffré. Les soldes affichés sont '
             'ceux de la dernière vérification et peuvent avoir changé.',
             style: TextStyle(color: DomoliaColors.muted)),
-          for (final item in controller.keys)
+          const SizedBox(height: DomoliaSpacing.compact),
+          for (final item in controller.keys) ...[
             _keyCard(item, item.id == active?.id),
+            const SizedBox(height: DomoliaSpacing.compact),
+          ],
           const SizedBox(height: 20),
           _models(),
-          if (controller.ai.profiles.any((p) =>
+          if (widget.sandbox == null && controller.ai.profiles.any((p) =>
               !p.id.startsWith('openuncensored-managed-') &&
               p.apiKey.isNotEmpty)) ...[
             const Divider(),

@@ -484,7 +484,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                   onChanged: _saving || widget.chat.busy
                       ? null : _setProfile,
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: DomoliaSpacing.field),
                 _taskProfileField(
                   task: 'jsonifier',
                   label: 'JSONificateur — profil de cette Partie',
@@ -514,11 +514,15 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                 ),
                 const SizedBox(height: 16),
                 const Divider(),
+                const SizedBox(height: DomoliaSpacing.compact),
                 const Text('Budget et raisonnement par tâche',
                   style: TextStyle(color: DomoliaColors.goldLight,
                       fontSize: 17)),
-                for (final task in AiNarrativeTask.values)
+                const SizedBox(height: DomoliaSpacing.compact),
+                for (final task in AiNarrativeTask.values) ...[
                   _taskGenerationControls(task),
+                  const SizedBox(height: DomoliaSpacing.field),
+                ],
                 const SizedBox(height: 12),
                 Text(
                   _cachedLoreCharacters > 0

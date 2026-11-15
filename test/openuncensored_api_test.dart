@@ -10,6 +10,10 @@ http.Response jsonResponse(Object data, [int status = 200]) =>
       headers: {'content-type': 'application/json'});
 
 void main() {
+  test('Refused checkout is a terminal non-paid status', () {
+    expect(OuCheckoutResult.parse({'status': 'refused'}).status,
+      OuCheckoutStatus.refused);
+  });
   TestWidgetsFlutterBinding.ensureInitialized();
   const key = 'ou-cus_TEST_KEY_123456';
   const checkout = {

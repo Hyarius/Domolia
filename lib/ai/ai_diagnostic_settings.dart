@@ -122,7 +122,7 @@ class _AiDiagnosticsSettingsPageState extends State<AiDiagnosticsSettingsPage> {
             ],
             onChanged: _saving || _limit == null ? null : _change,
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: DomoliaSpacing.field),
           const Text(
             'Les traces les plus anciennes sont supprimées automatiquement. '
             'La suppression d’une partie efface également ses diagnostics. '
