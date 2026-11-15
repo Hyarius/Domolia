@@ -117,10 +117,12 @@ class PendingOuCheckout {
 }
 
 class OuVaultState {
-  const OuVaultState({this.keys = const [], this.activeKeyId, this.pending});
+  const OuVaultState({this.keys = const [], this.activeKeyId, this.pending, this.mode = 'balanced', this.models = const {}});
   final List<StoredOuKey> keys;
   final String? activeKeyId;
   final PendingOuCheckout? pending;
+  final String mode;
+  final Map<String, String> models;
 
   StoredOuKey? find(String? id) {
     for (final key in keys) {
@@ -135,16 +137,22 @@ class OuVaultState {
     bool clearActive = false,
     PendingOuCheckout? pending,
     bool clearPending = false,
+    String? mode,
+    Map<String, String>? models,
   }) => OuVaultState(
     keys: keys ?? this.keys,
     activeKeyId: clearActive ? null : activeKeyId ?? this.activeKeyId,
     pending: clearPending ? null : pending ?? this.pending,
+    mode: mode ?? this.mode,
+    models: models ?? this.models,
   );
 
   Map<String, Object?> toJson() => {
     'version': 1,
     'keys': [for (final key in keys) key.toJson()],
     'activeKeyId': activeKeyId,
+    'mode': mode,
+    'models': models,
     if (pending != null) 'pending': pending!.toJson(),
   };
 
@@ -164,6 +172,8 @@ class OuVaultState {
     }
     return OuVaultState(
       keys: entries, activeKeyId: active,
+      mode: raw['mode'] is String ? raw['mode'] as String : 'balanced',
+      models: raw['models'] is Map ? Map<String, String>.from(raw['models'] as Map) : const {},
       pending: raw['pending'] == null ? null :
           PendingOuCheckout.fromJson(
             Map<String, dynamic>.from(raw['pending'] as Map)),
