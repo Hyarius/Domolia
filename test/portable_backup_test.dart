@@ -564,6 +564,19 @@ void main() {
     final wrongDate = clone()..['createdAtUtc'] = 'not-a-date';
     expect(() => PortableBackup.decode(encodeChanged(wrongDate)),
         throwsFormatException);
+    final ambiguousLocalTime = clone()
+      ..['createdAtUtc'] = '2026-11-15T07:00:00';
+    expect(() => PortableBackup.decode(encodeChanged(ambiguousLocalTime)),
+        throwsFormatException);
+    final ambiguousSessionTime = clone();
+    (ambiguousSessionTime['sessions'] as List).first['updatedAtUtc'] =
+        '2026-11-15T07:00:00';
+    expect(() => PortableBackup.decode(encodeChanged(ambiguousSessionTime)),
+        throwsFormatException);
+    final impossibleDay = clone()
+      ..['createdAtUtc'] = '2026-02-31T07:00:00Z';
+    expect(() => PortableBackup.decode(encodeChanged(impossibleDay)),
+        throwsFormatException);
     final unknownTopLevel = clone()..['oauthToken'] = 'PRIVATE_SECRET';
     expect(() => PortableBackup.decode(encodeChanged(unknownTopLevel)),
         throwsFormatException);
