@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import '../chat/narrator.dart';
+import 'book_lore.dart';
 
 /// Only portable, non-sensitive properties belong to a BookDefinition.
 /// AI profile bindings and player sessions are stored in separate tables.
@@ -16,10 +17,11 @@ class BookDefinition {
     this.detailLevel = 3,
     this.openingMessages = defaultNarratorOpeningMessages,
     this.extensions = const <String, Object?>{},
+    this.lore = const BookLore(),
   });
 
   static const format = 'domolia.book';
-  static const version = 1;
+  static const version = 2;
   static const maxJsonBytes = 2 * 1024 * 1024;
   static const maxCoverBytes = 1024 * 1024;
   static const _allowedMime = {'image/png', 'image/jpeg', 'image/webp'};
@@ -35,6 +37,7 @@ class BookDefinition {
   final List<String> openingMessages;
   /// Reserved for future versioned, explicitly safe scenario/character data.
   final Map<String, Object?> extensions;
+  final BookLore lore;
 
   bool get nsfw => tags.contains('nsfw');
 
@@ -79,6 +82,7 @@ class BookDefinition {
     int? detailLevel,
     List<String>? openingMessages,
     Map<String, Object?>? extensions,
+    BookLore? lore,
   }) => BookDefinition(
         id: id ?? this.id,
         title: title ?? this.title,
@@ -89,6 +93,7 @@ class BookDefinition {
         detailLevel: detailLevel ?? this.detailLevel,
         openingMessages: openingMessages ?? this.openingMessages,
         extensions: extensions ?? this.extensions,
+        lore: lore ?? this.lore,
       );
 
   static String freshId() {
@@ -114,11 +119,16 @@ class BookDefinition {
         },
         'openingMessages': openingMessages,
         'extensions': extensions,
+        'lore': lore.toJson(),
       };
 
   String exportJson() {
     validate();
-    return const JsonEncoder.withIndent('  ').convert(toPortableJson());
+    final result = const JsonEncoder.withIndent('  ').convert(toPortableJson());
+    if (utf8.encode(result).length > maxJsonBytes) {
+      throw const FormatException('Fichier de Livre trop volumineux.');
+    }
+    return result;
   }
 
   void validate() {
@@ -161,6 +171,7 @@ class BookDefinition {
         throw const FormatException('Couverture illisible.');
       }
     }
+    lore.validate();
     // Future extensions must declare a new schema before accepting data.
     if (extensions.isNotEmpty) {
       throw const FormatException('Extensions non prises en charge en v1.');
@@ -182,10 +193,13 @@ class BookDefinition {
     }
     const allowed = {
       'format', 'version', 'id', 'title', 'tags', 'cover',
-      'narrative', 'openingMessages', 'extensions',
+      'narrative', 'openingMessages', 'extensions', 'lore',
     };
     if (parsed.keys.any((key) => !allowed.contains(key)) ||
-        parsed['format'] != format || parsed['version'] != version ||
+        parsed['format'] != format ||
+        (parsed['version'] != 1 && parsed['version'] != version) ||
+        (parsed['version'] == 1 && parsed.containsKey('lore')) ||
+        (parsed['version'] == version && !parsed.containsKey('lore')) ||
         parsed['id'] is! String || parsed['title'] is! String ||
         parsed['tags'] is! List || parsed['narrative'] is! Map<String, dynamic> ||
         parsed['openingMessages'] is! List ||
@@ -219,6 +233,8 @@ class BookDefinition {
       extensions: Map<String, Object?>.unmodifiable(
         parsed['extensions'] as Map<String, dynamic>,
       ),
+      lore: parsed['version'] == 1
+          ? const BookLore() : BookLore.fromJson(parsed['lore']),
     );
     book.validate();
     return book;
