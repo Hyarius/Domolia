@@ -503,7 +503,75 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
             },
           );
         }),
-        const SizedBox(height: 14),
+        Builder(builder: (context) {
+          final generation = routing.generationFor(task);
+          final preset = switch (task) {
+            AiNarrativeTask.narrator => 'low',
+            AiNarrativeTask.jsonifier => 'none',
+            AiNarrativeTask.optimizer => 'low',
+          };
+          Future<void> save(AiTaskGenerationSettings options) async {
+            try {
+              await routing.setGeneration(task, options);
+            } catch (_) {
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text(
+                  'Impossible d’enregistrer les paramètres de génération.')));
+            }
+          }
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 8),
+              DropdownButtonFormField<int>(
+                key: ValueKey('aiTaskTokens-${task.name}-${generation.maxOutputTokens}'),
+                initialValue: generation.maxOutputTokens,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Budget maximal de sortie (tokens)'),
+                items: [
+                  for (final tokens in AiTaskGenerationSettings.tokenChoices)
+                    DropdownMenuItem(value: tokens,
+                      child: Text('$tokens tokens')),
+                ],
+                onChanged: controller.busy ? null : (tokens) {
+                  if (tokens != null) {
+                    save(AiTaskGenerationSettings(
+                      maxOutputTokens: tokens,
+                      reasoningEffort: generation.reasoningEffort,
+                    ));
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                key: ValueKey('aiTaskReasoning-${task.name}-${generation.reasoningEffort}'),
+                initialValue: generation.reasoningEffort,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  labelText: 'Effort de raisonnement (ChatGPT)',
+                  helperText: 'Auto : Luna = $preset ; autres modèles = défaut fournisseur.',
+                ),
+                items: [
+                  for (final effort in AiTaskGenerationSettings.reasoningChoices)
+                    DropdownMenuItem(value: effort, child: Text(
+                      effort == 'auto' ? 'Automatique' :
+                      effort == 'provider' ? 'Défaut du fournisseur' :
+                      effort.toUpperCase())),
+                ],
+                onChanged: controller.busy ? null : (effort) {
+                  if (effort != null) {
+                    save(AiTaskGenerationSettings(
+                      maxOutputTokens: generation.maxOutputTokens,
+                      reasoningEffort: effort,
+                    ));
+                  }
+                },
+              ),
+            ],
+          );
+        }),
+        const SizedBox(height: 18),
       ],
       const Divider(),
       const SizedBox(height: 14),
