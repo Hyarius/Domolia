@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:cupertino_ui/cupertino_ui.dart' as cupertino_ui;
 import 'package:flutter_localizations/flutter_localizations.dart' as flutter_l10n;
@@ -20,11 +21,8 @@ import 'ai/ai_diagnostics.dart';
 import 'ai/ai_diagnostic_settings.dart';
 import 'ai/ai_provider.dart';
 import 'ai/ai_settings_panel.dart';
-import 'ai/ai_storage.dart';
-import 'ai/chatgpt_auth.dart';
-import 'ai/chatgpt_responses.dart';
 import 'updates/update_service.dart';
-import 'updates/update_io.dart';
+import 'platform/production_services.dart';
 import 'updates/update_widgets.dart';
 
 void main() {
@@ -119,10 +117,10 @@ class _HomePageState extends State<HomePage> {
     _updates = widget.updates ?? createProductionUpdateController();
     _ownsAi = widget.ai == null;
     _ai = widget.ai ?? AiConnectionController(
-      store: SecureAiProfileStore(),
+      store: createProductionAiProfileStore(),
       provider: OpenAiCompatibleChatProvider(diagnostics: _aiDiagnostics),
-      chatGpt: ChatGptAuthService(store: SecureChatGptSessionStore()),
-      chatGptProvider: ChatGptResponsesProvider(diagnostics: _aiDiagnostics),
+      chatGpt: createProductionChatGptAccountService(),
+      chatGptProvider: createProductionChatGptProvider(_aiDiagnostics),
     );
     _ownsNarratorSettings = widget.narratorSettings == null;
     _narratorSettings = widget.narratorSettings ?? NarratorSettingsController(
@@ -130,7 +128,7 @@ class _HomePageState extends State<HomePage> {
     );
     _ownsBooks = widget.books == null;
     _books = widget.books ?? BookLibraryController(
-      store: SqliteBookStore(),
+      store: createProductionBookStore(),
       legacyNarrator: _narratorSettings.store,
     );
     _ownsChat = widget.chat == null;
@@ -140,7 +138,7 @@ class _HomePageState extends State<HomePage> {
       diagnostics: _aiDiagnostics,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(_updates.initialize());
+      if (mounted && !kIsWeb) unawaited(_updates.initialize());
     });
   }
 
@@ -298,7 +296,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         actions: [
-          IconButton(
+          if (!kIsWeb) IconButton(
             tooltip: 'Mise à jour',
             onPressed: _checkForUpdates,
             icon: const Icon(Icons.system_update_alt_rounded),
@@ -307,7 +305,7 @@ class _HomePageState extends State<HomePage> {
       ),
       drawer: _buildDrawer(),
       body: Column(children: [
-        if (_updates.phase == UpdatePhase.downloading)
+        if (!kIsWeb && _updates.phase == UpdatePhase.downloading)
           UpdateProgressStrip(controller: _updates),
         Expanded(child: _page == _Page.home ? _buildHome()
           : _page == _Page.books ? BookLibraryPage(
@@ -342,7 +340,7 @@ class _HomePageState extends State<HomePage> {
             )
           : _page == _Page.about ? _buildAbout()
           : _page == _Page.settings ? _buildSettings()
-          : _page == _Page.updates ? UpdateSettingsPanel(
+          : _page == _Page.updates && !kIsWeb ? UpdateSettingsPanel(
               controller: _updates,
               onBack: () => setState(() => _page = _Page.settings),
               onViewAllVersions: () => _openUrl(_allReleasesUrl),
@@ -479,12 +477,20 @@ class _HomePageState extends State<HomePage> {
           onTap: _openAiSettings,
         ),
         const Divider(),
-        ListTile(
+        if (!kIsWeb) ListTile(
           leading: const Icon(Icons.system_update_alt_rounded, color: DomoliaColors.gold),
           title: const Text('Mises à jour'),
           subtitle: const Text('Version installée, canal et préversions'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => setState(() => _page = _Page.updates),
+        ),
+        if (kIsWeb) const ListTile(
+          leading: Icon(Icons.storage_outlined, color: DomoliaColors.gold),
+          title: Text('Stockage local au navigateur'),
+          subtitle: Text(
+            'Livres et conversations enregistrés sur cet ordinateur. '
+            'Effacer les données du site peut supprimer votre bibliothèque. '
+            'La sauvegarde complète arrivera dans la prochaine étape.'),
         ),
         const Divider(),
         ListTile(

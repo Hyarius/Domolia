@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:material_ui/material_ui.dart';
 
 import '../theme/domolia_theme.dart';
@@ -354,12 +355,13 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               value: controller.selectedKind,
               isExpanded: true,
               dropdownColor: DomoliaColors.raisedSurface,
-              items: const [
+              items: [
                 DropdownMenuItem(
                   value: AiProviderKind.chatGpt,
-                  child: Text('ChatGPT'),
+                  enabled: !kIsWeb,
+                  child: const Text('ChatGPT'),
                 ),
-                DropdownMenuItem(
+                const DropdownMenuItem(
                   value: AiProviderKind.customAi,
                   child: Text('CustomAI'),
                 ),
@@ -371,6 +373,16 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
           ),
         ),
         const SizedBox(height: 17),
+        if (kIsWeb) const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: Text(
+            'Web : les clés API ne sont conservées que durant cette session. '
+            'Elles ne sont pas enregistrées dans IndexedDB ni dans les '
+            'préférences du navigateur. Leur utilisation dépend aussi du CORS '
+            'autorisé par le fournisseur.',
+            style: TextStyle(color: DomoliaColors.muted),
+          ),
+        ),
         const Text(
           'État de la connexion',
           style: TextStyle(
@@ -597,9 +609,12 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                 ),
               ],
               ] else ...[
-                const Text(
-                  'Connectez un compte ChatGPT à cette configuration nommée. '
-                  'Les identifiants OAuth restent protégés sur ce téléphone.',
+                Text(
+                  kIsWeb
+                      ? 'Connexion ChatGPT non disponible sur Web : le retour '
+                        'OAuth local ne peut pas fonctionner sur GitHub Pages.'
+                      : 'Connectez un compte ChatGPT à cette configuration nommée. '
+                        'Les identifiants OAuth restent protégés sur ce téléphone.',
                   style: TextStyle(color: DomoliaColors.cream, height: 1.5),
                 ),
                 const SizedBox(height: 14),
@@ -635,14 +650,14 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                 const SizedBox(height: 14),
                 FilledButton.icon(
                   key: const ValueKey('chatGptConnect'),
-                  onPressed: c.busy ? null : c.connectChatGpt,
+                  onPressed: kIsWeb || c.busy ? null : c.connectChatGpt,
                   icon: const Icon(Icons.login),
                   label: const Text('Continuer avec ChatGPT'),
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
                   key: const ValueKey('chatGptDisconnect'),
-                  onPressed: c.busy ? null : c.disconnectChatGpt,
+                  onPressed: kIsWeb || c.busy ? null : c.disconnectChatGpt,
                   icon: const Icon(Icons.logout),
                   label: const Text('Déconnecter ChatGPT'),
                 ),

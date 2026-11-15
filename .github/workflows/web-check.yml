@@ -1,0 +1,51 @@
+name: Web validation
+
+on:
+  push:
+    branches:
+      - main
+      - 'impl/web/**'
+  pull_request:
+    paths:
+      - 'lib/**'
+      - 'web/**'
+      - 'pubspec.yaml'
+      - 'test/**'
+      - '.github/workflows/web-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: Compiler Flutter Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Installer les dépendances
+        run: flutter pub get
+      - name: Générer les ressources SQLite WebAssembly
+        run: dart run sqflite_common_ffi_web:setup --force
+      - name: Analyse statique
+        run: flutter analyze
+      - name: Tests Dart et widgets
+        run: flutter test
+      - name: Compiler le site pour GitHub Pages
+        run: flutter build web --release --base-href /Domolia/
+      - name: Vérifier les ressources nécessaires
+        run: |
+          test -s build/web/index.html
+          test -s build/web/main.dart.js
+          test -s build/web/sqlite3.wasm
+          test -s build/web/sqflite_sw.js
+          grep -q '/Domolia/' build/web/index.html
+      - name: Conserver le build pour inspection (sans publication)
+        uses: actions/upload-artifact@v4
+        with:
+          name: domolia-web-build
+          path: build/web/
+          retention-days: 7
