@@ -23,7 +23,7 @@ class _BookLoreTabState extends State<BookLoreTab> {
   final Map<String, String> _typeFilters = {};
   final Set<String> _expanded = {'global'};
 
-  Future<void> _commit(BookLore next) async {
+  Future<bool> _commit(BookLore next) async {
     try {
       next.validate();
       await widget.onSave(next);
@@ -31,6 +31,7 @@ class _BookLoreTabState extends State<BookLoreTab> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Lore enregistré.')));
       }
+      return true;
     } on FormatException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -42,6 +43,7 @@ class _BookLoreTabState extends State<BookLoreTab> {
           const SnackBar(content: Text('Échec de sauvegarde du Lore.')));
       }
     }
+    return false;
   }
 
   List<_Field> _globalFields(LoreGlobal g) => [
@@ -58,19 +60,21 @@ class _BookLoreTabState extends State<BookLoreTab> {
   ];
 
   Future<void> _editGlobal() async {
-    final result = await Navigator.push<_EditResult>(
+    await Navigator.push<void>(
       context, MaterialPageRoute(builder: (_) => _LoreForm(
-        title: 'Lore global', fields: _globalFields(widget.lore.global),
+        title: 'Lore global',
+        fields: _globalFields(widget.lore.global),
+        onSubmit: (result) {
+          String v(String key) => result.values[key] ?? '';
+          return _commit(widget.lore.copyWith(global: LoreGlobal(
+            universe:v('universe'),overview:v('overview'),genre:v('genre'),
+            era:v('era'),initialContext:v('initialContext'),history:v('history'),
+            rules:v('rules'),conflicts:v('conflicts'),directions:v('directions'),
+            secrets:v('secrets'),
+          )));
+        },
       )),
     );
-    if (result == null) return;
-    String v(String key) => result.values[key] ?? '';
-    await _commit(widget.lore.copyWith(global: LoreGlobal(
-      universe:v('universe'),overview:v('overview'),genre:v('genre'),
-      era:v('era'),initialContext:v('initialContext'),history:v('history'),
-      rules:v('rules'),conflicts:v('conflicts'),directions:v('directions'),
-      secrets:v('secrets'),
-    )));
   }
 
   List<_Field> _baseFields(LoreRecord? record) => [
@@ -166,59 +170,79 @@ class _BookLoreTabState extends State<BookLoreTab> {
       ];
     }
     if (!mounted) return;
-    final result = await Navigator.push<_EditResult>(
+    await Navigator.push<void>(
       context, MaterialPageRoute(builder: (_) => _LoreForm(
         title: record == null ? 'Nouvelle fiche' : record.name,
         fields: fields, references: references,
+        onSubmit: (result) => _saveRecord(category, record, result),
       )),
     );
-    if (result == null) return;
-    String v(String key) => result.values[key] ?? '';
-    List<String> values(String key) => v(key).split(',')
-        .map((s) => s.trim()).where((s) => s.isNotEmpty).toSet().toList();
-    List<String> refs(String key) => result.references[key] ?? [];
-    final id = record?.id ?? newLoreId();
-    final common = <String, Object?>{
-      'id': id,'name':v('name').trim(),'description':v('description'),
-      'aliases':values('aliases'),'tags':values('tags'),'secrets':v('secrets'),
-    };
-    BookLore next;
-    switch (category) {
-      case 'characters':
-        next = lore.putCharacter(LoreCharacter.fromJson({
-          ...common,'appearance':v('appearance'),'personality':v('personality'),
-          'background':v('background'),'role':v('role'),
-          'motivations':v('motivations'),'values':v('values'),
-          'relatedCharacterIds':refs('relatedCharacterIds'),
-          'homePlaceId':refs('homePlaceId').firstOrNull,
-        }));
-      case 'places':
-        next = lore.putPlace(LorePlace.fromJson({
-          ...common,'type':v('type'),'atmosphere':v('atmosphere'),
-          'history':v('history'),'features':v('features'),
-          'characterIds':refs('characterIds'),'placeIds':refs('placeIds'),
-        }));
-      case 'scenarios':
-        next = lore.putScenario(LoreScenario.fromJson({
-          ...common,'summary':v('summary'),'importance':v('importance'),
-          'initialContext':v('initialContext'),'objectives':v('objectives'),
-          'introduction':v('introduction'),
-          'characterIds':refs('characterIds'),'placeIds':refs('placeIds'),
-          'eventIds':refs('eventIds'),
-        }));
-      case 'events':
-        next = lore.putEvent(LoreEvent.fromJson({
-          ...common,'trigger':v('trigger'),'mandatory':v('mandatory') == 'true',
-          'condition':v('condition'),'timing':v('timing'),
-          'consequences':v('consequences'),
-          'priority':int.parse(v('priority')),
-          'characterIds':refs('characterIds'),'placeIds':refs('placeIds'),
-          'scenarioIds':refs('scenarioIds'),
-        }));
-      default:
-        return;
+  }
+
+  /// Keep the editor open when model validation or SQLite persistence fails.
+  Future<bool> _saveRecord(
+      String category, LoreRecord? record, _EditResult result) async {
+    try {
+      final lore = widget.lore;
+      String v(String key) => result.values[key] ?? '';
+      List<String> values(String key) => v(key).split(',')
+          .map((s) => s.trim()).where((s) => s.isNotEmpty).toSet().toList();
+      List<String> refs(String key) => result.references[key] ?? [];
+      final id = record?.id ?? newLoreId();
+      final common = <String, Object?>{
+        'id': id,'name':v('name').trim(),'description':v('description'),
+        'aliases':values('aliases'),'tags':values('tags'),'secrets':v('secrets'),
+      };
+      BookLore next;
+      switch (category) {
+        case 'characters':
+          next = lore.putCharacter(LoreCharacter.fromJson({
+            ...common,'appearance':v('appearance'),'personality':v('personality'),
+            'background':v('background'),'role':v('role'),
+            'motivations':v('motivations'),'values':v('values'),
+            'relatedCharacterIds':refs('relatedCharacterIds'),
+            'homePlaceId':refs('homePlaceId').firstOrNull,
+          }));
+        case 'places':
+          next = lore.putPlace(LorePlace.fromJson({
+            ...common,'type':v('type'),'atmosphere':v('atmosphere'),
+            'history':v('history'),'features':v('features'),
+            'characterIds':refs('characterIds'),'placeIds':refs('placeIds'),
+          }));
+        case 'scenarios':
+          next = lore.putScenario(LoreScenario.fromJson({
+            ...common,'summary':v('summary'),'importance':v('importance'),
+            'initialContext':v('initialContext'),'objectives':v('objectives'),
+            'introduction':v('introduction'),
+            'characterIds':refs('characterIds'),'placeIds':refs('placeIds'),
+            'eventIds':refs('eventIds'),
+          }));
+        case 'events':
+          next = lore.putEvent(LoreEvent.fromJson({
+            ...common,'trigger':v('trigger'),'mandatory':v('mandatory') == 'true',
+            'condition':v('condition'),'timing':v('timing'),
+            'consequences':v('consequences'),
+            'priority':int.parse(v('priority')),
+            'characterIds':refs('characterIds'),'placeIds':refs('placeIds'),
+            'scenarioIds':refs('scenarioIds'),
+          }));
+        default:
+          return;
+      }
+      return await _commit(next);
+    } on FormatException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)));
+      }
+      return false;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Fiche de Lore invalide.')));
+      }
+      return false;
     }
-    await _commit(next);
   }
 
   Future<void> _duplicate(String category, LoreRecord record) async {
@@ -229,8 +253,11 @@ class _BookLoreTabState extends State<BookLoreTab> {
       LoreEvent e => e.toJson(),
       _ => <String, Object?>{},
     };
+    // The suffix must not invalidate a maximum-length name.
+    final baseName = record.name.length > 142
+        ? record.name.substring(0, 142) : record.name;
     final copy = {...source, 'id': newLoreId(),
-      'name': '${record.name} (copie)'};
+      'name': '$baseName (copie)'};
     final next = switch (category) {
       'characters' => widget.lore.putCharacter(LoreCharacter.fromJson(copy)),
       'places' => widget.lore.putPlace(LorePlace.fromJson(copy)),
@@ -455,10 +482,11 @@ class _EditResult {
 
 class _LoreForm extends StatefulWidget {
   const _LoreForm({required this.title,required this.fields,
-    this.references=const []});
+    required this.onSubmit, this.references=const []});
   final String title;
   final List<_Field> fields;
   final List<_ReferenceField> references;
+  final Future<bool> Function(_EditResult) onSubmit;
   @override
   State<_LoreForm> createState()=>_LoreFormState();
 }
@@ -467,6 +495,7 @@ class _LoreFormState extends State<_LoreForm> {
   late final Map<String,TextEditingController> _controllers;
   late final Map<String,String> _dropdowns;
   late final Map<String,List<String>> _references;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -531,12 +560,28 @@ class _LoreFormState extends State<_LoreForm> {
     if(selected!=null) setState(()=>_references[field.key]=selected);
   }
 
-  void _save() {
+  Future<void> _save() async {
+    if (_saving) return;
     final values={
       for(final entry in _controllers.entries)entry.key:entry.value.text,
       ..._dropdowns,
     };
-    Navigator.pop(context,_EditResult(values,_references));
+    setState(() => _saving = true);
+    var saved = false;
+    try {
+      saved = await widget.onSubmit(_EditResult(values,_references));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Échec de sauvegarde du Lore.')));
+      }
+    }
+    if (!mounted) return;
+    if (saved) {
+      Navigator.pop(context);
+    } else {
+      setState(() => _saving = false);
+    }
   }
 
   @override
@@ -544,7 +589,7 @@ class _LoreFormState extends State<_LoreForm> {
     backgroundColor:DomoliaColors.background,
     appBar:AppBar(title:Text(widget.title),actions:[
       IconButton(key:const ValueKey('loreFormSave'),
-        onPressed:_save,icon:const Icon(Icons.save_outlined),
+        onPressed:_saving?null:_save,icon:const Icon(Icons.save_outlined),
         tooltip:'Enregistrer la fiche'),
     ]),
     body:SafeArea(child:ListView(
@@ -589,7 +634,7 @@ class _LoreFormState extends State<_LoreForm> {
         ],
         FilledButton.icon(
           key:const ValueKey('loreFormSaveButton'),
-          onPressed:_save,icon:const Icon(Icons.save),
+          onPressed:_saving?null:_save,icon:const Icon(Icons.save),
           label:const Text('Enregistrer')),
         const SizedBox(height:26),
       ],
