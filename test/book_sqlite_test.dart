@@ -1,4 +1,8 @@
 import 'dart:io';
+import 'dart:convert';
+
+import 'package:domolia/ai/ai_provider.dart';
+import 'package:domolia/chat/chat_controller.dart';
 
 import 'package:domolia/ai/ai_diagnostics.dart';
 import 'package:domolia/books/book_definition.dart';
@@ -265,4 +269,122 @@ void main() {
       throwsFormatException);
   });
 
+
+  test('Controller and real SQLite resume a failed JSONification after restart',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('domolia-pipeline-integration-');
+    final file = '${dir.path}/integration.sqlite';
+    final first = SqliteBookStore(factory: databaseFactoryFfi, databasePath: file);
+    addTearDown(() async {
+      await first.close();
+      await dir.delete(recursive: true);
+    });
+    await first.putBook(const BookDefinition(id: 'b', title: 'Livre'));
+    const session = BookSession(id: 's', bookId: 'b', title: 'Partie');
+    await first.putSession(session);
+    final provider = _PipelineProvider();
+    final firstController = NarrativeChatController(
+      provider: provider,
+      configuration: () => _integrationConfig,
+      onPersistState: (events, raws) =>
+          first.saveNarrativeSnapshot(session.copyWith(timeline: events), raws),
+    );
+    await firstController.send('Je rentre dans le château.');
+    expect(firstController.messages, hasLength(1));
+    expect(firstController.pendingRaw?.rawText, provider.raw);
+    expect(provider.rawCalls, 1);
+    firstController.dispose();
+    await first.close();
+
+    final second = SqliteBookStore(factory: databaseFactoryFfi, databasePath: file);
+    addTearDown(second.close);
+    final saved = (await second.findSession('s'))!;
+    final savedRaw = await second.listRawGenerations('s');
+    expect(saved.timeline, hasLength(1));
+    expect(savedRaw.single.isStructured, isFalse);
+    provider.failFormatter = false;
+    final resumed = NarrativeChatController(
+      provider: provider,
+      configuration: () => _integrationConfig,
+      onPersistState: (events, raws) =>
+          second.saveNarrativeSnapshot(session.copyWith(timeline: events), raws),
+    );
+    addTearDown(resumed.dispose);
+    resumed.restoreTimeline(saved.timeline, rawGenerations: savedRaw);
+    await resumed.retry();
+    expect(provider.rawCalls, 1, reason: 'The narrator must not be called twice.');
+    expect(provider.formatCalls, 2);
+    expect(resumed.messages.last.text, provider.raw);
+    expect((await second.findSession('s'))!.timeline, hasLength(2));
+    final finalRaw = (await second.listRawGenerations('s')).single;
+    expect(finalRaw.isStructured, isTrue);
+    expect(finalRaw.rawText, provider.raw);
+
+    await second.deleteBook('b');
+    expect(await second.listRawGenerations('s'), isEmpty);
+  });
+
+  test('Rollback leaves an earlier committed RAW and timeline untouched',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('domolia-existing-rollback-');
+    final file = '${dir.path}/rollback.sqlite';
+    final db = SqliteBookStore(factory: databaseFactoryFfi, databasePath: file);
+    addTearDown(() async {
+      await db.close();
+      await dir.delete(recursive: true);
+    });
+    await db.putBook(const BookDefinition(id: 'b', title: 'Livre'));
+    const session = BookSession(id: 's', bookId: 'b', title: 'Partie',
+      timeline: [
+        ChatEntry(id: 0, speaker: ChatSpeaker.player, name: 'Vous', text: 'Oui'),
+      ],
+    );
+    await db.putSession(session);
+    const before = RawGeneration(playerEventId: 0, rawText: 'RAW original');
+    await db.saveNarrativeSnapshot(session, const [before]);
+    final changed = session.copyWith(timeline: [
+      ...session.timeline,
+      const ChatEntry(id: 1, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Ne doit pas être publié'),
+    ]);
+    await expectLater(db.saveNarrativeSnapshot(changed, const [
+      RawGeneration(playerEventId: 0, rawText: 'RAW nouveau'),
+      RawGeneration(playerEventId: 0, rawText: 'Doublon invalide'),
+    ]), throwsA(isA<Exception>()));
+    expect((await db.findSession('s'))!.timeline, hasLength(1));
+    expect((await db.listRawGenerations('s')).single.rawText, before.rawText);
+  });
+
+}
+
+
+const _integrationConfig = AiConfiguration(
+  baseUrl: defaultAiBaseUrl, model: defaultAiModel, apiKey: 'test',
+);
+
+class _PipelineProvider implements AiChatProvider {
+  final String raw = 'Le château apparaît, entouré de brume.';
+  bool failFormatter = true;
+  int rawCalls = 0;
+  int formatCalls = 0;
+
+  @override
+  Future<List<AiModel>> listModels(AiConfiguration config) async => [];
+
+  @override
+  Future<String> complete(AiConfiguration config, {
+    required List<AiMessage> messages,
+    int maxTokens = 1200,
+  }) async {
+    if (messages.first.content.contains('JSONificateur')) {
+      formatCalls++;
+      if (failFormatter) return '{"events":[]}';
+      return jsonEncode({'events': [
+        {'type': 'message', 'start': 0, 'end': raw.length,
+         'speaker': 'narrator', 'name': 'Narrateur'},
+      ]});
+    }
+    rawCalls++;
+    return raw;
+  }
 }
