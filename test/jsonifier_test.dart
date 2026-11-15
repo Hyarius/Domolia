@@ -47,7 +47,7 @@ void main() {
     expect(lines.whereType<ChatLine>().map((m) => m.name),
         ['Narrateur', 'Brann', 'Naëlle']);
     expect(lines.whereType<ChatLine>().map((m) => m.text).join(),
-        raw.replaceAll('\n', ''));
+        raw);
   });
 
   test('Scene break at response beginning, and multiple internal breaks', () {
