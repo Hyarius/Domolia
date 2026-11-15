@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../ai/ai_controller.dart';
+import '../ai/ai_diagnostics.dart';
 import '../books/book_library_controller.dart';
 import '../chat/chat_controller.dart';
 import '../chat/chat_exports.dart';
@@ -16,7 +17,7 @@ class ConversationSettingsPage extends StatefulWidget {
     super.key, required this.library, required this.ai,
     required this.chat, required this.bookId, required this.sessionId,
     this.bookTitle, this.sessionTitle, required this.onBack,
-    this.onExportBookJson,
+    this.onExportBookJson, this.onLoadAiDiagnostics, this.onExportAiTrace,
   });
   final BookLibraryController library;
   final AiConnectionController ai;
@@ -28,6 +29,10 @@ class ConversationSettingsPage extends StatefulWidget {
   final VoidCallback onBack;
   /// Optional test adapter; production uses the Android file picker.
   final Future<void> Function(String fileName, Uint8List bytes)? onExportBookJson;
+  /// Waits for queued SQLite diagnostic writes in production.
+  final Future<List<StoredAiDiagnostic>> Function()? onLoadAiDiagnostics;
+  /// Test adapter; production saves through Android's file picker.
+  final Future<void> Function(String fileName, Uint8List bytes)? onExportAiTrace;
   @override
   State<ConversationSettingsPage> createState() => _ConversationSettingsPageState();
 }
@@ -182,6 +187,47 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     }
   }
 
+  Future<void> _exportAiTrace() async {
+    try {
+      final diagnostics = widget.onLoadAiDiagnostics == null
+          ? await widget.library.diagnostics(widget.sessionId)
+          : await widget.onLoadAiDiagnostics!();
+      if (!mounted) return;
+      final payload = exportAiPipelineTrace(
+        widget.chat.timeline,
+        widget.chat.rawGenerations,
+        diagnostics,
+        latestExchange: widget.chat.lastExchange,
+        bookTitle: widget.bookTitle,
+        sessionTitle: widget.sessionTitle,
+      );
+      final bytes = Uint8List.fromList(
+        utf8.encode(const JsonEncoder.withIndent('  ').convert(payload)),
+      );
+      // Raw provider responses can be large; keep Android file export bounded.
+      if (bytes.length > 32 * 1024 * 1024) {
+        _notify('Diagnostic trop volumineux (32 Mio maximum).');
+        return;
+      }
+      const fileName = 'domolia-diagnostic-ia.json';
+      if (widget.onExportAiTrace != null) {
+        await widget.onExportAiTrace!(fileName, bytes);
+        _notify('Diagnostic IA exporté.');
+        return;
+      }
+      final saved = await FilePicker.platform.saveFile(
+        dialogTitle: 'Exporter les échanges IA',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        bytes: bytes,
+      );
+      if (saved != null) _notify('Diagnostic IA exporté.');
+    } catch (_) {
+      _notify('Impossible d’exporter les échanges IA.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) => SafeArea(
     child: ListView(
@@ -253,11 +299,20 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
             icon: const Icon(Icons.menu_book_outlined),
             label: const Text('Livre (JSON brut)'),
           ),
+          OutlinedButton.icon(
+            key: const ValueKey('aiPipelineExport'),
+            onPressed: _exportAiTrace,
+            icon: const Icon(Icons.bug_report_outlined),
+            label: const Text('Exporter les échanges IA'),
+          ),
         ]),
         const SizedBox(height: 10),
         const Text(
-          'Le Livre contient son Lore et ses paramètres narratifs, sans '
-          'les Parties, les échanges IA ni les clés personnelles.',
+          'Le Livre contient son Lore et ses paramètres narratifs. '
+          'Le diagnostic IA regroupe les requêtes, les réponses brutes, '
+          'les phases RAW/JSON et les erreurs encore disponibles. '
+          'Il peut contenir des informations personnelles ; '
+          'les traces supprimées ne sont pas récupérables.',
           style: TextStyle(color: DomoliaColors.muted),
         ),
       ],
