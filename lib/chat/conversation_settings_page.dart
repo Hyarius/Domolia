@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import '../ai/ai_controller.dart';
 import '../ai/ai_diagnostics.dart';
 import '../ai/ai_provider.dart';
+import '../ai/ai_task_routing.dart';
 import '../books/book_library_controller.dart';
 import '../chat/chat_controller.dart';
 import '../chat/chat_exports.dart';
@@ -19,7 +20,7 @@ class ConversationSettingsPage extends StatefulWidget {
     required this.chat, required this.bookId, required this.sessionId,
     this.bookTitle, this.sessionTitle, required this.onBack,
     this.onExportBookJson, this.onLoadAiDiagnostics, this.onExportAiTrace,
-    this.onPurgeAiDiagnostics,
+    this.onPurgeAiDiagnostics, this.taskRouting,
   });
   final BookLibraryController library;
   final AiConnectionController ai;
@@ -36,6 +37,7 @@ class ConversationSettingsPage extends StatefulWidget {
   /// Test adapter; production saves through Android's file picker.
   final Future<void> Function(String fileName, Uint8List bytes)? onExportAiTrace;
   final Future<void> Function()? onPurgeAiDiagnostics;
+  final AiTaskRouting? taskRouting;
   @override
   State<ConversationSettingsPage> createState() => _ConversationSettingsPageState();
 }
@@ -45,6 +47,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   String? _formatterProfile;
   String? _optimizerProfile;
   int _cachedLoreCharacters = 0;
+  Map<AiNarrativeTask, AiTaskGenerationOverride> _generationOverrides = {};
   bool _loaded = false;
   bool _saving = false;
 
@@ -61,6 +64,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           _formatterProfile = session?.formatterProfileId;
           _optimizerProfile = session?.optimizerProfileId;
           _cachedLoreCharacters = session?.optimizedLore?.length ?? 0;
+          _generationOverrides = Map.of(session?.generationOverrides ?? {});
           _loaded = true;
         });
       }
@@ -117,6 +121,94 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _setGeneration(AiNarrativeTask task,
+      AiTaskGenerationOverride options) async {
+    if (_saving || widget.chat.busy) return;
+    setState(() => _saving = true);
+    try {
+      await widget.library.setSessionGenerationOverride(
+          widget.sessionId, task, options);
+      if (mounted) {
+        setState(() {
+          _generationOverrides = Map.of(_generationOverrides);
+          if (options.isEmpty) {
+            _generationOverrides.remove(task);
+          } else {
+            _generationOverrides[task] = options;
+          }
+        });
+      }
+      _notify('Paramètres de génération enregistrés pour cette Partie.');
+    } catch (_) {
+      _notify('Impossible de sauvegarder les paramètres de génération.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Widget _taskGenerationControls(AiNarrativeTask task) {
+    final options = _generationOverrides[task] ??
+        const AiTaskGenerationOverride();
+    final inherited = widget.taskRouting?.generationFor(task) ??
+        AiTaskGenerationSettings.defaults(task);
+    final title = switch (task) {
+      AiNarrativeTask.narrator => 'Narrateur RAW',
+      AiNarrativeTask.jsonifier => 'JSONificateur',
+      AiNarrativeTask.optimizer => 'Optimiseur de Lore',
+    };
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const SizedBox(height: 14),
+      Text(title, style: const TextStyle(color: DomoliaColors.goldLight)),
+      const SizedBox(height: 8),
+      DropdownButtonFormField<int>(
+        key: ValueKey('conversationTokens-${task.name}-${options.maxOutputTokens ?? 0}'),
+        initialValue: options.maxOutputTokens ?? 0,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Budget maximal de sortie (tokens)'),
+        items: [
+          DropdownMenuItem(value: 0,
+              child: Text('Hériter (${inherited.maxOutputTokens})')),
+          for (final count in AiTaskGenerationSettings.tokenChoices)
+            DropdownMenuItem(value: count, child: Text('$count tokens')),
+        ],
+        onChanged: _saving || widget.chat.busy ? null : (count) {
+          if (count != null) {
+            _setGeneration(task, options.copyWith(
+              maxOutputTokens: count == 0 ? null : count,
+              clearMaxOutputTokens: count == 0,
+            ));
+          }
+        },
+      ),
+      const SizedBox(height: 8),
+      DropdownButtonFormField<String>(
+        key: ValueKey('conversationReasoning-${task.name}-${options.reasoningEffort ?? ""}'),
+        initialValue: options.reasoningEffort ?? '',
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Effort de raisonnement (ChatGPT)'),
+        items: [
+          DropdownMenuItem(value: '',
+            child: Text('Hériter (${inherited.reasoningEffort})')),
+          for (final effort in AiTaskGenerationSettings.reasoningChoices)
+            DropdownMenuItem(value: effort, child: Text(
+              effort == 'auto' ? 'Automatique (Luna)' :
+              effort == 'provider' ? 'Défaut fournisseur' :
+              effort.toUpperCase())),
+        ],
+        onChanged: _saving || widget.chat.busy ? null : (effort) {
+          if (effort != null) {
+            _setGeneration(task, options.copyWith(
+              reasoningEffort: effort.isEmpty ? null : effort,
+              clearReasoningEffort: effort.isEmpty,
+            ));
+          }
+        },
+      ),
+    ]);
   }
 
   Future<void> _recompileLore() async {
@@ -420,6 +512,13 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 16),
+                const Divider(),
+                const Text('Budget et raisonnement par tâche',
+                  style: TextStyle(color: DomoliaColors.goldLight,
+                      fontSize: 17)),
+                for (final task in AiNarrativeTask.values)
+                  _taskGenerationControls(task),
                 const SizedBox(height: 12),
                 Text(
                   _cachedLoreCharacters > 0
