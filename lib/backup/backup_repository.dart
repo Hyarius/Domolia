@@ -70,7 +70,7 @@ class BackupRepository {
     String Function(String id) contentsFor,
   ) {
     final digest = _fingerprint([originalId, content]);
-    final base = '${prefix}-${digest.substring(0, 24)}';
+    final base = '$prefix-${digest.substring(0, 24)}';
     for (var attempt = 0; attempt < 1000; attempt++) {
       final candidate = attempt == 0 ? base : '$base-$attempt';
       if (!existing.containsKey(candidate) ||
