@@ -152,9 +152,23 @@ class ChatGptResponsesProvider implements AiChatProvider, AiStreamingChatProvide
               );
             }
           }
-        } else if (event == 'response.failed' ||
-                   event == 'response.incomplete' ||
-                   event == 'error') {
+        } else if (event == 'response.incomplete') {
+          final response = body['response'];
+          final details = response is Map<String, dynamic>
+              ? response['incomplete_details'] : null;
+          final reason = details is Map<String, dynamic>
+              ? details['reason'] : null;
+          if (reason == 'max_output_tokens') {
+            throw const AiProviderException(
+              'Budget de sortie épuisé (raisonnement compris). '
+              'Augmentez les tokens de cette tâche ou réduisez le '
+              'niveau de raisonnement.',
+            );
+          }
+          throw const AiProviderException(
+            'ChatGPT a interrompu la réponse avant sa fin.',
+          );
+        } else if (event == 'response.failed' || event == 'error') {
           throw const AiProviderException(
             'ChatGPT a interrompu la génération. Vérifiez les limites de votre compte.',
           );
