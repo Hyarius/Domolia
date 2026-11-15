@@ -16,6 +16,7 @@ class ConversationSettingsPage extends StatefulWidget {
     super.key, required this.library, required this.ai,
     required this.chat, required this.bookId, required this.sessionId,
     this.bookTitle, this.sessionTitle, required this.onBack,
+    this.onExportBookJson,
   });
   final BookLibraryController library;
   final AiConnectionController ai;
@@ -25,6 +26,8 @@ class ConversationSettingsPage extends StatefulWidget {
   final String? bookTitle;
   final String? sessionTitle;
   final VoidCallback onBack;
+  /// Optional test adapter; production uses the Android file picker.
+  final Future<void> Function(String fileName, Uint8List bytes)? onExportBookJson;
   @override
   State<ConversationSettingsPage> createState() => _ConversationSettingsPageState();
 }
@@ -150,6 +153,35 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     }
   }
 
+  /// Export the canonical Book definition, not this session or its AI profile.
+  Future<void> _exportBook() async {
+    try {
+      final book = widget.library.byId(widget.bookId);
+      if (book == null) {
+        _notify('Livre introuvable.');
+        return;
+      }
+      final bytes = Uint8List.fromList(utf8.encode(book.exportJson()));
+      final safeName = book.title.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+      final fileName = '${safeName.isEmpty ? 'livre' : safeName}.json';
+      if (widget.onExportBookJson != null) {
+        await widget.onExportBookJson!(fileName, bytes);
+        _notify('Livre exporté.');
+        return;
+      }
+      final saved = await FilePicker.platform.saveFile(
+        dialogTitle: 'Exporter le Livre (JSON brut)',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        bytes: bytes,
+      );
+      if (saved != null) _notify('Livre exporté.');
+    } catch (_) {
+      _notify('Impossible d’exporter le Livre.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) => SafeArea(
     child: ListView(
@@ -208,11 +240,25 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
         const Text('Historique', style: TextStyle(
             color: DomoliaColors.goldLight, fontSize: 18)),
         const SizedBox(height: 14),
-        FilledButton.icon(
-          key: const ValueKey('conversationExport'),
-          onPressed: _export,
-          icon: const Icon(Icons.file_download_outlined),
-          label: const Text('Exporter la conversation'),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          FilledButton.icon(
+            key: const ValueKey('conversationExport'),
+            onPressed: _export,
+            icon: const Icon(Icons.file_download_outlined),
+            label: const Text('Exporter la conversation'),
+          ),
+          OutlinedButton.icon(
+            key: const ValueKey('bookRawExport'),
+            onPressed: _exportBook,
+            icon: const Icon(Icons.menu_book_outlined),
+            label: const Text('Exporter le Livre (JSON brut)'),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        const Text(
+          'Le Livre contient son Lore et ses paramètres narratifs, sans '
+          'les Parties, les échanges IA ni les clés personnelles.',
+          style: TextStyle(color: DomoliaColors.muted),
         ),
       ],
     ),
