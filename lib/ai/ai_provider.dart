@@ -15,11 +15,18 @@ class AiConfiguration {
     required this.baseUrl,
     required this.model,
     required this.apiKey,
+    this.reasoningEffort,
   });
 
   final String baseUrl;
   final String model;
   final String apiKey;
+  /// Optional Responses API knob; ignored by generic Chat Completions.
+  final String? reasoningEffort;
+
+  AiConfiguration withReasoning(String? effort) => AiConfiguration(
+    baseUrl: baseUrl, model: model, apiKey: apiKey, reasoningEffort: effort,
+  );
 }
 
 /// A named, locally stored connection. Each profile owns its API key.
@@ -274,7 +281,7 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
             message.content.trim().isEmpty)) {
       throw const AiProviderException('Messages de chat invalides.');
     }
-    if (maxTokens < 1 || maxTokens > 8192) {
+    if (maxTokens < 1 || maxTokens > 32768) {
       throw const AiProviderException('Limite de tokens invalide.');
     }
     final response = await _request(configuration, 'chat/completions', payload: {
@@ -320,7 +327,7 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
             !{'system', 'user', 'assistant'}.contains(entry.role) ||
             entry.content.trim().isEmpty) ||
         maxTokens < 1 ||
-        maxTokens > 8192) {
+        maxTokens > 32768) {
       throw const AiProviderException('Requête de discussion invalide.');
     }
 
