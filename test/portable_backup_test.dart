@@ -423,4 +423,118 @@ void main() {
     expect(roundtrip.bookBindings.single.aiProfileId, 'deleted-profile');
     expect(roundtrip.aiProfiles.last.requiresReconfiguration, true);
   });
+
+  test('field order and pretty printing do not create duplicate books',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('domolia-json-');
+    final store = SqliteBookStore(
+      factory: databaseFactoryFfi,
+      databasePath: path.join(directory.path, 'json.db'),
+    );
+    addTearDown(() async {
+      await store.close();
+      await directory.delete(recursive: true);
+    });
+    final incoming = archive();
+    await store.putBook(incoming.books.single);
+    final raw = jsonDecode(incoming.books.single.exportJson())
+        as Map<String, dynamic>;
+    final reordered = Map<String, dynamic>.fromEntries(
+      raw.entries.toList().reversed,
+    );
+    await (await store.database).update(
+      'books', {'definition_json': jsonEncode(reordered)},
+      where: 'id = ?', whereArgs: ['book1'],
+    );
+    final service = BackupService(
+      books: store, profileStore: _MemoryProfiles(local),
+    );
+    final preview = await service.preview(incoming, BackupRestoreMode.merge);
+    expect(preview.bookConflicts, 0);
+    await service.restore(incoming, BackupRestoreMode.merge);
+    expect(await store.listBooks(), hasLength(1));
+    await service.restore(incoming, BackupRestoreMode.merge);
+    expect(await store.listBooks(), hasLength(1));
+    expect((await store.findBook('book1'))!.title, 'Livre importé');
+  });
+
+  test('v3 profile_id of a conversation is restored and can be re-exported',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('domolia-v3-');
+    final store = SqliteBookStore(
+      factory: databaseFactoryFfi,
+      databasePath: path.join(directory.path, 'v3.db'),
+    );
+    addTearDown(() async {
+      await store.close();
+      await directory.delete(recursive: true);
+    });
+    // Simulate the additional field from PR07 without merging that branch.
+    final db = await store.database;
+    await db.execute('ALTER TABLE sessions ADD COLUMN profile_id TEXT');
+    final standard = archive();
+    final withProfile = PortableBackup(
+      createdAtUtc: standard.createdAtUtc,
+      books: standard.books,
+      bookBindings: standard.bookBindings,
+      aiProfiles: standard.aiProfiles,
+      sessions: [
+        BackupSession(
+          session: standard.sessions.single.session,
+          updatedAtMicros: standard.sessions.single.updatedAtMicros,
+          aiProfileId: 'profile',
+        ),
+      ],
+    );
+    final service = BackupService(
+      books: store, profileStore: _MemoryProfiles(local),
+    );
+    await service.restore(withProfile, BackupRestoreMode.merge);
+    final exported = await service.capture();
+    expect(exported.sessions.single.aiProfileId, startsWith('imported-'));
+    expect(exported.aiProfiles.any(
+        (profile) => profile.id == exported.sessions.single.aiProfileId), true);
+    await service.restore(withProfile, BackupRestoreMode.merge);
+    expect(await store.listSessions('book1'), hasLength(1));
+  });
+
+  test('v2 schema rejects per-session profile without destroying existing data',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('domolia-v2-');
+    final store = SqliteBookStore(
+      factory: databaseFactoryFfi,
+      databasePath: path.join(directory.path, 'v2.db'),
+    );
+    addTearDown(() async {
+      await store.close();
+      await directory.delete(recursive: true);
+    });
+    await store.putBook(const BookDefinition(
+      id: 'safe-old', title: 'Livre à conserver',
+    ));
+    final standard = archive();
+    final withProfile = PortableBackup(
+      createdAtUtc: standard.createdAtUtc,
+      books: standard.books,
+      bookBindings: standard.bookBindings,
+      aiProfiles: standard.aiProfiles,
+      sessions: [
+        BackupSession(
+          session: standard.sessions.single.session,
+          updatedAtMicros: standard.sessions.single.updatedAtMicros,
+          aiProfileId: 'profile',
+        ),
+      ],
+    );
+    final profiles = _MemoryProfiles(local);
+    await expectLater(
+      BackupService(books: store, profileStore: profiles)
+          .restore(withProfile, BackupRestoreMode.replace),
+      throwsFormatException,
+    );
+    expect((await store.listBooks()).single.id, 'safe-old');
+    expect(await store.findSession('session1'), isNull);
+    expect(profiles.state!.profiles, hasLength(1));
+    expect(profiles.state!.profiles.single.apiKey, sensitive);
+  });
 }
