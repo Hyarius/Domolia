@@ -25,7 +25,10 @@ import 'ai/ai_task_routing.dart';
 import 'ai/ai_diagnostics.dart';
 import 'ai/ai_diagnostic_settings.dart';
 import 'ai/ai_provider.dart';
-import 'ai/ai_settings_panel.dart';
+import 'ai/openuncensored_api.dart';
+import 'ai/openuncensored_controller.dart';
+import 'ai/openuncensored_vault.dart';
+import 'ai/openuncensored_credits_page.dart';
 import 'ai/ai_storage.dart';
 import 'ai/chatgpt_auth.dart';
 import 'ai/chatgpt_responses.dart';
@@ -64,6 +67,7 @@ class DomoliaApp extends StatelessWidget {
     super.key,
     this.updateController,
     this.aiController,
+    this.creditsController,
     this.chatController,
     this.narratorSettingsController,
     this.bookLibraryController,
@@ -71,6 +75,7 @@ class DomoliaApp extends StatelessWidget {
 
   final UpdateController? updateController;
   final AiConnectionController? aiController;
+  final OuCreditsController? creditsController;
   final NarrativeChatController? chatController;
   final NarratorSettingsController? narratorSettingsController;
   final BookLibraryController? bookLibraryController;
@@ -91,6 +96,7 @@ class DomoliaApp extends StatelessWidget {
       home: HomePage(
         updates: updateController,
         ai: aiController,
+        credits: creditsController,
         chat: chatController,
         narratorSettings: narratorSettingsController,
         books: bookLibraryController,
@@ -106,12 +112,14 @@ class HomePage extends StatefulWidget {
     super.key,
     this.updates,
     this.ai,
+    this.credits,
     this.chat,
     this.narratorSettings,
     this.books,
   });
   final UpdateController? updates;
   final AiConnectionController? ai;
+  final OuCreditsController? credits;
   final NarrativeChatController? chat;
   final NarratorSettingsController? narratorSettings;
   final BookLibraryController? books;
@@ -128,6 +136,8 @@ class _HomePageState extends State<HomePage> {
   final AiExchangeRecorder _aiDiagnostics = AiExchangeRecorder();
   final AiTaskRouting _taskRouting = AiTaskRouting();
   late final AiConnectionController _ai;
+  late final OuCreditsController _credits;
+  late final bool _ownsCredits;
   late final bool _ownsAi;
   late NarrativeChatController _chat;
   late final bool _ownsChat;
@@ -154,6 +164,11 @@ class _HomePageState extends State<HomePage> {
       chatGpt: ChatGptAuthService(store: SecureChatGptSessionStore()),
       chatGptProvider: ChatGptResponsesProvider(diagnostics: _aiDiagnostics),
     );
+    _ownsCredits = widget.credits == null;
+    _credits = widget.credits ?? OuCreditsController(
+      api: OpenUncensoredApi(), vault: SecureOuVaultStore(),
+      ai: _ai, routing: _taskRouting,
+    );
     _ownsNarratorSettings = widget.narratorSettings == null;
     _narratorSettings = widget.narratorSettings ?? NarratorSettingsController(
       store: LocalNarratorSettingsStore(),
@@ -172,6 +187,7 @@ class _HomePageState extends State<HomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(_updates.initialize());
+        unawaited(_credits.initialize());
         unawaited(_refreshRecent());
       }
     });
@@ -188,6 +204,7 @@ class _HomePageState extends State<HomePage> {
       }
       _books.dispose();
     }
+    if (_ownsCredits) _credits.dispose();
     if (_ownsAi) _ai.dispose();
     _taskRouting.dispose();
     super.dispose();
@@ -345,6 +362,14 @@ class _HomePageState extends State<HomePage> {
             });
           },
           onExchangeCaptured: (exchange) {
+            // A completed RAW→JSON turn has spent prepaid credits. Refresh
+            // once, on the final stage, without delaying narrative storage.
+            if (exchange.stage == 'jsonifier') {
+              final key = _credits.active;
+              if (key != null) {
+                unawaited(_credits.refresh(key.id));
+              }
+            }
             // Persist the already-redacted HTTP request and raw response.
             writes = writes.then((_) async {
               final retention =
@@ -388,7 +413,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _openAiSettings() {
-    unawaited(_ai.initialize());
+    unawaited(_credits.initialize());
     setState(() {
       _aiReturnPage = _page == _Page.chat ? _Page.chat : _Page.settings;
       _page = _Page.ai;
@@ -494,9 +519,8 @@ class _HomePageState extends State<HomePage> {
               onViewAllVersions: () => _openUrl(_allReleasesUrl),
               onCheckManually: _checkForUpdates,
             )
-          : _page == _Page.ai ? AiSettingsPanel(
-              controller: _ai,
-              taskRouting: _taskRouting,
+          : _page == _Page.ai ? OpenUncensoredCreditsPage(
+              controller: _credits,
               onBack: () => setState(() => _page = _aiReturnPage),
             )
           : _page == _Page.diagnostics ? AiDiagnosticsSettingsPage(
@@ -620,11 +644,11 @@ class _HomePageState extends State<HomePage> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: DomoliaSpacing.section),
         ListTile(
           leading: const Icon(Icons.smart_toy_outlined, color: DomoliaColors.gold),
-          title: const Text('Configurations IA'),
-          subtitle: const Text('Profils, fournisseurs et modèles'),
+          title: const Text('Crédits IA'),
+          subtitle: const Text('OpenUncensored, clés et modèles'),
           trailing: const Icon(Icons.chevron_right),
           onTap: _openAiSettings,
         ),
@@ -698,17 +722,15 @@ class _HomePageState extends State<HomePage> {
                       fontSize: 16,
                     ),
                   ),
-                  const SizedBox(height: 25),
+                  const SizedBox(height: DomoliaSpacing.section),
                   const _GoldSeparator(),
-                  const SizedBox(height: 25),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: DomoliaSpacing.section),
                   FilledButton.icon(
                     onPressed: _openBooks,
                     icon: const Icon(Icons.library_books_outlined),
                     label: const Text('Ouvrir mes Livres'),
                   ),
-                  const SizedBox(height: 12),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: DomoliaSpacing.section),
                   const Text('Parties récentes', style: TextStyle(
                     fontSize: 20, color: DomoliaColors.goldLight,
                     fontWeight: FontWeight.bold)),

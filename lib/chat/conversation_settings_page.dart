@@ -159,9 +159,9 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       AiNarrativeTask.optimizer => 'Optimiseur de Lore',
     };
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const SizedBox(height: 14),
+      const SizedBox(height: DomoliaSpacing.compact),
       Text(title, style: const TextStyle(color: DomoliaColors.goldLight)),
-      const SizedBox(height: 8),
+      const SizedBox(height: DomoliaSpacing.compact),
       DropdownButtonFormField<int>(
         key: ValueKey('conversationTokens-${task.name}-${options.maxOutputTokens ?? 0}'),
         initialValue: options.maxOutputTokens ?? 0,
@@ -183,7 +183,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           }
         },
       ),
-      const SizedBox(height: 8),
+      const SizedBox(height: DomoliaSpacing.field),
       DropdownButtonFormField<String>(
         key: ValueKey('conversationReasoning-${task.name}-${options.reasoningEffort ?? ""}'),
         initialValue: options.reasoningEffort ?? '',
@@ -484,7 +484,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                   onChanged: _saving || widget.chat.busy
                       ? null : _setProfile,
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: DomoliaSpacing.field),
                 _taskProfileField(
                   task: 'jsonifier',
                   label: 'JSONificateur — profil de cette Partie',
@@ -498,7 +498,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: DomoliaSpacing.field),
                 _taskProfileField(
                   task: 'optimizer',
                   label: 'Optimiseur de Lore — profil de cette Partie',
@@ -514,11 +514,15 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                 ),
                 const SizedBox(height: 16),
                 const Divider(),
+                const SizedBox(height: DomoliaSpacing.compact),
                 const Text('Budget et raisonnement par tâche',
                   style: TextStyle(color: DomoliaColors.goldLight,
                       fontSize: 17)),
-                for (final task in AiNarrativeTask.values)
+                const SizedBox(height: DomoliaSpacing.compact),
+                for (final task in AiNarrativeTask.values) ...[
                   _taskGenerationControls(task),
+                  const SizedBox(height: DomoliaSpacing.field),
+                ],
                 const SizedBox(height: 12),
                 Text(
                   _cachedLoreCharacters > 0
@@ -548,12 +552,12 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
             );
           },
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: DomoliaSpacing.section),
         const Divider(),
-        const SizedBox(height: 14),
+        const SizedBox(height: DomoliaSpacing.compact),
         const Text('Historique', style: TextStyle(
             color: DomoliaColors.goldLight, fontSize: 18)),
-        const SizedBox(height: 14),
+        const SizedBox(height: DomoliaSpacing.field),
         Wrap(spacing: 8, runSpacing: 8, children: [
           FilledButton.icon(
             key: const ValueKey('conversationExport'),

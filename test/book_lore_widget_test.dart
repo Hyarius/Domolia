@@ -178,14 +178,17 @@ void main() {
       const ValueKey('loreSection-events')));
     await tester.tap(find.byKey(const ValueKey('loreSection-events')));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const ValueKey('loreCreate-events')));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('loreCreate-events')), 120,
+      scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('loreCreate-events')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('loreField-name')),
       'Éclipse');
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('loreField-trigger')), 220,
-      scrollable: find.byType(Scrollable).last);
+      scrollable: find.byType(Scrollable).first);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('loreField-trigger')));
     await tester.pumpAndSettle();
@@ -198,7 +201,7 @@ void main() {
 
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('loreField-condition')), 220,
-      scrollable: find.byType(Scrollable).last);
+      scrollable: find.byType(Scrollable).first);
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('loreField-condition')),
       'Le joueur découvre la prophétie');

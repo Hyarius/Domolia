@@ -327,7 +327,7 @@ class _BookLoreTabState extends State<BookLoreTab> {
           if (open) { _expanded.add(key); } else { _expanded.remove(key); }
         },
         children: [
-          Padding(padding: const EdgeInsets.symmetric(horizontal:12),
+          Padding(padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
             child: TextField(
               key: ValueKey('loreSearch-$key'),
               decoration: const InputDecoration(prefixIcon: Icon(Icons.search),
@@ -335,7 +335,7 @@ class _BookLoreTabState extends State<BookLoreTab> {
               onChanged: (value) => setState(() => _queries[key] = value),
             )),
           if (tags.isNotEmpty) Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
             child: KeyedSubtree(
               key: ValueKey('loreTagOptions-$key-${tags.join("|")}'),
               child: DropdownButtonFormField<String>(
@@ -351,7 +351,7 @@ class _BookLoreTabState extends State<BookLoreTab> {
               onChanged:(v) => setState(() => _tagFilters[key] = v ?? ''),
             ))),
           if (types.isNotEmpty) Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
             child: KeyedSubtree(
               key: ValueKey('loreTypeOptions-$key-${types.join("|")}'),
               child: DropdownButtonFormField<String>(
@@ -443,9 +443,13 @@ class _BookLoreTabState extends State<BookLoreTab> {
             icon:const Icon(Icons.edit),label:const Text('Modifier le Lore global')),
         ],
       )),
+      const SizedBox(height: DomoliaSpacing.compact),
       _section('characters','Personnages',widget.lore.characters),
+      const SizedBox(height: DomoliaSpacing.compact),
       _section('places','Lieux',widget.lore.places),
+      const SizedBox(height: DomoliaSpacing.compact),
       _section('scenarios','Scénarios',widget.lore.scenarios),
+      const SizedBox(height: DomoliaSpacing.compact),
       _section('events','Événements',widget.lore.events),
     ],
   );
@@ -631,7 +635,7 @@ class _LoreFormState extends State<_LoreForm> {
               onChanged:(value)=>setState(
                 ()=>_dropdowns[field.key]=value??field.value),
             ),
-          const SizedBox(height:12),
+          const SizedBox(height:DomoliaSpacing.field),
         ],
         for(final reference in widget.references) ...[
           OutlinedButton.icon(
@@ -640,7 +644,7 @@ class _LoreFormState extends State<_LoreForm> {
             icon:const Icon(Icons.link),
             label:Text('${reference.label} (${_references[reference.key]?.length??0})'),
           ),
-          const SizedBox(height:12),
+          const SizedBox(height:DomoliaSpacing.field),
         ],
         FilledButton.icon(
           key:const ValueKey('loreFormSaveButton'),

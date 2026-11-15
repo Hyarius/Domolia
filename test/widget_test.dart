@@ -1,7 +1,14 @@
 import 'dart:async';
 
 import 'package:domolia/main.dart';
-import 'package:domolia/ai/ai_settings_panel.dart';
+import 'package:domolia/ai/openuncensored_credits_page.dart';
+import 'package:domolia/ai/openuncensored_api.dart';
+import 'package:domolia/ai/openuncensored_vault.dart';
+import 'package:domolia/ai/openuncensored_controller.dart';
+import 'package:domolia/ai/ai_task_routing.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:domolia/ai/ai_controller.dart';
 import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/theme/domolia_theme.dart';
@@ -72,6 +79,14 @@ class _NeverCallAi implements AiChatProvider {
   Future<String> complete(AiConfiguration configuration, {
     required List<AiMessage> messages, int maxTokens = 1200,
   }) async => throw StateError('Aucun appel réseau dans le test de navigation');
+}
+
+class _FakeOuVault implements OuVaultStore {
+  OuVaultState state = const OuVaultState();
+  @override
+  Future<OuVaultState> read() async => state;
+  @override
+  Future<void> write(OuVaultState value) async { state = value; }
 }
 
 void main() {
@@ -239,8 +254,17 @@ void main() {
     );
     addTearDown(ai.dispose);
     await ai.initialize();
+    SharedPreferences.setMockInitialValues({});
+    final routing = AiTaskRouting();
+    final credits = OuCreditsController(
+      ai: ai, routing: routing, vault: _FakeOuVault(),
+      api: OpenUncensoredApi(client: MockClient((_) async =>
+        http.Response('Never call payment or model API in widget test', 500))),
+    );
+    addTearDown(credits.dispose);
+    addTearDown(routing.dispose);
     await tester.pumpWidget(DomoliaApp(
-      updateController: updates, aiController: ai,
+      updateController: updates, aiController: ai, creditsController: credits,
     ));
     await tester.pumpAndSettle();
 
@@ -252,7 +276,7 @@ void main() {
 
     await tester.tap(find.widgetWithText(ListTile, 'Paramètres'));
     await tester.pumpAndSettle();
-    expect(find.widgetWithText(ListTile, 'Configurations IA'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Crédits IA'), findsOneWidget);
     expect(find.widgetWithText(ListTile, 'Mises à jour'), findsOneWidget);
     expect(find.text('Toutes les versions'), findsNothing);
 
@@ -274,12 +298,12 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(ListTile, 'Configurations IA'));
+    await tester.tap(find.widgetWithText(ListTile, 'Crédits IA'));
     await tester.pumpAndSettle();
-    expect(find.byType(AiSettingsPanel), findsOneWidget);
+    expect(find.byType(OpenUncensoredCreditsPage), findsOneWidget);
     await tester.tap(find.descendant(
-      of: find.byType(AiSettingsPanel),
-      matching: find.text('Retour aux paramètres'),
+      of: find.byType(OpenUncensoredCreditsPage),
+      matching: find.byIcon(Icons.arrow_back),
     ));
     await tester.pumpAndSettle();
     expect(find.widgetWithText(ListTile, 'Mises à jour'), findsOneWidget);

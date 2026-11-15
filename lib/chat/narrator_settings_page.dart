@@ -103,7 +103,7 @@ class _NarratorSettingsPageState extends State<NarratorSettingsPage> {
                   helperMaxLines: 2,
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: DomoliaSpacing.section),
               TextField(
                 key: const ValueKey('narratorOpeningsField'),
                 controller: _openings,
@@ -131,7 +131,7 @@ class _NarratorSettingsPageState extends State<NarratorSettingsPage> {
                   height: 1.4,
                 ),
               ),
-              const SizedBox(height: 22),
+              const SizedBox(height: DomoliaSpacing.section),
               FilledButton.icon(
                 key: const ValueKey('narratorSave'),
                 onPressed: settings.busy ? null : _save,

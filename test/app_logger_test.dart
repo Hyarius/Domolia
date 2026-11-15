@@ -135,6 +135,18 @@ void main() {
     expect(snapshot, contains('[REDACTED]'));
   });
 
+  test('OpenUncensored prepaid keys and checkout claim tokens are redacted', () async {
+    final logger = AppLogger(storage: MemoryAppLogStorage());
+    logger.log(AppLogLevel.warning,
+      'Purchase claimed: ou-cus_TEST_PREPAID_SECRET12345',
+      details: const {'reason': 'claim_token=checkoutSecret12345'});
+    await logger.flush();
+    final snapshot = await logger.snapshot();
+    expect(snapshot, isNot(contains('TEST_PREPAID_SECRET12345')));
+    expect(snapshot, isNot(contains('checkoutSecret12345')));
+    expect(snapshot, contains('[REDACTED]'));
+  });
+
   test('bearer tokens are fully redacted after an Authorization prefix', () async {
     final logger = AppLogger(storage: MemoryAppLogStorage());
     logger.log(AppLogLevel.warning,

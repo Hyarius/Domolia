@@ -204,7 +204,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: DomoliaSpacing.compact),
         Container(
           key: const ValueKey('aiProfilePicker'),
           constraints: const BoxConstraints(minHeight: 58),
@@ -269,7 +269,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
             ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: DomoliaSpacing.field),
         DropdownButtonFormField<AiNsfwCompatibility>(
           key: const ValueKey('aiNsfwCapability'),
           initialValue: controller.selectedProfile.nsfwCompatibility,
@@ -294,7 +294,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
             if (value != null) controller.setNsfwCompatibility(value);
           },
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: DomoliaSpacing.compact),
         Wrap(
           spacing: 12,
           runSpacing: 4,
@@ -341,7 +341,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
             ),
           ],
         ),
-        const SizedBox(height: 17),
+        const SizedBox(height: DomoliaSpacing.section),
         const Text(
           'Type de fournisseur',
           style: TextStyle(
@@ -382,7 +382,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
             ),
           ),
         ),
-        const SizedBox(height: 17),
+        const SizedBox(height: DomoliaSpacing.section),
         const Text(
           'État de la connexion',
           style: TextStyle(
@@ -455,8 +455,9 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
       AiNarrativeTask.optimizer: 'Optimiseur de Lore (une fois par Partie)',
     };
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const SizedBox(height: DomoliaSpacing.compact),
       const Divider(),
-      const SizedBox(height: 10),
+      const SizedBox(height: DomoliaSpacing.compact),
       const Text('IA par tâche', style: TextStyle(
         color: DomoliaColors.goldLight, fontSize: 19,
         fontWeight: FontWeight.w700)),
@@ -466,7 +467,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
         'chaque conversation peut les surcharger. '
         'L’optimiseur est désactivé tant qu’aucun profil ne lui est assigné.',
         style: TextStyle(color: DomoliaColors.muted)),
-      const SizedBox(height: 14),
+      const SizedBox(height: DomoliaSpacing.field),
       for (final task in AiNarrativeTask.values) ...[
         Builder(builder: (context) {
           final chosen = routing.profileFor(task);
@@ -522,7 +523,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
           }
           return Column(crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 8),
+              const SizedBox(height: DomoliaSpacing.field),
               DropdownButtonFormField<int>(
                 key: ValueKey('aiTaskTokens-${task.name}-${generation.maxOutputTokens}'),
                 initialValue: generation.maxOutputTokens,
@@ -543,7 +544,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                   }
                 },
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: DomoliaSpacing.field),
               DropdownButtonFormField<String>(
                 key: ValueKey('aiTaskReasoning-${task.name}-${generation.reasoningEffort}'),
                 initialValue: generation.reasoningEffort,
@@ -571,7 +572,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
             ],
           );
         }),
-        const SizedBox(height: 18),
+        const SizedBox(height: DomoliaSpacing.section),
       ],
       const Divider(),
       const SizedBox(height: 14),
@@ -620,9 +621,9 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                 'ses propres paramètres et sa clé sécurisée.',
                 style: TextStyle(color: DomoliaColors.cream, height: 1.5),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: DomoliaSpacing.section),
               _profileAndStatus(c),
-              const SizedBox(height: 20),
+              const SizedBox(height: DomoliaSpacing.section),
               _taskProfiles(c),
               if (c.selectedKind == AiProviderKind.customAi) ...[
               TextField(
@@ -635,7 +636,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                   hintText: 'https://api.openuncensored.com/v1',
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: DomoliaSpacing.field),
               TextField(
                 controller: _key,
                 key: const ValueKey('aiApiKeyField'),
@@ -652,7 +653,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                   suffixIcon: const Icon(Icons.lock_outline),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: DomoliaSpacing.field),
               InputDecorator(
                 decoration: const InputDecoration(
                   labelText: 'Modèle de chat',
@@ -707,7 +708,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                   ),
                 ),
               ),
-              const SizedBox(height: 22),
+              const SizedBox(height: DomoliaSpacing.section),
               FilledButton.icon(
                 onPressed: c.busy ? null : _save,
                 icon: const Icon(Icons.save_outlined),

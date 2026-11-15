@@ -119,10 +119,15 @@ jobs:
             version="0.1.0"
           fi
           channel="$(python3 tool/update_channels.py)"
+          sandbox=false
+          if [[ "$GITHUB_REF" == refs/heads/* && "$GITHUB_REF" != refs/heads/main ]]; then
+            sandbox=true
+          fi
           flutter build apk --release \
             --build-name="$version" \
             --build-number="${GITHUB_RUN_NUMBER}" \
-            --dart-define="DOMOLIA_UPDATE_CHANNEL=$channel"
+            --dart-define="DOMOLIA_UPDATE_CHANNEL=$channel" \
+            --dart-define="DOMOLIA_PAYMENT_SANDBOX=$sandbox"
 
       - name: Préparer l'APK à télécharger
         shell: bash

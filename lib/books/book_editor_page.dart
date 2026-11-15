@@ -389,7 +389,7 @@ class _BookEditorPageState extends State<BookEditorPage> {
       decoration: const InputDecoration(labelText: 'Titre du Livre'),
       onChanged: (_) => _queueSave(),
     ),
-    const SizedBox(height: 18),
+    const SizedBox(height: DomoliaSpacing.section),
     const Text('Couverture', style: TextStyle(
       fontSize: 18, color: DomoliaColors.goldLight)),
     const SizedBox(height: 12),
@@ -406,13 +406,13 @@ class _BookEditorPageState extends State<BookEditorPage> {
       icon: const Icon(Icons.photo_library_outlined),
       label: const Text('Choisir une image locale'),
     ),
-    const SizedBox(height: 8),
+    const SizedBox(height: DomoliaSpacing.compact),
     OutlinedButton.icon(
       onPressed: null,
       icon: Icon(Icons.auto_awesome_outlined),
       label: Text('Générer une couverture — à venir'),
     ),
-    const SizedBox(height: 18),
+    const SizedBox(height: DomoliaSpacing.section),
     SwitchListTile(
       key: const ValueKey('bookNsfw'),
       value: _book.nsfw,
@@ -437,7 +437,7 @@ class _BookEditorPageState extends State<BookEditorPage> {
       ),
       onChanged: (_) => _queueSave(),
     ),
-    const SizedBox(height: 22),
+    const SizedBox(height: DomoliaSpacing.section),
     Text('Niveau de détail : ${_book.detailLevel} / 5',
       style: const TextStyle(
         fontSize: 18, color: DomoliaColors.goldLight)),
@@ -475,10 +475,10 @@ class _BookEditorPageState extends State<BookEditorPage> {
       ),
       onChanged: (_) => _queueSave(),
     ),
-    const SizedBox(height: 18),
+    const SizedBox(height: DomoliaSpacing.section),
     const Text('Configuration IA', style: TextStyle(
       color: DomoliaColors.goldLight, fontSize: 18)),
-    const SizedBox(height: 8),
+    const SizedBox(height: DomoliaSpacing.field),
     AnimatedBuilder(
       animation: widget.ai,
       builder: (context, _) {

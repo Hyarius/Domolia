@@ -14,6 +14,13 @@ abstract final class DomoliaColors {
   static const muted = Color(0xFFBAC9B4);
 }
 
+/// Shared spacing scale used by forms and section-based pages.
+abstract final class DomoliaSpacing {
+  static const double compact = 12;
+  static const double field = 16;
+  static const double section = 24;
+}
+
 abstract final class DomoliaTheme {
   static ThemeData get dark => ThemeData(
         useMaterial3: true,
@@ -69,6 +76,7 @@ abstract final class DomoliaTheme {
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
           filled: true,
           fillColor: DomoliaColors.raisedSurface,
           enabledBorder: OutlineInputBorder(
