@@ -61,8 +61,12 @@ class LoreContextBuilder {
     final characters = [
       for (final c in lore.characters) if (mentioned(c)) c,
     ]..sort((a,b) => a.id.compareTo(b.id));
+    final directCharacterIds = characters.map((e) => e.id).toSet();
+    final homePlaceIds = characters.map((e) => e.homePlaceId).toSet();
     final places = [
-      for (final p in lore.places) if (mentioned(p)) p,
+      for (final p in lore.places)
+        if (mentioned(p) || homePlaceIds.contains(p.id) ||
+            p.characterIds.any(directCharacterIds.contains)) p,
     ]..sort((a,b) => a.id.compareTo(b.id));
 
     // Explicit canonical links enrich the selection; none describes session state.
