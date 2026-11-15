@@ -82,6 +82,21 @@ class OuCreditsController extends ChangeNotifier {
         state = migrated;
       }
       _state = state;
+      // A process can be killed between writing a newly claimed key and
+      // preparing its managed AI profiles. Repair that partial setup on boot.
+      final selected = state.find(state.activeKeyId);
+      if (selected != null) {
+        final managed = ai.profiles.where((profile) =>
+            profile.id == AiConnectionController.ouNarratorProfileId).toList();
+        if (managed.isEmpty ||
+            managed.first.apiKey != selected.secret ||
+            routing.profileFor(AiNarrativeTask.narrator) !=
+                AiConnectionController.ouNarratorProfileId) {
+          if (!await _configure(state)) {
+            error = 'Clé conservée, mais configuration du narrateur à reprendre.';
+          }
+        }
+      }
     } catch (_) {
       error = 'Le coffre sécurisé est indisponible. Aucune clé n’a été supprimée.';
     } finally {
