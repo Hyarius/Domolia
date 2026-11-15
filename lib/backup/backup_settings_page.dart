@@ -59,8 +59,12 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
     if (_busy) return;
     setState(() { _busy = true; _message = null; });
     try {
-      await widget.ai.initialize();
-      await widget.books.initialize();
+      if (!widget.ai.initialized) {
+        await widget.ai.initialize();
+      }
+      if (!widget.books.initialized) {
+        await widget.books.initialize();
+      }
       await task();
     } on FormatException catch (error) {
       if (mounted) setState(() => _message = error.message);
