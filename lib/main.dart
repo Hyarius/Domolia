@@ -255,6 +255,7 @@ class _HomePageState extends State<HomePage> {
           provider: _ai.provider,
           configuration: () => null,
           narrator: book.narrator,
+          loreProvider: () => _books.byId(book.id)?.lore ?? book.lore,
           diagnostics: _aiDiagnostics,
           resolveConnection: () async {
             final id = await _books.profileForSession(session.id, book.id);
