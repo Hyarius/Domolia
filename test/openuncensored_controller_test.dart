@@ -147,6 +147,46 @@ void main() {
         AiConnectionController.ouJsonifierProfileId);
   });
 
+  test('Managed narrator uses explicit catalogue tool capability', () async {
+    await controller.importKey(keyA);
+    AiProfile narrator() => ai.profiles.firstWhere(
+      (p) => p.id == AiConnectionController.ouNarratorProfileId);
+    expect(narrator().model, defaultAiModel);
+    expect(narrator().toolCallingCompatibility,
+        AiToolCallingCompatibility.supported);
+
+    await controller.importKey(keyB);
+    expect(narrator().toolCallingCompatibility,
+        AiToolCallingCompatibility.supported);
+
+    // Switching to a model not advertised as tool-compatible must disable
+    // native tool calls, even if the prior model supported them.
+    expect(await ai.configureOpenUncensored(keyB,
+      narratorModel: 'cheap-json-model',
+      jsonifierModel: 'cheap-json-model',
+      optimizerModel: 'cheap-json-model',
+      narratorToolsSupported: false,
+    ), true);
+    expect(narrator().toolCallingCompatibility,
+        AiToolCallingCompatibility.unknown);
+
+    // An unavailable catalogue must not erase a previously verified
+    // declaration when the exact same model remains selected.
+    expect(await ai.configureOpenUncensored(keyB,
+      narratorModel: defaultAiModel,
+      jsonifierModel: 'cheap-json-model',
+      optimizerModel: 'cheap-json-model',
+      narratorToolsSupported: true,
+    ), true);
+    expect(await ai.configureOpenUncensored(keyB,
+      narratorModel: defaultAiModel,
+      jsonifierModel: 'cheap-json-model',
+      optimizerModel: 'cheap-json-model',
+    ), true);
+    expect(narrator().toolCallingCompatibility,
+        AiToolCallingCompatibility.supported);
+  });
+
   test('Replacements keep all keys and allow activation from history', () async {
     await controller.importKey(keyA);
     await controller.importKey(keyB);

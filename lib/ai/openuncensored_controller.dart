@@ -196,9 +196,17 @@ class OuCreditsController extends ChangeNotifier {
     if (key == null) return true;
     final models = snapshot.models.isEmpty ?
         _chooseModels(OuQuality.balanced) : snapshot.models;
+    final narratorModel = models['narrator'] ?? defaultAiModel;
+    final knownNarrator = _catalogue.where(
+        (model) => model.id == narratorModel).toList();
+    final narratorToolsSupported = knownNarrator.isEmpty
+        ? null
+        : knownNarrator.any((model) =>
+            model.available && model.toolCompatible);
     final applied = await ai.configureOpenUncensored(
       key.secret,
-      narratorModel: models['narrator'] ?? defaultAiModel,
+      narratorModel: narratorModel,
+      narratorToolsSupported: narratorToolsSupported,
       jsonifierModel: models['jsonifier'] ?? defaultAiModel,
       optimizerModel: models['optimizer'] ?? defaultAiModel,
     );

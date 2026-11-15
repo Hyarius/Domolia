@@ -496,6 +496,9 @@ class AiConnectionController extends ChangeNotifier {
     required String narratorModel,
     required String jsonifierModel,
     required String optimizerModel,
+    // Explicit OpenUncensored model-catalogue metadata, not an HTTP probe.
+    // Null means that no trustworthy capability information is available.
+    bool? narratorToolsSupported,
   }) async {
     if (_closed || busy || !initialized ||
         !key.startsWith('ou-') || key.length < 11) {
@@ -511,6 +514,16 @@ class AiConnectionController extends ChangeNotifier {
       };
       final next = List<AiProfile>.of(_profiles);
       for (final entry in selectedModels.entries) {
+        final index = next.indexWhere((profile) => profile.id == entry.key);
+        final previous = index < 0 ? null : next[index];
+        final capability = entry.key == ouNarratorProfileId &&
+                narratorToolsSupported != null
+            ? narratorToolsSupported
+                ? AiToolCallingCompatibility.supported
+                : AiToolCallingCompatibility.unknown
+            : previous != null && previous.model == entry.value
+                ? previous.toolCallingCompatibility
+                : AiToolCallingCompatibility.unknown;
         final replacement = AiProfile(
           id: entry.key,
           name: switch (entry.key) {
@@ -522,8 +535,8 @@ class AiConnectionController extends ChangeNotifier {
           model: entry.value,
           apiKey: key,
           nsfwCompatibility: AiNsfwCompatibility.supported,
+          toolCallingCompatibility: capability,
         );
-        final index = next.indexWhere((profile) => profile.id == entry.key);
         if (index < 0) {
           next.add(replacement);
         } else {
