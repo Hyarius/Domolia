@@ -52,6 +52,12 @@ class BookLibraryController extends ChangeNotifier {
     }
   }
 
+  /// Reload the SQLite library after an atomic backup import.
+  Future<void> reload() async {
+    _loading = _load();
+    await _loading;
+  }
+
   Future<BookDefinition> create([String title = 'Nouveau Livre']) async {
     final book = BookDefinition(id: BookDefinition.freshId(), title: title);
     await save(book);

@@ -109,6 +109,24 @@ class AiConnectionController extends ChangeNotifier {
     }
   }
 
+  /// Refresh profiles after restoring portable metadata. Never copies secrets
+  /// from an archive, and invalidates transient connection indicators.
+  Future<void> reloadProfiles() async {
+    if (busy) throw StateError('Une connexion IA est en cours.');
+    final state = await store.read();
+    if (state == null || state.profiles.isEmpty ||
+        !state.profiles.any((p) => p.id == state.selectedId)) {
+      throw const FormatException('Impossible de recharger les profils IA.');
+    }
+    _profiles = List.of(state.profiles);
+    _selectedId = state.selectedId;
+    _statuses.clear();
+    _errors.clear();
+    _replies.clear();
+    _catalogues.clear();
+    _notify();
+  }
+
   String? _validName(String input) {
     final name = input.trim();
     if (name.isEmpty || name.length > 60 || name.contains(RegExp(r'[\r\n]'))) {

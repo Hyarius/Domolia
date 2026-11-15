@@ -16,6 +16,7 @@ import 'books/book_library_controller.dart';
 import 'books/book_library_page.dart';
 import 'books/book_editor_page.dart';
 import 'books/book_store.dart';
+import 'backup/backup_settings_page.dart';
 import 'ai/ai_controller.dart';
 import 'ai/ai_diagnostics.dart';
 import 'ai/ai_diagnostic_settings.dart';
@@ -69,7 +70,7 @@ class DomoliaApp extends StatelessWidget {
   }
 }
 
-enum _Page { home, books, book, chat, about, settings, updates, ai, diagnostics }
+enum _Page { home, books, book, chat, about, settings, updates, ai, diagnostics, backups }
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -354,6 +355,11 @@ class _HomePageState extends State<HomePage> {
               onBack: () => setState(() => _page = _Page.settings),
               onPrune: _books.pruneDiagnostics,
             )
+          : _page == _Page.backups ? BackupSettingsPage(
+              books: _books,
+              ai: _ai,
+              onBack: () => setState(() => _page = _Page.settings),
+            )
           : _buildSettings()),
       ]),
     ),
@@ -434,7 +440,7 @@ class _HomePageState extends State<HomePage> {
               title: const Text('Paramètres'),
               selected: _page == _Page.settings ||
                   _page == _Page.updates || _page == _Page.ai ||
-                  _page == _Page.diagnostics,
+                  _page == _Page.diagnostics || _page == _Page.backups,
               selectedColor: DomoliaColors.goldLight,
               selectedTileColor: DomoliaColors.raisedSurface,
               onTap: () => _showPage(_Page.settings),
@@ -484,13 +490,18 @@ class _HomePageState extends State<HomePage> {
           trailing: const Icon(Icons.chevron_right),
           onTap: () => setState(() => _page = _Page.updates),
         ),
+        ListTile(
+          leading: const Icon(Icons.save_alt_rounded, color: DomoliaColors.gold),
+          title: const Text('Données et sauvegardes'),
+          subtitle: const Text('Sauvegarder ou charger livres et parties'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => setState(() => _page = _Page.backups),
+        ),
         if (kIsWeb) const ListTile(
           leading: Icon(Icons.storage_outlined, color: DomoliaColors.gold),
           title: Text('Stockage local au navigateur'),
-          subtitle: Text(
-            'Livres et conversations enregistrés sur cet ordinateur. '
-            'Effacer les données du site peut supprimer votre bibliothèque. '
-            'La sauvegarde complète arrivera dans la prochaine étape.'),
+          subtitle: Text('Les données restent sur cet ordinateur. '
+            'Effacer les données du site peut les supprimer.'),
         ),
         const Divider(),
         ListTile(
