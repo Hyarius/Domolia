@@ -183,7 +183,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('loreField-name')),
       'Éclipse');
-    await tester.ensureVisible(find.byKey(const ValueKey('loreField-trigger')));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('loreField-trigger')), 220,
+      scrollable: find.byType(Scrollable).last);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('loreField-trigger')));
     await tester.pumpAndSettle();
@@ -194,7 +196,9 @@ void main() {
     expect(lore.events, isEmpty);
     expect(find.byKey(const ValueKey('loreField-condition')), findsOneWidget);
 
-    await tester.ensureVisible(find.byKey(const ValueKey('loreField-condition')));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('loreField-condition')), 220,
+      scrollable: find.byType(Scrollable).last);
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('loreField-condition')),
       'Le joueur découvre la prophétie');
