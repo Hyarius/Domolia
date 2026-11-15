@@ -158,6 +158,34 @@ class BookLibraryController extends ChangeNotifier {
         details: {'hasOverride': profileId != null});
   }
 
+  Future<void> setSessionTaskProfile(
+      String id, String task, String? profileId) async {
+    if (task != 'jsonifier' && task != 'optimizer') {
+      throw ArgumentError.value(task, 'task');
+    }
+    final current = await store.findSession(id);
+    if (current == null) throw StateError('Partie introuvable.');
+    final next = task == 'jsonifier'
+        ? current.copyWith(formatterProfileId: profileId,
+            clearFormatterProfile: profileId == null)
+        : current.copyWith(optimizerProfileId: profileId,
+            clearOptimizerProfile: profileId == null);
+    await store.putSession(next);
+    _notify();
+  }
+
+  Future<void> saveOptimizedLore(
+      String id, String loreHash, String compactLore) async {
+    if (_deletedSessions.contains(id)) {
+      throw StateError('Partie supprimée.');
+    }
+    final current = await store.findSession(id);
+    if (current == null) throw StateError('Partie introuvable.');
+    await store.putSession(current.copyWith(
+      optimizedLore: compactLore, optimizedLoreHash: loreHash,
+    ));
+  }
+
   Future<String?> profileForSession(String id, String bookId) async {
     final part = await store.findSession(id);
     return part?.aiProfileId ?? await store.profileIdForBook(bookId);
