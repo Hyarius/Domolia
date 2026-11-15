@@ -34,7 +34,7 @@ class LoreContextBuilder {
       'Les faits canoniques priment sur l’improvisation. '
       'Les secrets sont connus du narrateur, jamais révélés avant '
       'une découverte narrative appropriée. Les conditions et événements '
-      'envisagés ne sont PAS des faits déjà accomplis. '
+      'envisagés ne sont pas des faits déjà accomplis. '
       'Ne décide aucune action, pensée ou parole du personnage joueur.',
       essential: true);
 
