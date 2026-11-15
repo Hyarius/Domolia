@@ -30,8 +30,18 @@ class BackupService {
   }
 
   Future<({int bookConflicts, int sessionConflicts})> preview(
-      PortableBackup backup, BackupRestoreMode mode) =>
-      repository.preview(backup, mode);
+    PortableBackup backup, BackupRestoreMode mode,
+  ) async {
+    backup.validate();
+    final before = await profileStore.read();
+    if (before == null || before.profiles.isEmpty) {
+      throw const FormatException('Aucun profil IA local initialisé.');
+    }
+    final plan = _planProfiles(backup, before);
+    return repository.preview(
+      backup, mode, profileIdMap: plan.mappings,
+    );
+  }
 
   static String _newProfileId(BackupProfile profile) {
     final bytes = utf8.encode(jsonEncode(profile.toJson()));
@@ -48,6 +58,31 @@ class BackupService {
       local.model == imported.model &&
       local.nsfwCompatibility == imported.nsfwCompatibility;
 
+  ({List<AiProfile> profiles, Map<String, String> mappings}) _planProfiles(
+    PortableBackup backup, AiProfilesState before,
+  ) {
+    final updated = List<AiProfile>.of(before.profiles);
+    final mappings = <String, String>{};
+    for (final profile in backup.aiProfiles) {
+      final base = _newProfileId(profile);
+      var target = base;
+      var suffix = 0;
+      while (true) {
+        final matches = updated.where((entry) => entry.id == target);
+        if (matches.isEmpty || _matches(matches.single, profile)) {
+          break;
+        }
+        suffix++;
+        target = '$base-$suffix';
+      }
+      mappings[profile.id] = target;
+      if (!updated.any((entry) => entry.id == target)) {
+        updated.add(profile.toAi(importedId: target));
+      }
+    }
+    return (profiles: updated, mappings: mappings);
+  }
+
   Future<void> restore(
     PortableBackup backup,
     BackupRestoreMode mode,
@@ -57,24 +92,9 @@ class BackupService {
     if (before == null || before.profiles.isEmpty) {
       throw const FormatException('Aucun profil IA local initialisé.');
     }
-    final updated = List<AiProfile>.of(before.profiles);
-    final mappings = <String, String>{};
-    for (final profile in backup.aiProfiles) {
-      final base = _newProfileId(profile);
-      var target = base;
-      var suffix = 0;
-      while (true) {
-        final matches = updated.where((e) => e.id == target);
-        if (matches.isEmpty || _matches(matches.single, profile)) break;
-        suffix++;
-        target = '$base-$suffix';
-      }
-      mappings[profile.id] = target;
-      if (!updated.any((e) => e.id == target)) {
-        updated.add(profile.toAi(importedId: target));
-      }
-    }
-
+    final plan = _planProfiles(backup, before);
+    final updated = plan.profiles;
+    final mappings = plan.mappings;
     final changed = updated.length != before.profiles.length;
     if (changed) {
       // Metadata is written first: failures before SQL commit cannot delete

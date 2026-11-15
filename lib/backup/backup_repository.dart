@@ -104,41 +104,80 @@ class BackupRepository {
     timeline: BookSession.decodeTimeline(raw),
   ).encodeTimeline();
 
-  /// Preview is for UI only: apply() always performs fresh conflict checks in
-  /// the transaction to avoid applying stale IDs from another tab.
+  /// Mirrors the transaction's ID remapping without writing. An already
+  /// imported, unchanged collision must not appear as a new conflict.
   Future<({int bookConflicts, int sessionConflicts})> preview(
-    PortableBackup backup, BackupRestoreMode mode,
-  ) async {
+    PortableBackup backup,
+    BackupRestoreMode mode, {
+    Map<String, String> profileIdMap = const {},
+  }) async {
     backup.validate();
     if (mode == BackupRestoreMode.replace) {
       return (bookConflicts: 0, sessionConflicts: 0);
     }
     final db = await store.database;
-    final books = await db.query('books');
-    final sessions = await db.query('sessions');
-    final cols = await _sessionColumns(db);
-    final bookMap = {
-      for (final r in books) r['id'] as String: r['definition_json'] as String,
-    };
-    final sessionMap = {
-      for (final r in sessions) r['id'] as String: r,
-    };
-    return (
-      bookConflicts: backup.books.where((b) =>
-          bookMap.containsKey(b.id) &&
-          !_sameJson(bookMap[b.id]!, b.exportJson())).length,
-      sessionConflicts: backup.sessions.where((s) {
-        final row = sessionMap[s.session.id];
-        return row != null &&
-            (row['book_id'] != s.session.bookId ||
-              row['title'] != s.session.title ||
-              row['updated_at'] != s.updatedAtMicros ||
-              (cols.contains('profile_id') &&
-                  row['profile_id'] != s.aiProfileId) ||
-              _canonicalTimeline(row['timeline_json'] as String) !=
-                  s.session.encodeTimeline());
-      }).length,
-    );
+    return db.transaction((txn) async {
+      final cols = await _sessionColumns(txn);
+      final books = await txn.query('books');
+      final sessions = await txn.query('sessions');
+      final bookContent = <String, String>{
+        for (final row in books)
+          row['id'] as String: row['definition_json'] as String,
+      };
+      final bookIds = <String, String>{};
+      var bookConflicts = 0;
+      for (final book in backup.books) {
+        final json = book.exportJson();
+        var target = book.id;
+        if (bookContent.containsKey(target) &&
+            !_sameJson(bookContent[target]!, json)) {
+          target = _stableId(
+            'bookimport', book.id, book.toPortableJson(),
+            bookContent, (id) => book.copyWith(id: id).exportJson(),
+          );
+          if (!bookContent.containsKey(target)) bookConflicts++;
+        }
+        bookIds[book.id] = target;
+        bookContent.putIfAbsent(target, () =>
+          book.copyWith(id: target).exportJson());
+      }
+      final sessionContent = <String, String>{
+        for (final row in sessions)
+          row['id'] as String: jsonEncode([
+            row['book_id'], row['title'],
+            _canonicalTimeline(row['timeline_json'] as String),
+            row['updated_at'],
+            if (cols.contains('profile_id')) row['profile_id'],
+          ]),
+      };
+      var sessionConflicts = 0;
+      for (final record in backup.sessions) {
+        final source = record.session;
+        final bookId = bookIds[source.bookId]!;
+        final mappedProfile = record.aiProfileId == null
+            ? null : (profileIdMap[record.aiProfileId] ??
+                record.aiProfileId);
+        String signature(String _) => jsonEncode([
+          bookId, source.title, source.encodeTimeline(),
+          record.updatedAtMicros,
+          if (cols.contains('profile_id')) mappedProfile,
+        ]);
+        var target = source.id;
+        if (sessionContent.containsKey(target) &&
+            sessionContent[target] != signature(target)) {
+          target = _stableId(
+            'partimport', source.id, signature(source.id),
+            sessionContent, signature,
+          );
+          if (!sessionContent.containsKey(target)) sessionConflicts++;
+        }
+        sessionContent.putIfAbsent(target, () => signature(target));
+      }
+      return (
+        bookConflicts: bookConflicts,
+        sessionConflicts: sessionConflicts,
+      );
+    });
   }
 
   static bool _sameJson(String a, String b) {
