@@ -112,6 +112,10 @@ class NarrativeChatController extends ChangeNotifier {
       (e) => e is ChatEntry && e.speaker == ChatSpeaker.player,
     );
     _lastPlayerIndex = last < 0 ? null : last;
+    if (pendingRaw != null) {
+      error = 'Une réponse attend sa mise en forme. '
+          'Réessayez sans régénérer le récit.';
+    }
     _notify();
   }
 
