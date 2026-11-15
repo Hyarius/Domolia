@@ -112,9 +112,12 @@ class LoreContextBuilder {
     }
     final events = [
       for (final e in lore.events)
-        if (mentioned(e) || e.characterIds.any(activeCharacterIds.contains) ||
+        if (mentioned(e) ||
+            (e.trigger == LoreEventTrigger.planned && e.mandatory) ||
+            e.characterIds.any(activeCharacterIds.contains) ||
             e.placeIds.any(activePlaceIds.contains) ||
-            e.scenarioIds.any(activeScenarioIds.contains)) e,
+            e.scenarioIds.any(activeScenarioIds.contains) ||
+            scenarios.any((scenario) => scenario.eventIds.contains(e.id))) e,
     ]..sort((a,b) {
       final byPriority = b.priority.compareTo(a.priority);
       return byPriority != 0 ? byPriority : a.id.compareTo(b.id);
