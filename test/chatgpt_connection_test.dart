@@ -194,4 +194,65 @@ void main() {
       )),
     );
   });
+  test('Responses API forwards task budget and reasoning, not credentials', () async {
+    final bodies = <Map<String, dynamic>>[];
+    final provider = ChatGptResponsesProvider(
+      client: MockClient((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        bodies.add(body);
+        expect(request.headers['Authorization'], 'Bearer test-secret');
+        return http.Response(
+          'data: {"type":"response.output_text.delta","delta":"Réponse"}\\n\\n'
+          'data: {"type":"response.completed","response":{"usage":'
+          '{"input_tokens":14,"output_tokens":120}}}\\n\\n',
+          200,
+        );
+      }),
+    );
+    const base = AiConfiguration(
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-5.6-luna', apiKey: 'test-secret',
+    );
+    final outputs = <String>[];
+    for (final (effort, limit) in [
+      ('low', 8192), ('none', 4096), (null, 16384),
+    ]) {
+      final chunks = await provider.streamChat(
+        base.withReasoning(effort),
+        messages: const [AiMessage(role: 'user', content: 'Bonjour')],
+        maxTokens: limit,
+      ).toList();
+      outputs.add(chunks.map((chunk) => chunk.text).join());
+    }
+    expect(outputs, ['Réponse', 'Réponse', 'Réponse']);
+    expect(bodies.map((b) => b['max_output_tokens']), [8192, 4096, 16384]);
+    expect((bodies[0]['reasoning'] as Map)['effort'], 'low');
+    expect((bodies[1]['reasoning'] as Map)['effort'], 'none');
+    expect(bodies[2].containsKey('reasoning'), false);
+    expect(jsonEncode(bodies), isNot(contains('test-secret')));
+  });
+
+  test('Bad budgets and effort are rejected before an HTTP request', () async {
+    var calls = 0;
+    final provider = ChatGptResponsesProvider(
+      client: MockClient((_) async {
+        calls++;
+        return http.Response('', 200);
+      }),
+    );
+    const configuration = AiConfiguration(
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-5.6-luna', apiKey: 'private',
+    );
+    await expectLater(provider.streamChat(configuration,
+      messages: const [AiMessage(role: 'user', content: 'Bonjour')],
+      maxTokens: 50000,
+    ).toList(), throwsA(isA<AiProviderException>()));
+    await expectLater(provider.streamChat(
+      configuration.withReasoning('invalid'),
+      messages: const [AiMessage(role: 'user', content: 'Bonjour')],
+    ).toList(), throwsA(isA<AiProviderException>()));
+    expect(calls, 0);
+  });
+
 }
