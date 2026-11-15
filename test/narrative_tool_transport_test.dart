@@ -37,7 +37,7 @@ void main() {
         }},
       ];
       return http.Response(
-        frames.map((f) => 'data: ' + jsonEncode(f) + '\n\n').join() +
+        frames.map((f) => 'data: ${jsonEncode(f)}\n\n').join() +
             'data: [DONE]\n\n', 200,
       );
     }));

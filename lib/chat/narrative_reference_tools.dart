@@ -121,24 +121,34 @@ class NarrativeReferenceTools {
   Iterable<(String, LoreRecord)> _entries(String category) sync* {
     final l = lore();
     if (category == 'all' || category == 'character') {
-      for (final e in l.characters) yield ('character', e);
+      for (final e in l.characters) {
+        yield ('character', e);
+      }
     }
     if (category == 'all' || category == 'place') {
-      for (final e in l.places) yield ('place', e);
+      for (final e in l.places) {
+        yield ('place', e);
+      }
     }
     if (category == 'all' || category == 'scenario') {
-      for (final e in l.scenarios) yield ('scenario', e);
+      for (final e in l.scenarios) {
+        yield ('scenario', e);
+      }
     }
     if (category == 'all' || category == 'event') {
-      for (final e in l.events) yield ('event', e);
+      for (final e in l.events) {
+        yield ('event', e);
+      }
     }
   }
 
   static dynamic _short(dynamic value) {
     if (value is String) {
-      return value.length <= 800 ? value : value.substring(0, 800) + '… [abrégé]';
+      return value.length <= 800 ? value : '${value.substring(0, 800)}… [abrégé]';
     }
-    if (value is List) return value.take(40).map(_short).toList();
+    if (value is List) {
+      return value.take(40).map(_short).toList();
+    }
     if (value is Map) return {
       for (final e in value.entries) e.key.toString(): _short(e.value),
     };
@@ -206,12 +216,12 @@ class NarrativeReferenceTools {
     final lines = <String>[];
     void flush() {
       if (player == null) return;
-      final original = availableRaw[player!.id];
+      final original = availableRaw[player.id];
       output.add((
-        player: player!,
+        player: player,
         raw: original,
         text: [
-          player!.text,
+          player.text,
           if (original != null) original.compactText ?? '',
           if (original != null) original.rawText,
           ...lines,
@@ -224,7 +234,7 @@ class NarrativeReferenceTools {
         player = event;
         lines.clear();
       } else if (player != null && event is ChatEntry) {
-        lines.add(event.name + ' : ' + event.text);
+        lines.add('${event.name} : ${event.text}');
       }
     }
     flush();
@@ -236,8 +246,10 @@ class NarrativeReferenceTools {
     final results = <(int, int, String, String)>[];
     for (final turn in _turns()) {
       final score = _score(turn.text, query);
-      if (score > 0) results.add((score, turn.player.id,
-          turn.player.text, _excerpt(turn.text, query)));
+      if (score > 0) {
+        results.add((score, turn.player.id,
+            turn.player.text, _excerpt(turn.text, query)));
+      }
     }
     results.sort((a, b) {
       final byScore = b.$1.compareTo(a.$1);
