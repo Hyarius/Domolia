@@ -225,6 +225,31 @@ class AiConnectionController extends ChangeNotifier {
     }
   }
 
+  /// Only a user declaration may enable tools; never auto-detect via an HTTP 200.
+  Future<bool> setToolCallingCompatibility(
+      AiToolCallingCompatibility compatibility) async {
+    if (_closed || busy || !initialized) return false;
+    busy = true;
+    _notify();
+    try {
+      final next = [
+        for (final profile in _profiles)
+          profile.id == _selectedId
+              ? profile.copyWith(toolCallingCompatibility: compatibility)
+              : profile,
+      ];
+      await store.write(AiProfilesState(profiles: next, selectedId: _selectedId));
+      _profiles = next;
+      return true;
+    } catch (_) {
+      message = 'Impossible de sauvegarder la capacité Tool Calling.';
+      return false;
+    } finally {
+      busy = false;
+      _notify();
+    }
+  }
+
   Future<bool> setProviderKind(AiProviderKind kind) async {
     if (_closed || busy || selectedKind == kind) return false;
     busy = true;

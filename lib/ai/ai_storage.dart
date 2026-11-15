@@ -79,6 +79,10 @@ class SecureAiProfileStore implements AiProfileStore {
         baseUrl: item['baseUrl'] as String,
         model: item['model'] as String,
         apiKey: item['apiKey'] as String,
+        toolCallingCompatibility: AiToolCallingCompatibility.values.firstWhere(
+          (e) => e.name == item['toolCallingCompatibility'],
+          orElse: () => AiToolCallingCompatibility.unknown,
+        ),
         nsfwCompatibility: AiNsfwCompatibility.values.firstWhere(
           (e) => e.name == item['nsfwCompatibility'],
           orElse: () => AiNsfwCompatibility.unknown,
@@ -113,6 +117,7 @@ class SecureAiProfileStore implements AiProfileStore {
               'id': profile.id,
               'name': profile.name,
               'nsfwCompatibility': profile.nsfwCompatibility.name,
+              'toolCallingCompatibility': profile.toolCallingCompatibility.name,
               'providerType': profile.kind == AiProviderKind.chatGpt
                   ? 'chatgpt' : 'customai',
               'baseUrl': profile.baseUrl,
