@@ -135,7 +135,9 @@ class BackupRepository {
             'bookimport', book.id, book.toPortableJson(),
             bookContent, (id) => book.copyWith(id: id).exportJson(),
           );
-          if (!bookContent.containsKey(target)) bookConflicts++;
+          if (!bookContent.containsKey(target)) {
+            bookConflicts++;
+          }
         }
         bookIds[book.id] = target;
         bookContent.putIfAbsent(target, () =>
@@ -169,7 +171,9 @@ class BackupRepository {
             'partimport', source.id, signature(source.id),
             sessionContent, signature,
           );
-          if (!sessionContent.containsKey(target)) sessionConflicts++;
+          if (!sessionContent.containsKey(target)) {
+            sessionConflicts++;
+          }
         }
         sessionContent.putIfAbsent(target, () => signature(target));
       }

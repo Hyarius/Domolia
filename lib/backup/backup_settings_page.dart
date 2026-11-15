@@ -19,15 +19,24 @@ class BackupSettingsPage extends StatefulWidget {
     required this.books,
     required this.ai,
     required this.onBack,
+    this.onBeforeCapture,
     this.onBeforeRestore,
     this.onAfterRestore,
+    this.saveArchive,
+    this.pickArchive,
   });
 
   final BookLibraryController books;
   final AiConnectionController ai;
   final VoidCallback onBack;
+  final Future<void> Function()? onBeforeCapture;
   final Future<void> Function()? onBeforeRestore;
   final VoidCallback? onAfterRestore;
+
+  /// File operations are injectable so widget tests cover the actual UI and
+  /// exact selected bytes without invoking a native dialog.
+  final Future<bool> Function(Uint8List bytes, String name)? saveArchive;
+  final Future<({String name, Uint8List bytes})?> Function()? pickArchive;
 
   @override
   State<BackupSettingsPage> createState() => _BackupSettingsPageState();
@@ -62,7 +71,57 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
     }
   }
 
+  Future<bool> _saveWithPicker(Uint8List bytes, String name) async {
+    final output = await FilePicker.platform.saveFile(
+      dialogTitle: 'Sauvegarder mes données',
+      fileName: name,
+      type: FileType.custom,
+      allowedExtensions: ['domolia'],
+      bytes: bytes,
+    );
+    // The v10 Web implementation returns null after initiating a browser
+    // download; there is no stable destination path to return.
+    return kIsWeb || output != null;
+  }
+
+  Future<({String name, Uint8List bytes})?> _pickWithPicker() async {
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Charger mes données',
+      type: FileType.custom,
+      allowedExtensions: ['domolia'],
+      withData: kIsWeb,
+      withReadStream: !kIsWeb,
+      allowMultiple: false,
+    );
+    if (result == null) return null;
+    final file = result.files.single;
+    if (file.size > PortableBackup.maxBytes ||
+        !file.name.toLowerCase().endsWith('.domolia')) {
+      throw const FormatException(
+        'Choisissez une sauvegarde .domolia valide (100 Mio maximum).',
+      );
+    }
+    if (file.bytes != null) {
+      return (name: file.name, bytes: file.bytes!);
+    }
+    final stream = file.readStream;
+    if (stream == null) {
+      throw const FormatException('Fichier sélectionné illisible.');
+    }
+    // Android may expose files via ContentResolver instead of giving a
+    // filesystem path. Read the stream, with a strict bound at each chunk.
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in stream) {
+      if (builder.length + chunk.length > PortableBackup.maxBytes) {
+        throw const FormatException('Fichier supérieur à 100 Mio.');
+      }
+      builder.add(chunk);
+    }
+    return (name: file.name, bytes: builder.takeBytes());
+  }
+
   Future<void> _save() => _run(() async {
+    await widget.onBeforeCapture?.call();
     final backup = await _service.capture();
     final data = backup.encode();
     final now = DateTime.now().toUtc();
@@ -70,16 +129,9 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
         '${now.year.toString().padLeft(4, '0')}-'
         '${now.month.toString().padLeft(2, '0')}-'
         '${now.day.toString().padLeft(2, '0')}.domolia';
-    final result = await FilePicker.platform.saveFile(
-      dialogTitle: 'Sauvegarder mes données',
-      fileName: filename,
-      type: FileType.custom,
-      allowedExtensions: ['domolia'],
-      bytes: data,
-    );
-    // file_picker 10.x triggers a download on Web but returns null because
-    // the browser cannot expose the destination path.
-    if (result == null && !kIsWeb) return;
+    final saved = await (widget.saveArchive?.call(data, filename) ??
+        _saveWithPicker(data, filename));
+    if (!saved) return;
     if (mounted) {
       setState(() => _message = kIsWeb
           ? 'Téléchargement déclenché. Vérifiez le dossier de téléchargements.'
@@ -89,24 +141,15 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
   });
 
   Future<void> _load() => _run(() async {
-    final chosen = await FilePicker.platform.pickFiles(
-      dialogTitle: 'Charger mes données',
-      type: FileType.any,
-      withData: true,
-      allowMultiple: false,
-    );
-    if (chosen == null || !mounted) {
-      return;
-    }
-    final picked = chosen.files.single;
+    final picked = await (widget.pickArchive?.call() ?? _pickWithPicker());
+    if (picked == null || !mounted) return;
     if (!picked.name.toLowerCase().endsWith('.domolia') ||
-        picked.size > PortableBackup.maxBytes ||
-        picked.bytes == null) {
+        picked.bytes.length > PortableBackup.maxBytes) {
       throw const FormatException(
         'Choisissez une sauvegarde .domolia valide (100 Mio maximum).',
       );
     }
-    final backup = PortableBackup.decode(Uint8List.fromList(picked.bytes!));
+    final backup = PortableBackup.decode(picked.bytes);
     final collisions = await _service.preview(backup, BackupRestoreMode.merge);
     if (!mounted) return;
     final mode = await showDialog<BackupRestoreMode>(
