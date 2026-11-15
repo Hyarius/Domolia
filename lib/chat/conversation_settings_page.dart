@@ -41,6 +41,8 @@ class ConversationSettingsPage extends StatefulWidget {
 
 class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   String? _selected;
+  String? _formatterProfile;
+  String? _optimizerProfile;
   bool _loaded = false;
   bool _saving = false;
 
@@ -54,6 +56,8 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       if (mounted) {
         setState(() {
           _selected = session?.aiProfileId;
+          _formatterProfile = session?.formatterProfileId;
+          _optimizerProfile = session?.optimizerProfileId;
           _loaded = true;
         });
       }
@@ -84,6 +88,31 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       _notify('Impossible de sauvegarder cette connexion.');
     } finally {
       if (mounted) { setState(() => _saving = false); }
+    }
+  }
+
+  Future<void> _setTaskProfile(String task, String? value) async {
+    if (_saving || widget.chat.busy) return;
+    setState(() => _saving = true);
+    try {
+      final selected = value == '' ? null : value;
+      await widget.library.setSessionTaskProfile(
+        widget.sessionId, task, selected,
+      );
+      if (mounted) {
+        setState(() {
+          if (task == 'jsonifier') {
+            _formatterProfile = selected;
+          } else {
+            _optimizerProfile = selected;
+          }
+        });
+      }
+      _notify('Profil de tâche enregistré pour cette Partie.');
+    } catch (_) {
+      _notify('Impossible de sauvegarder le profil de cette tâche.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -257,6 +286,41 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     }
   }
 
+  Widget _taskProfileField({
+    required String task,
+    required String label,
+    required String? value,
+    required List<AiProfile> profiles,
+    required String inheritedLabel,
+    required List<DropdownMenuItem<String>> additional,
+  }) {
+    final selected = value ?? '';
+    final known = selected.isEmpty ||
+        additional.any((item) => item.value == selected) ||
+        profiles.any((profile) => profile.id == selected);
+    return DropdownButtonFormField<String>(
+      key: ValueKey('conversationTask-$task-${known ? selected : "missing"}'),
+      initialValue: known ? selected : '',
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        helperText: known ? null :
+            'Le profil précédemment choisi a été supprimé.',
+      ),
+      items: [
+        DropdownMenuItem(value: '', child: Text(inheritedLabel)),
+        ...additional,
+        for (final profile in profiles)
+          DropdownMenuItem(
+            value: profile.id,
+            child: Text(profile.name, overflow: TextOverflow.ellipsis),
+          ),
+      ],
+      onChanged: _saving || widget.chat.busy
+          ? null : (value) => _setTaskProfile(task, value),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => SafeArea(
     child: ListView(
@@ -290,7 +354,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                   initialValue: exists ? _selected ?? '' : '',
                   isExpanded: true,
                   decoration: const InputDecoration(
-                    labelText: 'Profil IA de cette Partie'),
+                    labelText: 'Narrateur RAW — profil de cette Partie'),
                   items: [
                     const DropdownMenuItem(value: '',
                         child: Text('Profil par défaut du Livre')),
@@ -299,12 +363,45 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                           child: Text(profile.name,
                               overflow: TextOverflow.ellipsis)),
                   ],
-                  onChanged: _saving ? null : _setProfile,
+                  onChanged: _saving || widget.chat.busy
+                      ? null : _setProfile,
+                ),
+                const SizedBox(height: 14),
+                _taskProfileField(
+                  task: 'jsonifier',
+                  label: 'JSONificateur — profil de cette Partie',
+                  value: _formatterProfile,
+                  profiles: profiles,
+                  inheritedLabel: 'Hériter des paramètres généraux',
+                  additional: const [
+                    DropdownMenuItem(
+                      value: '#narrator',
+                      child: Text('Même IA que le narrateur'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _taskProfileField(
+                  task: 'optimizer',
+                  label: 'Optimiseur de Lore — profil de cette Partie',
+                  value: _optimizerProfile,
+                  profiles: profiles,
+                  inheritedLabel: 'Hériter des paramètres généraux',
+                  additional: const [
+                    DropdownMenuItem(
+                      value: '#disabled',
+                      child: Text('Désactiver pour cette Partie'),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
-                const Text('Choisissez un profil IA déjà configuré. '
-                  'La création des profils reste dans les paramètres généraux.',
-                  style: TextStyle(color: DomoliaColors.muted)),
+                const Text(
+                  'Chaque tâche peut hériter de sa configuration générale '
+                  'ou utiliser un profil existant. Le JSONificateur peut '
+                  'également réutiliser le narrateur. L’optimisation du Lore '
+                  'est facultative et ne modifie jamais le Livre original.',
+                  style: TextStyle(color: DomoliaColors.muted),
+                ),
               ],
             );
           },
