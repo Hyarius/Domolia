@@ -15,6 +15,7 @@ import 'package:domolia/chat/conversation_settings_page.dart';
 import 'package:domolia/chat/chat_protocol.dart';
 import 'package:domolia/chat/narrator.dart';
 import 'package:domolia/chat/narrator_settings.dart';
+import 'package:domolia/chat/raw_generation.dart';
 import 'package:domolia/theme/domolia_theme.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -662,6 +663,97 @@ void main() {
     await tester.pumpAndSettle();
     expect(called, false);
     expect(find.text('Livre introuvable.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+
+  testWidgets('Conversation IA export includes RAW and exact captured phases',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 780);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final store = _MemoryBooks();
+    final library = BookLibraryController(store: store);
+    addTearDown(library.dispose);
+    await library.initialize();
+    final book = await library.create('Skogheim');
+    final session = await library.newSession(book);
+    final ai = AiConnectionController(
+      store: _Profiles(const AiProfilesState(
+        profiles: [_profile], selectedId: 'profile-1',
+      )), provider: _NoNetwork(),
+    );
+    addTearDown(ai.dispose);
+    final chat = NarrativeChatController(
+      provider: _NoNetwork(), configuration: () => null,
+    );
+    addTearDown(chat.dispose);
+    chat.restoreTimeline(const [
+      ChatEntry(id: 5, speaker: ChatSpeaker.player,
+        name: 'Vous', text: 'Où suis-je ?'),
+    ], rawGenerations: const [
+      RawGeneration(playerEventId: 5, rawText: 'Astrid répond...'),
+    ]);
+
+    final recorder = AiExchangeRecorder();
+    final exchange = recorder.begin(
+      provider: 'openai-compatible', method: 'POST',
+      url: 'https://example.invalid/v1/chat/completions',
+      requestBody: '{"model":"test","messages":[]}',
+      secret: 'secret-token', accept: 'application/json',
+    );
+    exchange.stage = 'jsonifier';
+    exchange.playerEventId = 5;
+    exchange.complete(error: 'JSONification invalide');
+    await library.saveDiagnostic(StoredAiDiagnostic(
+      id: 'diag-1', sessionId: session.id,
+      createdAtUtc: DateTime.utc(2026, 11, 15),
+      content: exchange.exportJson(),
+    ), 10);
+
+    var loads = 0;
+    String? exportedName;
+    String? exportedText;
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: Scaffold(body: ConversationSettingsPage(
+        library: library, ai: ai, chat: chat,
+        bookId: book.id, sessionId: session.id,
+        bookTitle: 'Skogheim', onBack: () {},
+        onLoadAiDiagnostics: () async {
+          loads++;
+          return library.diagnostics(session.id);
+        },
+        onExportAiTrace: (name, bytes) async {
+          exportedName = name;
+          exportedText = utf8.decode(bytes);
+        },
+      )),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('conversationExport')), findsOneWidget);
+    expect(find.byKey(const ValueKey('bookRawExport')), findsOneWidget);
+    await tester.scrollUntilVisible(find.byKey(
+      const ValueKey('aiPipelineExport')), 180);
+    await tester.tap(find.byKey(const ValueKey('aiPipelineExport')));
+    await tester.pumpAndSettle();
+
+    expect(loads, 1);
+    expect(exportedName, 'domolia-diagnostic-ia.json');
+    final exported = jsonDecode(exportedText!) as Map<String, dynamic>;
+    expect(exported['format'], 'domolia-ai-pipeline-trace-v1');
+    expect(exported['bookTitle'], 'Skogheim');
+    final turn = (exported['turns'] as List).single;
+    expect(turn['playerMessage'], 'Où suis-je ?');
+    expect(turn['raw']['text'], 'Astrid répond...');
+    expect(turn['raw']['status'], 'pending_jsonification');
+    expect(turn['phases'][0]['stage'], 'jsonifier');
+    expect(turn['phases'][0]['interpretation']['error'],
+      'JSONification invalide');
+    expect(exportedText!, isNot(contains('secret-token')));
     expect(tester.takeException(), isNull);
   });
 
