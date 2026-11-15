@@ -35,6 +35,38 @@ Représentation visible :
 La vraie source RAW reste stockée indépendamment et renvoyée intacte au
 narrateur à son prochain tour, conformément à PR08.
 
+
+## Mémoire narrative compacte pour les tours suivants
+
+Le même appel de JSONification peut produire un champ facultatif
+`compact` au niveau de l'enveloppe JSON (à côté de `events`). Il résume
+les faits narratifs du **tour RAW courant**, pour éviter de renvoyer toute
+la prose aux futurs appels du narrateur. Ce résumé n'est jamais utilisé pour
+produire les bulles de la conversation.
+
+- Les faits du lieu, les protagonistes, les actions réalisées, l'état des
+  personnages, les révélations et les questions encore ouvertes doivent
+  être présents si utiles au prochain tour.
+- Le JSONificateur ne doit pas inventer de propos ou d'actions du joueur,
+  ni transformer une possibilité future en événement réalisé.
+- La validation accepte seulement un résumé non vide de 25 à 1200 caractères,
+  économisant au moins 20 % du texte RAW ; en dessous de 180 caractères RAW,
+  on ne condense pas. Le résumé non valable est ignoré, **sans invalider la
+  JSONification ni perdre le RAW**.
+- Dans `NarrativeChatController.buildNarratorContext`, chaque tour terminé
+  utilise son `compactText` validé lorsque disponible ; sinon le RAW original
+  est transmis. Les interventions du joueur restent inchangées.
+- La table SQLite `raw_generations` dispose d'une colonne nullable
+  `compact_text` depuis la version 7. Les anciennes Parties sont migrées
+  sans compression et gardent leur comportement antérieur.
+- Les exports de diagnostics IA conservent côte à côte le RAW d'origine
+  et son résumé, pour permettre l'inspection des éventuels oublis.
+
+La compression réduit généralement le volume du contexte transmis mais ne
+prouve pas la fidélité sémantique du résumé. Le texte original reste la source
+de vérité, et la mémoire compacte est une optimisation de contexte, pas une
+modification du canon du Livre ou un nouveau mécanisme de Live Lore.
+
 ## Rejets et compatibilité
 
 Les indices de parties absents, réordonnés ou répétés sont rejetés.
