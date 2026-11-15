@@ -654,7 +654,11 @@ void main() {
       jsonDecode(session.encodeTimeline()),
     );
     await (await store.database).update(
-      'sessions', {'timeline_json': pretty},
+      'sessions', {
+        'timeline_json': pretty,
+        // A true equivalence test must also preserve the modification time.
+        'updated_at': incoming.sessions.single.updatedAtMicros,
+      },
       where: 'id = ?', whereArgs: [session.id],
     );
     final service = BackupService(
