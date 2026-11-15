@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../ai/ai_controller.dart';
 import '../ai/ai_diagnostics.dart';
+import '../ai/ai_provider.dart';
 import '../books/book_library_controller.dart';
 import '../chat/chat_controller.dart';
 import '../chat/chat_exports.dart';
