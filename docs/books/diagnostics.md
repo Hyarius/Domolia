@@ -14,6 +14,10 @@ Aucun diagnostic n'est envoyé à un serveur Domolia.
   message**, y compris s'il fait partie d'une réponse avec plusieurs bulles.
   Si le diagnostic correspondant a été purgé ou n'a jamais été enregistré,
   l'application le signale au lieu d'exporter une autre requête.
+- **Appui long sur un message → Commencer une scène ici** : insère un
+  séparateur persistant avant le message. Si un séparateur est déjà présent,
+  le menu propose **Supprimer le changement de scène**. Cette correction
+  ne rappelle aucune IA et ne change pas l'ID du message.
 - **Appui long sur un message du joueur → Éditer** : modifier uniquement
   le texte et le sauvegarder. Le reste de la conversation demeure tant que
   l'utilisateur ne choisit pas « Reprendre ici ».
@@ -57,6 +61,8 @@ ordonnée `events`. Les messages ont `id`, `type: message`, `speaker`,
 
 ## Format `domolia-ai-exchange-v1`
 
+Pour le pipeline à deux passes, chaque requête est un échange distinct et le champ facultatif `stage` vaut `narrator_raw` ou `jsonifier`. Les diagnostics anciens n'ont pas ce champ et restent lisibles. L'export lié à une bulle renvoie la passe `jsonifier` ayant publié son événement ; le RAW est enregistré séparément en SQLite.
+
 Un export contient :
 
 - `recordedAtUtc`, `completedAtUtc`, `durationMs` et `provider` ;
@@ -83,7 +89,7 @@ les jetons d'accès ou clés API connus sont expurgés des corps capturés.
 peuvent contenir des informations personnelles ou confidentielles.
 Vérifiez le JSON avant de le partager.
 
-La base SQLite migre de la version 1 vers la version 2 sans effacer
+La base SQLite migre jusqu'à la version 4 sans effacer
 les Livres ou leurs parties. Chaque diagnostic reste rattaché à une seule
 partie par une clé étrangère ; la suppression de cette partie le supprime
 également.
@@ -121,3 +127,5 @@ du fichier est vérifiée (PNG, JPEG ou WebP), puis sa taille (1 Mio au maximum)
 Le journal indique l'étape d'échec sans inclure l'image elle-même.
 Une validation sur appareil Android réel reste indispensable pour tester les
 différents fournisseurs de documents du téléphone.
+
+La nouvelle table `raw_generations` retient le texte du narrateur avant JSONification (y compris après échec du formatteur), et le rattache au tour et à la Partie. Les échanges HTTP exacts restent séparés et soumis à la politique de conservation des diagnostics.
