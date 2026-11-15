@@ -56,6 +56,8 @@ class NarrativeChatController extends ChangeNotifier {
     this.narratorProvider,
     this.loreProvider,
     this.loreContextBudget = 8000,
+    this.narratorRecentBudget = 16000,
+    this.hybridRecentBudget = 7000,
     this.onTimelineChanged,
     this.onPersistState,
     this.onExchangeCaptured,
@@ -80,6 +82,8 @@ class NarrativeChatController extends ChangeNotifier {
   final Narrator Function()? narratorProvider;
   final BookLore Function()? loreProvider;
   final int loreContextBudget;
+  final int narratorRecentBudget;
+  final int hybridRecentBudget;
   final AiExchangeRecorder? diagnostics;
   final void Function(AiExchange exchange)? onExchangeCaptured;
   final void Function(List<ChatTimelineEvent> events)? onTimelineChanged;
@@ -407,7 +411,8 @@ class NarrativeChatController extends ChangeNotifier {
     final selected = <AiMessage>[];
     var used = 0;
     for (final entry in history.reversed) {
-      if (used + entry.content.length > (hybrid ? 9000 : 16000) &&
+      if (used + entry.content.length >
+          (hybrid ? hybridRecentBudget : narratorRecentBudget) &&
           selected.isNotEmpty) {
         break;
       }

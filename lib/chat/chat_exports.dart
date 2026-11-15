@@ -143,6 +143,48 @@ Map<String, dynamic> exportAiPipelineTrace(
     }
   }
 
+  // Aggregation includes every resumed narrator request and JSONifier call.
+  // Missing provider usage is reported, never counted as a zero-token call.
+  for (final item in turns.values) {
+    final phases = item['phases'] as List<Map<String, dynamic>>;
+    var prompt = 0, completion = 0, missing = 0;
+    var narratorRequests = 0, jsonifierRequests = 0, optimizerRequests = 0;
+    for (final phase in phases) {
+      final name = phase['stage']?.toString() ?? '';
+      if (name.startsWith('narrator_')) {
+        narratorRequests++;
+      } else if (name == 'jsonifier') {
+        jsonifierRequests++;
+      } else if (name == 'context_optimizer') {
+        optimizerRequests++;
+      }
+      final interpretation = phase['interpretation'];
+      if (interpretation is Map) {
+        final input = interpretation['promptTokens'];
+        final output = interpretation['completionTokens'];
+        if (input is int && output is int) {
+          prompt += input;
+          completion += output;
+        } else {
+          missing++;
+        }
+      } else {
+        missing++;
+      }
+    }
+    item['usage'] = {
+      'requests': phases.length,
+      'narratorRequests': narratorRequests,
+      'jsonifierRequests': jsonifierRequests,
+      'optimizerRequests': optimizerRequests,
+      'promptTokensKnown': prompt,
+      'completionTokensKnown': completion,
+      'totalTokensKnown': prompt + completion,
+      'requestsWithoutTokenUsage': missing,
+      'complete': missing == 0,
+    };
+  }
+
   return {
     'format': 'domolia-ai-pipeline-trace-v1',
     'exportedAtUtc': DateTime.now().toUtc().toIso8601String(),

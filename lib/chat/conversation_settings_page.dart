@@ -46,6 +46,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   String? _selected;
   String? _formatterProfile;
   String? _optimizerProfile;
+  String? _inheritedNarratorProfile;
   bool _toolCallingEnabled = true;
   int _cachedLoreCharacters = 0;
   Map<AiNarrativeTask, AiTaskGenerationOverride> _generationOverrides = {};
@@ -59,12 +60,14 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     try {
       await widget.ai.initialize();
       final session = await widget.library.session(widget.sessionId);
+      final bookProfile = await widget.library.profileFor(widget.bookId);
       if (mounted) {
         setState(() {
           _selected = session?.aiProfileId;
           _formatterProfile = session?.formatterProfileId;
           _optimizerProfile = session?.optimizerProfileId;
           _toolCallingEnabled = session?.toolCallingEnabled ?? true;
+          _inheritedNarratorProfile = bookProfile;
           _cachedLoreCharacters = session?.optimizedLore?.length ?? 0;
           _generationOverrides = Map.of(session?.generationOverrides ?? {});
           _loaded = true;
@@ -532,7 +535,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                   final inherited = widget.taskRouting?.profileFor(
                     AiNarrativeTask.narrator,
                   );
-                  final chosen = _selected ?? inherited;
+                  final chosen = _selected ?? inherited ?? _inheritedNarratorProfile;
                   final profile = [
                     for (final p in profiles) if (p.id == chosen) p,
                   ];
