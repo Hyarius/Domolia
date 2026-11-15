@@ -44,6 +44,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   String? _selected;
   String? _formatterProfile;
   String? _optimizerProfile;
+  int _cachedLoreCharacters = 0;
   bool _loaded = false;
   bool _saving = false;
 
@@ -59,6 +60,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           _selected = session?.aiProfileId;
           _formatterProfile = session?.formatterProfileId;
           _optimizerProfile = session?.optimizerProfileId;
+          _cachedLoreCharacters = session?.optimizedLore?.length ?? 0;
           _loaded = true;
         });
       }
@@ -112,6 +114,29 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       _notify('Profil de tâche enregistré pour cette Partie.');
     } catch (_) {
       _notify('Impossible de sauvegarder le profil de cette tâche.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _recompileLore() async {
+    if (_saving || widget.chat.busy || widget.chat.pendingRaw != null) {
+      _notify('Terminez la génération en cours avant de recompiler le Lore.');
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      // Invalidate both the live cache and its persisted copy, even after an
+      // app restart. The next narrative RAW rebuilds the context just once.
+      await widget.library.saveOptimizedLore(widget.sessionId, '', '');
+      if (!widget.chat.requestLoreRecompilation()) {
+        throw StateError('Une génération est en cours.');
+      }
+      if (mounted) setState(() => _cachedLoreCharacters = 0);
+      _notify('Lore à recompiler au prochain message, '
+          'si un profil optimiseur est configuré.');
+    } catch (_) {
+      _notify('Impossible de réinitialiser le cache de Lore.');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -394,6 +419,23 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                       child: Text('Désactiver pour cette Partie'),
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _cachedLoreCharacters > 0
+                      ? 'Lore compilé : $_cachedLoreCharacters caractères '
+                        'conservés pour cette Partie.'
+                      : 'Pas de résumé optimisé disponible pour cette Partie.',
+                  key: const ValueKey('conversationLoreCacheStatus'),
+                  style: const TextStyle(color: DomoliaColors.muted),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  key: const ValueKey('conversationRecompileLore'),
+                  onPressed: _saving || widget.chat.busy ||
+                      widget.chat.pendingRaw != null ? null : _recompileLore,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Recompiler le Lore au prochain message'),
                 ),
                 const SizedBox(height: 12),
                 const Text(
