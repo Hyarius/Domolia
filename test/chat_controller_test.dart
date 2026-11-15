@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:domolia/ai/ai_provider.dart';
+import 'package:domolia/books/book_lore.dart';
+import 'package:domolia/books/lore_context_optimizer.dart';
 import 'package:domolia/chat/chat_controller.dart';
 import 'package:domolia/chat/chat_protocol.dart';
 import 'package:domolia/chat/jsonifier.dart';
@@ -26,6 +28,7 @@ class _Provider implements AiChatProvider {
   String? structured;
   int rawCalls = 0;
   int formatCalls = 0;
+  final outputBudgets = <int>[];
   bool failRaw = false;
   bool failFormat = false;
   List<AiMessage>? narrativeContext;
@@ -40,6 +43,7 @@ class _Provider implements AiChatProvider {
   Future<String> complete(AiConfiguration config, {
     required List<AiMessage> messages, int maxTokens = 1200,
   }) async {
+    outputBudgets.add(maxTokens);
     if (messages.first.content.contains('JSONificateur')) {
       formatCalls++;
       formatterContext = messages;
@@ -77,6 +81,36 @@ class _StreamingProvider implements AiChatProvider, AiStreamingChatProvider {
   @override
   Future<List<AiModel>> listModels(AiConfiguration config) async => [];
 }
+
+class _ContextProvider implements AiChatProvider {
+  _ContextProvider(this.summary);
+  String summary;
+  int calls = 0;
+  final outputBudgets = <int>[];
+  @override
+  Future<List<AiModel>> listModels(AiConfiguration config) async => const [];
+  @override
+  Future<String> complete(AiConfiguration config, {
+    required List<AiMessage> messages, int maxTokens = 1200,
+  }) async {
+    calls++;
+    outputBudgets.add(maxTokens);
+    expect(messages.first.content, contains('compresseur'));
+    return summary;
+  }
+}
+
+BookLore _largeLore() => BookLore(
+  global: LoreGlobal(
+    universe: 'Skogheim',
+    overview: List.filled(115, 'Pierres, montagnes et fjord').join(' '),
+    rules: 'Les événements restent hypothétiques.',
+  ),
+  characters: [
+    LoreCharacter(id:'astrid',name:'Astrid',
+      description: List.filled(280, 'Astrid veille au foyer.').join(' ')),
+  ],
+);
 
 void main() {
   late _Provider provider;
@@ -463,6 +497,274 @@ void main() {
     expect(local.rawGenerations.single.isStructured, isTrue);
     expect(local.pendingRaw, isNull);
     expect(local.busy, isFalse);
+  });
+
+
+  test('Lore optimization is compiled once, cached across turns and restarts',
+      () async {
+    final lore = _largeLore();
+    final summary = 'Skogheim. Astrid, prêtresse principale. '
+        '${List.filled(75, "Vie ordinaire").join(" ")}';
+    final optimizer = _ContextProvider(summary);
+    String? cached, hash;
+    final local = NarrativeChatController(
+      provider: provider, configuration: () => credentials,
+      loreProvider: () => lore,
+      resolveOptimizerConnection: () async =>
+          NarrativeAiEndpoint(provider: optimizer, configuration: credentials),
+      onOptimizedLore: (h, s) async { hash = h; cached = s; },
+    );
+    addTearDown(local.dispose);
+    await local.send('Bonjour');
+    expect(optimizer.calls, 1);
+    expect(cached, summary);
+    expect(hash, const LoreContextOptimizer().sourceHash(lore));
+    expect(provider.narrativeContext!.first.content,
+      contains('LORE CANONIQUE RÉSUMÉ'));
+    await local.send('Je m’assieds.');
+    expect(optimizer.calls, 1);
+
+    final reopened = NarrativeChatController(
+      provider: provider, configuration: () => credentials,
+      loreProvider: () => lore,
+      resolveOptimizerConnection: () async =>
+          NarrativeAiEndpoint(provider: optimizer, configuration: credentials),
+      initialOptimizedLore: cached, initialOptimizedLoreHash: hash,
+    );
+    addTearDown(reopened.dispose);
+    await reopened.send('Je regarde dehors.');
+    expect(optimizer.calls, 1);
+    expect(reopened.messages.last.text, provider.raw);
+
+    expect(local.requestLoreRecompilation(), true);
+    await local.send('Une nouvelle journée commence.');
+    expect(optimizer.calls, 2);
+  });
+
+  test('Invalid summary never prevents storytelling or replaces canonical Lore',
+      () async {
+    final lore = _largeLore();
+    final optimizer = _ContextProvider('Résumé incomplet');
+    String? persisted;
+    final local = NarrativeChatController(
+      provider: provider, configuration: () => credentials,
+      loreProvider: () => lore,
+      resolveOptimizerConnection: () async =>
+          NarrativeAiEndpoint(provider: optimizer, configuration: credentials),
+      onOptimizedLore: (h, s) async { persisted = s; },
+    );
+    addTearDown(local.dispose);
+    await local.send('Un pas.');
+    expect(optimizer.calls, 1);
+    expect(persisted, isEmpty);
+    expect(local.messages.last.text, provider.raw);
+    expect(provider.narrativeContext!.first.content,
+      contains('CANON DU MONDE'));
+    expect(provider.narrativeContext!.first.content,
+      isNot(contains('LORE CANONIQUE RÉSUMÉ')));
+  });
+
+  test('Disabling optimization ignores an existing cached summary',
+      () async {
+    final lore = _largeLore();
+    final local = NarrativeChatController(
+      provider: provider, configuration: () => credentials,
+      loreProvider: () => lore,
+      initialOptimizedLore: 'Skogheim Astrid résumé ancien. '
+        '${List.filled(75, "Résumé").join(" ")}',
+      initialOptimizedLoreHash:
+        const LoreContextOptimizer().sourceHash(lore),
+      resolveOptimizerConnection: () async => null,
+    );
+    addTearDown(local.dispose);
+    await local.send('Je me présente.');
+    expect(local.messages.last.text, provider.raw);
+    expect(provider.narrativeContext!.first.content,
+      contains('CANON DU MONDE'));
+    expect(provider.narrativeContext!.first.content,
+      isNot(contains('LORE CANONIQUE RÉSUMÉ')));
+  });
+
+  test('All three real pipeline stages use independent output budgets', () async {
+    final source = _largeLore();
+    final summary = 'Skogheim Astrid. ${List.filled(80, "Vie quotidienne").join(" ")}';
+    final optimizer = _ContextProvider(summary);
+    final formatter = _Provider()..structured = format(provider.raw);
+    const config = AiConfiguration(
+      baseUrl: defaultAiBaseUrl, model: 'gpt-5.6-luna',
+      apiKey: 'test-only',
+    );
+    final local = NarrativeChatController(
+      provider: provider, configuration: () => config,
+      loreProvider: () => source,
+      resolveConnection: () async => NarrativeAiEndpoint(
+        provider: provider,
+        configuration: config.withReasoning('low'),
+        maxOutputTokens: 8192,
+      ),
+      resolveFormatterConnection: () async => NarrativeAiEndpoint(
+        provider: formatter,
+        configuration: config.withReasoning('none'),
+        maxOutputTokens: 4096,
+      ),
+      resolveOptimizerConnection: () async => NarrativeAiEndpoint(
+        provider: optimizer,
+        configuration: config.withReasoning('low'),
+        maxOutputTokens: 16384,
+      ),
+    );
+    addTearDown(local.dispose);
+    await local.send('Bonjour');
+    expect(optimizer.outputBudgets, [16384]);
+    expect(provider.outputBudgets, [8192]);
+    expect(formatter.outputBudgets, [4096]);
+    expect(local.messages.last.text, provider.raw);
+    await local.send('Encore');
+    expect(optimizer.outputBudgets, [16384],
+      reason: 'Never redo a successful compilation per scene.');
+    expect(provider.outputBudgets, [8192, 8192]);
+    expect(formatter.outputBudgets, [4096, 4096]);
+  });
+
+  test('New numbered-block JSONifier preserves source and character voices',
+      () async {
+    provider.raw = 'Les pierres sont froides.\n\n'
+        'Astrid : « Vous êtes à Skogheim. »\n\n'
+        'Liv observe le plafond.\n\n'
+        'Liv : « Nous avons prié. »';
+    provider.structured = jsonEncode({'events': [
+      {'type': 'message', 'block': 0,
+        'speaker': 'narrator', 'name': 'Narrateur'},
+      {'type': 'message', 'block': 1,
+        'speaker': 'character', 'name': 'Astrid'},
+      {'type': 'message', 'block': 2,
+        'speaker': 'narrator', 'name': 'Narrateur'},
+      {'type': 'message', 'block': 3,
+        'speaker': 'character', 'name': 'Liv'},
+    ]});
+    await chat.send('Où suis-je ?');
+    expect(chat.error, isNull);
+    expect(chat.messages.skip(1).map((e) => e.name),
+      ['Narrateur', 'Astrid', 'Narrateur', 'Liv']);
+    expect(chat.messages.skip(1).map((e) => e.text).join(), provider.raw);
+    expect(provider.rawCalls, 1);
+    expect(provider.formatCalls, 1);
+    final formattedRequest = provider.formatterContext![1].content;
+    expect(formattedRequest, contains('Partie 0 (prose)'));
+    expect(formattedRequest, contains('Partie 6 (citation)'));
+    expect(formattedRequest, isNot(contains('UTF-16')));
+    expect(chat.pendingRaw, isNull);
+  });
+
+  test('Bad block labels keep RAW intact until retry with correct numbering',
+      () async {
+    provider.raw = 'Un couloir.\n\nAstrid : « Bonjour ! »';
+    provider.structured = jsonEncode({'events': [
+      {'type': 'message', 'block': 0,
+        'speaker': 'narrator', 'name': 'Narrateur'},
+      {'type': 'message', 'block': 999,
+        'speaker': 'character', 'name': 'Astrid'},
+    ]});
+    await chat.send('Bonjour');
+    expect(chat.pendingRaw!.rawText, provider.raw);
+    expect(chat.messages, hasLength(1));
+    expect(chat.error, isNotNull);
+    provider.structured = jsonEncode({'events': [
+      {'type': 'message', 'block': 0,
+        'speaker': 'narrator', 'name': 'Narrateur'},
+      {'type': 'message', 'block': 1,
+        'speaker': 'character', 'name': 'Astrid'},
+    ]});
+    await chat.retry();
+    expect(chat.error, isNull);
+    expect(chat.pendingRaw, isNull);
+    expect(provider.rawCalls, 1);
+    expect(provider.formatCalls, 2);
+    expect(chat.messages.skip(1).map((e) => e.text).join(), provider.raw);
+  });
+
+  test('Pipeline persists clean split dialogue, emotion and original RAW',
+      () async {
+    provider.raw = 'Liv, étonnée : « Quoi ?! » ajouta-t-elle. '
+        '« Ce n’est pas possible ! »';
+    provider.structured = jsonEncode({'events': [
+      {'type': 'part', 'part': 0, 'kind': 'aside'},
+      {'type': 'part', 'part': 1, 'kind': 'dialogue',
+        'name': 'Liv', 'status': 'étonnée'},
+      {'type': 'part', 'part': 2, 'kind': 'aside'},
+      {'type': 'part', 'part': 3, 'kind': 'dialogue',
+        'name': 'Liv', 'status': 'incrédule'},
+    ]});
+    await chat.send('Que se passe-t-il ?');
+    expect(chat.error, isNull);
+    final speeches = chat.messages.skip(1).toList();
+    expect(speeches.map((e) => e.name), ['Liv', 'Liv']);
+    expect(speeches.map((e) => e.text),
+        ['Quoi ?!', 'Ce n’est pas possible !']);
+    expect(speeches.map((e) => e.status), ['étonnée', 'incrédule']);
+    expect(chat.rawGenerations.single.rawText, provider.raw);
+    expect(chat.rawGenerations.single.isStructured, isTrue);
+    expect(provider.formatterContext![1].content,
+        contains('Partie 1 (citation)'));
+  });
+
+  test('Future narrator input uses persisted compact turn instead of long RAW',
+      () async {
+    final raw = List.filled(20,
+        'Astrid et Liv demeurent devant la porte close de la chapelle.')
+        .join(' ');
+    const compact = 'Astrid et Liv se trouvent devant la porte close '
+        'de la chapelle. La porte est toujours fermée.';
+    provider.raw = raw;
+    provider.structured = jsonEncode({
+      'events': [
+        {'type': 'message', 'start': 0, 'end': raw.length,
+         'speaker': 'narrator', 'name': 'Narrateur'},
+      ],
+      'compact': compact,
+    });
+    await chat.send('Je regarde les femmes.');
+    expect(chat.error, isNull);
+    expect(chat.messages.last.text, raw);
+    expect(chat.rawGenerations.single.rawText, raw);
+    expect(chat.rawGenerations.single.compactText, compact);
+
+    await chat.send('Je demande si la porte est ouverte.');
+    final nextInput = provider.narrativeContext!
+        .skip(1).map((message) => message.content).join('\n');
+    expect(nextInput, contains(compact));
+    expect(nextInput, isNot(contains(raw)));
+    expect(nextInput, contains('Je regarde les femmes.'));
+  });
+
+  test('Old restored generations without compact memory use original RAW',
+      () {
+    chat.restoreTimeline(const [
+      ChatEntry(id: 0, speaker: ChatSpeaker.player,
+          name: 'Vous', text: 'Je regarde.'),
+      ChatEntry(id: 1, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'La fenêtre grince.'),
+    ], rawGenerations: const [
+      RawGeneration(playerEventId: 0, rawText: 'RAW original intact.',
+          firstEventId: 1, lastEventId: 1),
+    ]);
+    final history = chat.buildNarratorContext().map((e) => e.content).toList();
+    expect(history, contains('RAW original intact.'));
+  });
+
+  test('Invalid compact memory does not block a valid response or its retry',
+      () async {
+    final raw = List.filled(20, 'La pluie frappe les tuiles.').join(' ');
+    provider.raw = raw;
+    provider.structured = jsonEncode({
+      'events': [ {'type': 'message', 'start': 0, 'end': raw.length,
+        'speaker': 'narrator', 'name': 'Narrateur'} ],
+      'compact': 'Trop court',
+    });
+    await chat.send('Je reste immobile.');
+    expect(chat.error, isNull);
+    expect(chat.rawGenerations.single.compactText, isNull);
+    expect(chat.messages.last.text, raw);
   });
 
 }

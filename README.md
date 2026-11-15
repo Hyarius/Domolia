@@ -189,7 +189,7 @@ Dans une Partie, maintenez une bulle enfoncée pour accéder à ses actions :
 - **Message du narrateur ou d’un personnage → Régénérer** : remplacer tout le tour IA associé à cette bulle, ainsi que la suite de la conversation, après confirmation ;
 - **Message IA → Exporter** : sauvegarder un JSON contenant la requête HTTP et la réponse brute **ayant réellement produit cette bulle**. Si la trace n’est plus disponible, aucun autre échange n’est substitué.
 
-**Options de la conversation** conserve l’export de l’historique complet ou des X dernières scènes/messages, ainsi que la purge des traces IA sans effacer l’histoire. **Paramètres → Diagnostics IA** règle la conservation (0, 5, 10, 20 ou 50 échanges par Partie, 10 par défaut). Les corps bruts sont limités à 1 Mio et les clés d’authentification sont expurgées ; le contenu des prompts et réponses est toutefois conservé dans les fichiers exportés.
+**Paramètres de la conversation → Historique** regroupe l’export de l’historique complet ou des X dernières scènes/messages, l’export JSON brut du Livre, le diagnostic des échanges IA (RAW, compilateur et JSONificateur) et la purge des traces IA sans effacer l’histoire. **Paramètres → Diagnostics IA** règle la conservation (0, 5, 10, 20 ou 50 échanges par Partie, 10 par défaut). Les corps bruts sont limités à 1 Mio et les clés d’authentification sont expurgées ; le contenu des prompts et réponses est toutefois conservé dans les fichiers exportés.
 
 Voir [le format, les contrôles et la confidentialité des diagnostics](docs/books/diagnostics.md).
 
@@ -200,3 +200,25 @@ Le menu latéral se limite à **Accueil**, **Livres**, **À propos** et **Param�
 ## Bibliothèque de Livres (refonte)
 
 Chaque Livre possède un titre, une couverture, un narrateur, un niveau de détail et des tags. Les parties sont enregistrées localement et les configurations IA restent séparées dans le stockage sécurisé. Un Livre peut être exporté/importé comme JSON portable, sans clés, compte, lien de profil ou historique de Partie. Format et limites : [docs/books/format.md](docs/books/format.md).
+
+
+## IA par tâche et compilation du contexte de Lore
+
+Dans **Paramètres → Configurations IA → IA par tâche**, trois fonctions indépendantes utilisent des **profils nommés existants**, sans recopier les clés API :
+
+- **Narrateur RAW** : écrit librement la scène. Par défaut, reprend le profil déjà associé au Livre.
+- **JSONificateur** : convertit la réponse RAW en bulles. Il peut utiliser un modèle rapide distinct ; par défaut, il suit le narrateur.
+  Domolia découpe désormais le RAW en paragraphes numérotés et conserve leur texte exact. L'IA identifie le locuteur de chaque bloc et, si nécessaire, les transitions de scène ; elle **ne calcule plus les positions UTF-16**. Le découpage et la reconstruction restent déterministes dans Dart, avec vérification stricte de l'ordre et de la couverture. Les anciens diagnostics avec intervalles restent interprétables. Une JSONification refusée garde le RAW en attente : on peut retenter uniquement cette phase, sans redemander la scène au narrateur.
+- **Optimiseur de Lore** : étape facultative qui produit un résumé compact des fiches canoniques avant la **première génération RAW** de la Partie. L’absence de profil optimise zéro token et garde le sélecteur déterministe.
+
+Dans **Paramètres de la conversation**, chaque tâche peut être surchargée pour cette Partie seulement. Le JSONificateur peut être explicitement forcé à utiliser le narrateur, et l’optimiseur peut être désactivé pour cette Partie même si sa configuration générale est active. Les valeurs restent locales à cette installation et sont exclues des exports de Livre.
+
+Chaque tâche dispose aussi d’un **budget de tokens de sortie** et d’un **niveau de raisonnement** : ces paramètres se définissent au niveau de l’application, puis peuvent être surchargés **champ par champ** dans une Partie, sans modifier les autres tâches. Valeurs initiales recommandées : narrateur **8 192**, JSONificateur **4 096**, optimiseur **4 096** tokens. Pour `gpt-5.6-luna` via ChatGPT Responses, le mode automatique applique respectivement `low`, `none` et `low` (sinon la valeur du fournisseur est conservée). Le réglage explicite du raisonnement est transmis uniquement à ChatGPT Responses ; les profils CustomAI reçoivent uniquement la limite de tokens. Tous les modèles n’acceptent pas les mêmes niveaux de raisonnement ou budgets et l'API peut refuser une valeur non prise en charge.
+
+Les budgets couvrent la **sortie et les tokens de raisonnement** lorsqu’ils sont comptés ensemble par le fournisseur, pas la fenêtre de contexte d’entrée. La plage de l’application est de 128 à 32 768 tokens (choix prédéfinis dans l’interface) ; les limites effectives et les coûts restent propres au modèle et au compte. Les nouvelles données sont stockées via les préférences locales et dans la base SQLite **v6** des Parties. L’ancienne configuration des profils est préservée et la définition portable du Livre demeure inchangée.
+
+L’optimiseur reçoit le Lore statique complet **dans la limite de son budget d’entrée** ; il tente de préserver les personnages, lieux, événements, secrets et conditions tout en économisant des caractères. Le résultat ne remplace **jamais** le Lore de l’auteur : le résumé est conservé dans la Partie, associé à l’empreinte du Lore source, et réutilisé sans nouvel appel IA sur les tours suivants et les réouvertures. La validation automatique vérifie la taille et la présence des noms canoniques ; elle **ne peut pas garantir une équivalence sémantique totale**. Une sortie incorrecte, trop longue, absente ou indisponible déclenche le retour au sélecteur déterministe, sans interrompre la génération narrative lorsque ce dernier peut traiter le canon.
+
+La commande **Recompiler le Lore au prochain message** invalide volontairement le cache de la Partie. Modifier le Lore du Livre invalide aussi la compatibilité de son ancien résumé. La compilation et la JSONification peuvent consommer des crédits selon le fournisseur choisi : leurs requêtes et réponses sont enregistrées dans les diagnostics IA, selon la politique de conservation réglée par l’utilisateur.
+
+Le système ne consulte pas encore le Lore à la demande et n’écrit jamais de Live Lore. Ce sera une étape distincte.

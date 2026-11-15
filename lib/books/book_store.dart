@@ -1,4 +1,5 @@
 import '../chat/raw_generation.dart';
+import '../ai/ai_task_generation.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
@@ -61,7 +62,8 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
     await db.execute(
       'CREATE TABLE raw_generations ('
       'session_id TEXT NOT NULL, player_event_id INTEGER NOT NULL, '
-      'raw_text TEXT NOT NULL, first_event_id INTEGER, last_event_id INTEGER, '
+      'raw_text TEXT NOT NULL, compact_text TEXT, '
+      'first_event_id INTEGER, last_event_id INTEGER, '
       'PRIMARY KEY(session_id, player_event_id), '
       'FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE)',
     );
@@ -78,6 +80,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
         RawGeneration(
           playerEventId: row['player_event_id'] as int,
           rawText: row['raw_text'] as String,
+          compactText: row['compact_text'] as String?,
           firstEventId: row['first_event_id'] as int?,
           lastEventId: row['last_event_id'] as int?,
         ),
@@ -106,6 +109,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
           'session_id': session.id,
           'player_event_id': raw.playerEventId,
           'raw_text': raw.rawText,
+          'compact_text': raw.compactText,
           'first_event_id': raw.firstEventId,
           'last_event_id': raw.lastEventId,
         });
@@ -132,7 +136,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
     return _db ??= await (_factoryOverride ?? databaseFactory).openDatabase(
       location,
       options: OpenDatabaseOptions(
-      version: 4,
+      version: 7,
       onConfigure: (db) async =>
           db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, version) async {
@@ -148,6 +152,9 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
           'CREATE TABLE sessions (id TEXT PRIMARY KEY, book_id TEXT NOT NULL, '
           'title TEXT NOT NULL, timeline_json TEXT NOT NULL, '
           'updated_at INTEGER NOT NULL, profile_id TEXT, '
+          'formatter_profile_id TEXT, optimizer_profile_id TEXT, '
+          'optimized_lore TEXT, optimized_lore_hash TEXT, '
+          'generation_options_json TEXT, '
           'FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE)',
         );
         await db.execute(
@@ -162,6 +169,20 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
           await db.execute('ALTER TABLE sessions ADD COLUMN profile_id TEXT');
         }
         if (oldVersion < 4) await _createRawGenerations(db);
+        if (oldVersion < 5) {
+          await db.execute('ALTER TABLE sessions ADD COLUMN formatter_profile_id TEXT');
+          await db.execute('ALTER TABLE sessions ADD COLUMN optimizer_profile_id TEXT');
+          await db.execute('ALTER TABLE sessions ADD COLUMN optimized_lore TEXT');
+          await db.execute('ALTER TABLE sessions ADD COLUMN optimized_lore_hash TEXT');
+        }
+        if (oldVersion < 6) {
+          await db.execute('ALTER TABLE sessions ADD COLUMN generation_options_json TEXT');
+        }
+        // Older migrations (<4) create the table using the new schema.
+        if (oldVersion >= 4 && oldVersion < 7) {
+          await db.execute(
+            'ALTER TABLE raw_generations ADD COLUMN compact_text TEXT');
+        }
       },
       ),
     );
@@ -229,6 +250,12 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
     title: row['title'] as String,
     timeline: BookSession.decodeTimeline(row['timeline_json'] as String),
     aiProfileId: row['profile_id'] as String?,
+    formatterProfileId: row['formatter_profile_id'] as String?,
+    optimizerProfileId: row['optimizer_profile_id'] as String?,
+    generationOverrides: AiTaskGenerationOverride.decode(
+        row['generation_options_json'] as String?),
+    optimizedLore: row['optimized_lore'] as String?,
+    optimizedLoreHash: row['optimized_lore_hash'] as String?,
     updatedAtUtc: DateTime.fromMicrosecondsSinceEpoch(
         row['updated_at'] as int, isUtc: true),
   );
@@ -250,6 +277,12 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
       'timeline_json': session.encodeTimeline(),
       'updated_at': DateTime.now().microsecondsSinceEpoch,
       'profile_id': session.aiProfileId,
+      'formatter_profile_id': session.formatterProfileId,
+      'optimizer_profile_id': session.optimizerProfileId,
+      'generation_options_json': AiTaskGenerationOverride.encode(
+          session.generationOverrides),
+      'optimized_lore': session.optimizedLore,
+      'optimized_lore_hash': session.optimizedLoreHash,
     };
     // REPLACE deletes the existing SQLite row and cascades into diagnostics.
     // An in-place update preserves every retained AI exchange for this part.

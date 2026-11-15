@@ -27,6 +27,14 @@ class ChatGptResponsesProvider implements AiChatProvider, AiStreamingChatProvide
       throw const AiProviderException('Connectez d’abord votre compte ChatGPT.');
     }
     validatedAiModel(configuration.model);
+    if (maxTokens < 1 || maxTokens > 32768) {
+      throw const AiProviderException('Budget de sortie IA invalide.');
+    }
+    if (configuration.reasoningEffort != null &&
+        !const ['none', 'low', 'medium', 'high', 'xhigh', 'max']
+            .contains(configuration.reasoningEffort)) {
+      throw const AiProviderException('Niveau de raisonnement invalide.');
+    }
     if (messages.isEmpty ||
         messages.any((message) =>
             !{'user', 'assistant', 'system'}.contains(message.role) ||
@@ -47,6 +55,8 @@ class ChatGptResponsesProvider implements AiChatProvider, AiStreamingChatProvide
         'store': false,
         'stream': true,
         'max_output_tokens': maxTokens,
+        if (configuration.reasoningEffort != null)
+          'reasoning': {'effort': configuration.reasoningEffort},
       });
 
     final exchange = diagnostics?.begin(
@@ -142,9 +152,23 @@ class ChatGptResponsesProvider implements AiChatProvider, AiStreamingChatProvide
               );
             }
           }
-        } else if (event == 'response.failed' ||
-                   event == 'response.incomplete' ||
-                   event == 'error') {
+        } else if (event == 'response.incomplete') {
+          final response = body['response'];
+          final details = response is Map<String, dynamic>
+              ? response['incomplete_details'] : null;
+          final reason = details is Map<String, dynamic>
+              ? details['reason'] : null;
+          if (reason == 'max_output_tokens') {
+            throw const AiProviderException(
+              'Budget de sortie épuisé (raisonnement compris). '
+              'Augmentez les tokens de cette tâche ou réduisez le '
+              'niveau de raisonnement.',
+            );
+          }
+          throw const AiProviderException(
+            'ChatGPT a interrompu la réponse avant sa fin.',
+          );
+        } else if (event == 'response.failed' || event == 'error') {
           throw const AiProviderException(
             'ChatGPT a interrompu la génération. Vérifiez les limites de votre compte.',
           );

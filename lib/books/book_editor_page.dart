@@ -9,6 +9,8 @@ import '../theme/domolia_theme.dart';
 import '../logging/app_logger.dart';
 import 'book_cover_loader.dart';
 import 'book_definition.dart';
+import 'book_lore.dart';
+import 'book_lore_tab.dart';
 import 'book_library_controller.dart';
 import 'book_library_page.dart';
 import 'book_session.dart';
@@ -97,6 +99,20 @@ class _BookEditorPageState extends State<BookEditorPage> {
       _show('Impossible de sauvegarder ce Livre.');
       return false;
     }
+  }
+
+  Future<void> _saveLore(BookLore lore) async {
+    _saveDelay?.cancel();
+    final next = _book.copyWith(
+      title: _title.text.trim(),
+      narrativeStyle: _style.text.trim(),
+      openingMessages: _openings.text.split('\n')
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty).toList(),
+      lore: lore,
+    );
+    await widget.library.save(next);
+    if (mounted) setState(() => _book = next);
   }
 
   Future<void> _chooseCover() async {
@@ -295,6 +311,8 @@ class _BookEditorPageState extends State<BookEditorPage> {
           NavigationDestination(
             icon: Icon(Icons.menu_book_outlined), label: 'Livre'),
           NavigationDestination(
+            icon: Icon(Icons.auto_stories_outlined), label: 'Lore'),
+          NavigationDestination(
             icon: Icon(Icons.edit_note_rounded), label: 'Narrateur'),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined), label: 'Système'),
@@ -329,14 +347,34 @@ class _BookEditorPageState extends State<BookEditorPage> {
             ),
           ),
           const SizedBox(height: 10),
-          Expanded(child: ListView(
-            key: ValueKey('bookTab-$_tab'),
-            padding: const EdgeInsets.fromLTRB(18, 10, 18, 26),
-            children: switch (_tab) {
-              0 => _bookTab(),
-              1 => _narratorTab(),
-              _ => _systemTab(),
-            },
+          Expanded(child: IndexedStack(
+            index: _tab,
+            children: [
+              ListView(
+                key: const ValueKey('bookTab-0'),
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 26),
+                children: _bookTab(),
+              ),
+              ListView(
+                key: const ValueKey('bookTab-1'),
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 26),
+                children: [BookLoreTab(
+                  key: const ValueKey('bookLoreTab'),
+                  lore: _book.lore,
+                  onSave: _saveLore,
+                )],
+              ),
+              ListView(
+                key: const ValueKey('bookTab-2'),
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 26),
+                children: _narratorTab(),
+              ),
+              ListView(
+                key: const ValueKey('bookTab-3'),
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 26),
+                children: _systemTab(),
+              ),
+            ],
           )),
         ]),
       ),

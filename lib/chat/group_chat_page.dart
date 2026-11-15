@@ -9,8 +9,6 @@ import '../theme/domolia_theme.dart';
 import 'chat_controller.dart';
 import 'chat_protocol.dart';
 
-enum _ChatExportAction { purgeDiagnostics }
-
 class GroupChatPage extends StatefulWidget {
   const GroupChatPage({
     super.key,
@@ -335,38 +333,6 @@ class _GroupChatPageState extends State<GroupChatPage> {
     );
   }
 
-  Future<void> _purgeDiagnostics() async {
-    if (widget.controller.busy || widget.onPurgeDiagnostics == null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Purger les diagnostics ?'),
-        content: const Text(
-          'Supprimer définitivement les requêtes et réponses IA '
-          'enregistrées pour cette partie ? Les messages et les scènes '
-          'de la conversation seront conservés.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Annuler'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Purger'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-    try {
-      await widget.onPurgeDiagnostics!();
-      widget.controller.forgetLastExchange();
-      _showExportMessage('Diagnostics de cette partie supprimés.');
-    } catch (_) {
-      _showExportMessage('Impossible de purger les diagnostics.');
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -378,79 +344,6 @@ class _GroupChatPageState extends State<GroupChatPage> {
         return SafeArea(
           child: Column(
             children: [
-              Container(
-                padding: const EdgeInsets.fromLTRB(18, 12, 18, 13),
-                decoration: const BoxDecoration(
-                  color: DomoliaColors.surface,
-                  border: Border(
-                    bottom: BorderSide(color: DomoliaColors.border),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.forum_outlined,
-                      color: DomoliaColors.goldLight,
-                      size: 27,
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Conversation de groupe',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                              color: DomoliaColors.goldLight,
-                            ),
-                          ),
-                          Text(
-                            'Vous et les personnages',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: DomoliaColors.muted,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    PopupMenuButton<_ChatExportAction>(
-                      key: const ValueKey('chatExportMenu'),
-                      tooltip: 'Options de la conversation',
-                      icon: const Icon(Icons.ios_share_outlined,
-                        color: DomoliaColors.goldLight),
-                      onSelected: (action) {
-                        switch (action) {
-                          case _ChatExportAction.purgeDiagnostics:
-                            _purgeDiagnostics();
-                        }
-                      },
-                      itemBuilder: (_) => [
-                        PopupMenuItem(
-                          value: _ChatExportAction.purgeDiagnostics,
-                          enabled: !chat.busy &&
-                              widget.onPurgeDiagnostics != null,
-                          child: const Text('Purger les diagnostics'),
-                        ),
-                      ],
-                    ),
-                    IconButton(
-                      tooltip: 'Paramètres de la conversation',
-                      onPressed: widget.onOpenSettings,
-                      icon: const Icon(
-                        Icons.tune_rounded,
-                        color: DomoliaColors.goldLight,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
               Expanded(
                 child: transcript.isEmpty
                     ? _EmptyConversation(onOpenSettings: widget.onOpenSettings)
@@ -801,14 +694,32 @@ class _ChatBubble extends StatelessWidget {
               children: [
                 Padding(
                   padding: const EdgeInsets.only(left: 3, bottom: 6),
-                  child: Text(
-                    entry.name,
-                    key: const ValueKey('chatSpeakerName'),
-                    style: TextStyle(
-                      color: color,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
+                  child: Row(
+                    children: [
+                      Text(
+                        entry.name,
+                        key: const ValueKey('chatSpeakerName'),
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                      if (!isPlayer && entry.status?.isNotEmpty == true)
+                        Flexible(
+                          child: Text(
+                            ' - ${entry.status}',
+                            key: const ValueKey('chatSpeakerStatus'),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: DomoliaColors.cream,
+                              fontSize: 12,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 Container(
@@ -836,7 +747,7 @@ class _ChatBubble extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    entry.text,
+                    isPlayer ? entry.text : _characterText(entry.text, entry.name),
                     key: const ValueKey('chatBubbleText'),
                     style: TextStyle(
                       color: DomoliaColors.cream,
@@ -856,6 +767,16 @@ class _ChatBubble extends StatelessWidget {
       ),
     );
   }
+}
+
+/// UI-only compatibility for older saved bubbles. New JSONification stores
+/// already-clean speeches; the literary RAW is always available separately.
+String _characterText(String text, String name) {
+  var visible = text.trim();
+  final prefix = RegExp('^${RegExp.escape(name)}' r'\s*[:：]\s*',
+      caseSensitive: false);
+  visible = visible.replaceFirst(prefix, '');
+  return visible.replaceAll('«', '').replaceAll('»', '').trim();
 }
 
 class _ChatAvatar extends StatelessWidget {

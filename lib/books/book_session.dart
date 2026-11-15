@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import '../chat/chat_protocol.dart';
+import '../ai/ai_task_generation.dart';
 
 /// Personal and never included in a BookDefinition export.
 class BookSession {
@@ -11,6 +12,11 @@ class BookSession {
     required this.title,
     this.timeline = const [],
     this.aiProfileId,
+    this.formatterProfileId,
+    this.optimizerProfileId,
+    this.generationOverrides = const {},
+    this.optimizedLore,
+    this.optimizedLoreHash,
     this.updatedAtUtc,
   });
 
@@ -20,19 +26,47 @@ class BookSession {
   final List<ChatTimelineEvent> timeline;
   /// Overrides the parent Book's default AI profile for this conversation.
   final String? aiProfileId;
+  /// Explicit per-Party overrides; null inherits the application task profile.
+  final String? formatterProfileId;
+  final String? optimizerProfileId;
+  /// Task-specific output/reasoning overrides; never part of a shared Book.
+  final Map<AiNarrativeTask, AiTaskGenerationOverride> generationOverrides;
+  /// Generated summary only. The canonical Lore remains in BookDefinition.
+  /// Empty string means an optimization was attempted and rejected.
+  final String? optimizedLore;
+  final String? optimizedLoreHash;
   final DateTime? updatedAtUtc;
 
   static String freshId() =>
       'session-${DateTime.now().microsecondsSinceEpoch}-'
       '${Random.secure().nextInt(0x7fffffff)}';
 
-  BookSession copyWith({String? title, List<ChatTimelineEvent>? timeline,
-      String? aiProfileId, bool clearAiProfile = false, DateTime? updatedAtUtc}) => BookSession(
+  BookSession copyWith({
+    String? title,
+    List<ChatTimelineEvent>? timeline,
+    String? aiProfileId,
+    bool clearAiProfile = false,
+    String? formatterProfileId,
+    bool clearFormatterProfile = false,
+    String? optimizerProfileId,
+    bool clearOptimizerProfile = false,
+    Map<AiNarrativeTask, AiTaskGenerationOverride>? generationOverrides,
+    String? optimizedLore,
+    String? optimizedLoreHash,
+    DateTime? updatedAtUtc,
+  }) => BookSession(
         id: id,
         bookId: bookId,
         title: title ?? this.title,
         timeline: timeline ?? this.timeline,
         aiProfileId: clearAiProfile ? null : aiProfileId ?? this.aiProfileId,
+        formatterProfileId: clearFormatterProfile
+            ? null : formatterProfileId ?? this.formatterProfileId,
+        optimizerProfileId: clearOptimizerProfile
+            ? null : optimizerProfileId ?? this.optimizerProfileId,
+        generationOverrides: generationOverrides ?? this.generationOverrides,
+        optimizedLore: optimizedLore ?? this.optimizedLore,
+        optimizedLoreHash: optimizedLoreHash ?? this.optimizedLoreHash,
         updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
       );
 
@@ -47,6 +81,7 @@ class BookSession {
               'speaker': event.speaker.name,
               'name': event.name,
               'text': event.text,
+              if (event.status != null) 'status': event.status,
             },
       ]);
 
@@ -70,12 +105,15 @@ class BookSession {
       } else if (item['type'] == 'message' &&
           item['speaker'] is String &&
           item['name'] is String && item['text'] is String &&
+          (item['status'] == null || item['status'] is String &&
+              (item['status'] as String).length <= 65) &&
           ChatSpeaker.values.any((s) => s.name == item['speaker'])) {
         result.add(ChatEntry(
           id: id,
           speaker: ChatSpeaker.values.byName(item['speaker'] as String),
           name: item['name'] as String,
           text: item['text'] as String,
+          status: item['status'] as String?,
         ));
       } else {
         throw const FormatException('Événement de partie inconnu.');

@@ -10,11 +10,16 @@ import 'chat_protocol.dart';
 import 'jsonifier.dart';
 import 'narrator.dart';
 import 'raw_generation.dart';
+import '../books/book_lore.dart';
+import '../books/lore_context_builder.dart';
+import '../books/lore_context_optimizer.dart';
 
 class NarrativeAiEndpoint {
-  const NarrativeAiEndpoint({required this.provider, required this.configuration});
+  const NarrativeAiEndpoint({required this.provider, required this.configuration,
+    this.maxOutputTokens});
   final AiChatProvider provider;
   final AiConfiguration configuration;
+  final int? maxOutputTokens;
 }
 
 class _Cancelled implements Exception {}
@@ -27,22 +32,38 @@ class NarrativeChatController extends ChangeNotifier {
     required this.configuration,
     this.resolveConnection,
     this.resolveFormatterConnection,
+    this.resolveOptimizerConnection,
+    this.initialOptimizedLore,
+    this.initialOptimizedLoreHash,
+    this.onOptimizedLore,
     this.narrator = const Narrator(),
     this.narratorProvider,
+    this.loreProvider,
+    this.loreContextBudget = 8000,
     this.onTimelineChanged,
     this.onPersistState,
     this.onExchangeCaptured,
     this.diagnostics,
     int Function(int count)? selectOpeningIndex,
-  }) : _selectOpeningIndex = selectOpeningIndex ?? Random.secure().nextInt;
+  }) : _selectOpeningIndex = selectOpeningIndex ?? Random.secure().nextInt,
+       _optimizedLore = initialOptimizedLore,
+       _optimizedHash = initialOptimizedLoreHash;
 
   final AiChatProvider provider;
   final AiConfiguration? Function() configuration;
   final Future<NarrativeAiEndpoint> Function()? resolveConnection;
   /// Optional distinct profile for later; defaults to the narrator endpoint.
   final Future<NarrativeAiEndpoint> Function()? resolveFormatterConnection;
+  /// Optional separate third task; null means no compression request.
+  final Future<NarrativeAiEndpoint?> Function()? resolveOptimizerConnection;
+  final String? initialOptimizedLore;
+  final String? initialOptimizedLoreHash;
+  /// Stores a summary (or an empty failure sentinel) once per Lore revision.
+  final Future<void> Function(String loreHash, String summary)? onOptimizedLore;
   final Narrator narrator;
   final Narrator Function()? narratorProvider;
+  final BookLore Function()? loreProvider;
+  final int loreContextBudget;
   final AiExchangeRecorder? diagnostics;
   final void Function(AiExchange exchange)? onExchangeCaptured;
   final void Function(List<ChatTimelineEvent> events)? onTimelineChanged;
@@ -83,6 +104,10 @@ class NarrativeChatController extends ChangeNotifier {
   int _generationToken = 0;
   StreamSubscription<AiStreamChunk>? _subscription;
   Completer<void>? _done;
+  bool _optimizationChecked = false;
+  bool _forceOptimization = false;
+  String? _optimizedLore;
+  String? _optimizedHash;
 
   void _notify() {
     if (!_closed) notifyListeners();
@@ -95,6 +120,18 @@ class NarrativeChatController extends ChangeNotifier {
     lastExchange = null;
     diagnostics?.last = null;
     _notify();
+  }
+
+  /// Rebuild on the next RAW generation without changing the author's Lore.
+  /// Never interrupt an unfinished RAW or a pending JSONifier retry.
+  bool requestLoreRecompilation() {
+    if (_closed || busy || pendingRaw != null) return false;
+    _optimizationChecked = false;
+    _forceOptimization = true;
+    _optimizedLore = null;
+    _optimizedHash = null;
+    _notify();
+    return true;
   }
 
   void restoreTimeline(List<ChatTimelineEvent> events, {
@@ -315,7 +352,7 @@ class NarrativeChatController extends ChangeNotifier {
   }
 
   /// The last 24 conversational turns / 16k UTF-16 units are retained.
-  /// Original RAW replaces only the generated events of its own turn.
+  /// Compact narration replaces that turn's RAW when available; RAW is the fallback.
   /// Legacy sessions without RAW fall back to their structured history.
   List<AiMessage> buildNarratorContext() {
     final history = <AiMessage>[];
@@ -331,7 +368,13 @@ class NarrativeChatController extends ChangeNotifier {
       } else if (event is ChatEntry || event is ChatSceneChange) {
         if (active != null) {
           if (!rawEmitted) {
-            history.add(AiMessage(role: 'assistant', content: active.rawText));
+            history.add(AiMessage(
+              role: 'assistant',
+              content: active.compactText == null
+                  ? active.rawText
+                  : 'Résumé narratif factuel du tour :\n'
+                    '${active.compactText}',
+            ));
             rawEmitted = true;
           }
         } else if (event is ChatEntry) {
@@ -354,9 +397,25 @@ class NarrativeChatController extends ChangeNotifier {
       selected.add(entry);
       used += entry.content.length;
     }
+    final lore = loreProvider?.call();
+    final optimizer = const LoreContextOptimizer();
+    final compact = lore != null &&
+        _optimizedHash == optimizer.sourceHash(lore) &&
+        _optimizedLore != null && _optimizedLore!.isNotEmpty;
+    final loreContext = lore == null ? '' : compact
+        ? 'LORE CANONIQUE RÉSUMÉ (réservé au narrateur)\\n'
+          'Ne révèle pas les secrets. Les événements potentiels ne '
+          'se sont pas nécessairement produits. '
+          'Ne décide aucune action du joueur.\\n'
+          '${_optimizedLore!}'
+        : LoreContextBuilder(
+            maxCharacters: loreContextBudget,
+          ).build(lore, selected.reversed.map((entry) => entry.content));
     return [
-      AiMessage(role: 'system',
-          content: (narratorProvider?.call() ?? narrator).systemPrompt),
+      AiMessage(role: 'system', content: [
+        (narratorProvider?.call() ?? narrator).systemPrompt,
+        if (loreContext.isNotEmpty) loreContext,
+      ].join('\n\n')),
       ...selected.reversed,
     ];
   }
@@ -366,13 +425,18 @@ class NarrativeChatController extends ChangeNotifier {
         .take(6).toList().reversed;
     final context = [
       for (final entry in previous)
-        '${entry.name} : ${entry.text}',
+        '${entry.name}${entry.status == null ? '' : ' (${entry.status})'} : ${entry.text}',
     ].join('\n');
     return [
       const AiMessage(role: 'system', content: jsonifierSystemPrompt),
-      AiMessage(role: 'user',
-          content: 'Contexte précédent (ne pas convertir) :\n' 
-              '$context\n\nTexte RAW à convertir :\n$raw'),
+      AiMessage(
+        role: 'user',
+        content: 'Contexte précédent (ne pas convertir) :\n'
+            '$context\n\n'
+            'Parties RAW à classifier (texte JSON échappé, '
+            'numéros fournis par Dart) :\n'
+            '${const Jsonifier().partsForPrompt(raw)}',
+      ),
     ];
   }
 
@@ -441,6 +505,7 @@ class NarrativeChatController extends ChangeNotifier {
               'id': event.id, 'type': 'message',
               'speaker': event.speaker.name, 'name': event.name,
               'text': event.text,
+              if (event.status != null) 'status': event.status,
             },
       ],
     );
@@ -450,6 +515,67 @@ class NarrativeChatController extends ChangeNotifier {
     } catch (_) {
       // Logging persistence cannot invalidate an otherwise committed turn.
     }
+  }
+
+  Future<void> _ensureOptimizedContext(int token) async {
+    if (_optimizationChecked || resolveOptimizerConnection == null) return;
+    _optimizationChecked = true;
+    final lore = loreProvider?.call();
+    if (lore == null) return;
+    const optimizer = LoreContextOptimizer();
+    final hash = optimizer.sourceHash(lore);
+    // A disabled or inaccessible task must never use a previously cached
+    // summary: prefer the canonical deterministic Lore selector.
+    final endpoint = await resolveOptimizerConnection!();
+    _check(token);
+    if (endpoint == null || endpoint.configuration.apiKey.isEmpty) {
+      _optimizedLore = null;
+      _optimizedHash = null;
+      return;
+    }
+    if (!_forceOptimization && _optimizedHash == hash) return;
+    _forceOptimization = false;
+    if (!optimizer.canOptimize(lore)) {
+      _optimizedLore = null;
+      _optimizedHash = null;
+      return;
+    }
+
+    final before = diagnostics?.last;
+    Object? failed;
+    String summary = '';
+    try {
+      final raw = await _requestText(
+        endpoint, optimizer.request(lore), token,
+        endpoint.maxOutputTokens ?? 2400,
+      );
+      _check(token);
+      final validated = optimizer.validate(lore, raw);
+      if (validated == null) {
+        throw const FormatException('Résumé de Lore incomplet ou non économique.');
+      }
+      summary = validated;
+      AppLogger.info('Lore compact validé', component: 'lore',
+          details: {'summaryCharacters': summary.length});
+    } on _Cancelled {
+      rethrow;
+    } catch (error) {
+      failed = error;
+      AppLogger.warning('Optimisation du Lore rejetée : sélection classique',
+          component: 'lore');
+    } finally {
+      _capture('context_optimizer', before, failure: failed);
+    }
+    // Never allow an optimization error to invalidate the narrative turn.
+    _optimizedHash = hash;
+    _optimizedLore = summary;
+    try {
+      await onOptimizedLore?.call(hash, summary);
+    } catch (_) {
+      AppLogger.warning('Sauvegarde du Lore compact impossible',
+          component: 'lore');
+    }
+    _check(token);
   }
 
   Future<void> _generate({bool reuseRaw = false}) async {
@@ -479,12 +605,17 @@ class NarrativeChatController extends ChangeNotifier {
       }
       modelUsed = endpoint.configuration.model;
       if (rawRecord == null) {
+        stage = 'optimizer';
+        await _ensureOptimizedContext(token);
+        _check(token);
+        stage = 'raw';
         AppLogger.info('Début narration RAW', component: 'chat');
         final before = diagnostics?.last;
         Object? failed;
         try {
           final response = await _requestText(
-              endpoint, buildNarratorContext(), token, 2400);
+              endpoint, buildNarratorContext(), token,
+              endpoint.maxOutputTokens ?? 2400);
           _check(token);
           if (response.trim().isEmpty) {
             throw const FormatException('Le narrateur a répondu sans texte.');
@@ -521,18 +652,19 @@ class NarrativeChatController extends ChangeNotifier {
       List<ChatTimelineEvent> additions = const [];
       try {
         final formatted = await _requestText(
-            formatterEndpoint, _jsonifierContext(rawRecord.rawText), token, 2400);
+            formatterEndpoint, _jsonifierContext(rawRecord.rawText), token,
+            formatterEndpoint.maxOutputTokens ?? 2400);
         _check(token);
         final known = _timeline.whereType<ChatEntry>()
             .where((e) => e.speaker == ChatSpeaker.character)
             .map((e) => e.name);
-        final decoded = const Jsonifier().decode(
+        final jsonified = const Jsonifier().decodeWithMemory(
           rawRecord.rawText, formatted, knownCharacters: known,
           hasPreviousScene: _timeline.isNotEmpty,
         );
         final prepared = <ChatTimelineEvent>[];
         var id = _nextId;
-        for (final entry in decoded) {
+        for (final entry in jsonified.events) {
           if (entry is ChatSceneChangeOutput) {
             if (prepared.isNotEmpty && prepared.last is ChatSceneChange ||
                 prepared.isEmpty && _timeline.isNotEmpty &&
@@ -542,7 +674,7 @@ class NarrativeChatController extends ChangeNotifier {
             prepared.add(ChatSceneChange(id: id++));
           } else if (entry is ChatLine) {
             prepared.add(ChatEntry(id: id++, speaker: entry.speaker,
-                name: entry.name, text: entry.text));
+                name: entry.name, text: entry.text, status: entry.status));
           }
         }
         if (prepared.whereType<ChatEntry>().isEmpty) {
@@ -550,7 +682,8 @@ class NarrativeChatController extends ChangeNotifier {
         }
         final updated = [
           ..._generations.where((g) => g.playerEventId != playerId),
-          rawRecord.structured(_nextId, id - 1),
+          rawRecord.structured(_nextId, id - 1,
+              compactText: jsonified.compact),
         ];
         // Once the final transaction starts, stopping cannot safely undo it.
         // Keep the UI busy until its success/failure is reconciled in memory.

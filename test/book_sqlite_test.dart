@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 
 import 'package:domolia/ai/ai_provider.dart';
+import 'package:domolia/ai/ai_task_generation.dart';
 import 'package:domolia/chat/chat_controller.dart';
 
 import 'package:domolia/ai/ai_diagnostics.dart';
@@ -353,6 +354,150 @@ void main() {
     ]), throwsA(isA<Exception>()));
     expect((await db.findSession('s'))!.timeline, hasLength(1));
     expect((await db.listRawGenerations('s')).single.rawText, before.rawText);
+  });
+
+
+  test('SQLite v4 upgrades task profiles and Lore cache without losing a Party',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('domolia-tasks-migration-');
+    final file = '${dir.path}/tasks.sqlite';
+    addTearDown(() async => dir.delete(recursive: true));
+    final legacy = await databaseFactoryFfi.openDatabase(
+      file,
+      options: OpenDatabaseOptions(version: 4, onCreate: (db, version) async {
+        await db.execute('CREATE TABLE books '
+          '(id TEXT PRIMARY KEY, definition_json TEXT NOT NULL)');
+        await db.execute('CREATE TABLE book_bindings '
+          '(book_id TEXT PRIMARY KEY, profile_id TEXT)');
+        await db.execute('CREATE TABLE sessions '
+          '(id TEXT PRIMARY KEY, book_id TEXT NOT NULL, title TEXT NOT NULL, '
+          'timeline_json TEXT NOT NULL, updated_at INTEGER NOT NULL, '
+          'profile_id TEXT)');
+        await db.execute('CREATE TABLE ai_diagnostics '
+          '(id TEXT PRIMARY KEY, session_id TEXT NOT NULL, '
+          'created_at INTEGER NOT NULL, payload_json TEXT NOT NULL)');
+        await db.execute('CREATE TABLE raw_generations '
+          '(session_id TEXT NOT NULL, player_event_id INTEGER NOT NULL, '
+          'raw_text TEXT NOT NULL, first_event_id INTEGER, '
+          'last_event_id INTEGER, '
+          'PRIMARY KEY(session_id, player_event_id))');
+      }),
+    );
+    const book = BookDefinition(id: 'old-book', title: 'Avant les tâches');
+    await legacy.insert('books', {
+      'id': book.id, 'definition_json': book.exportJson(),
+    });
+    await legacy.insert('sessions', {
+      'id': 'old-session', 'book_id': book.id,
+      'title': 'Partie sauvegardée', 'timeline_json': '[]',
+      'updated_at': 100, 'profile_id': 'writer',
+    });
+    await legacy.insert('raw_generations', {
+      'session_id': 'old-session', 'player_event_id': 3,
+      'raw_text': 'Texte déjà généré',
+    });
+    await legacy.close();
+
+    final db = SqliteBookStore(
+      factory: databaseFactoryFfi, databasePath: file);
+    final old = (await db.findSession('old-session'))!;
+    expect(old.title, 'Partie sauvegardée');
+    expect(old.aiProfileId, 'writer');
+    expect(old.formatterProfileId, isNull);
+    expect(old.optimizerProfileId, isNull);
+    expect(old.optimizedLore, isNull);
+    expect((await db.listRawGenerations(old.id)).single.rawText,
+      'Texte déjà généré');
+
+    await db.putSession(old.copyWith(
+      formatterProfileId: 'json-only', optimizerProfileId: 'compact-only',
+      optimizedLoreHash: 'hash-123', optimizedLore: 'Résumé compact',
+      generationOverrides: {
+        AiNarrativeTask.narrator: const AiTaskGenerationOverride(
+          maxOutputTokens: 16384),
+        AiNarrativeTask.jsonifier: const AiTaskGenerationOverride(
+          reasoningEffort: 'none'),
+      },
+    ));
+    expect((await db.listRawGenerations(old.id)), hasLength(1));
+    await db.close();
+
+    final reopened = SqliteBookStore(
+      factory: databaseFactoryFfi, databasePath: file);
+    addTearDown(reopened.close);
+    final saved = (await reopened.findSession('old-session'))!;
+    expect(saved.aiProfileId, 'writer');
+    expect(saved.formatterProfileId, 'json-only');
+    expect(saved.optimizerProfileId, 'compact-only');
+    expect(saved.optimizedLoreHash, 'hash-123');
+    expect(saved.optimizedLore, 'Résumé compact');
+    expect(saved.generationOverrides[AiNarrativeTask.narrator]!
+        .maxOutputTokens, 16384);
+    expect(saved.generationOverrides[AiNarrativeTask.jsonifier]!
+        .reasoningEffort, 'none');
+    expect((await reopened.listRawGenerations(old.id)), hasLength(1));
+    expect((await reopened.findBook(book.id))!.title, book.title);
+  });
+
+  test('SQLite stores compressed narrator context with immutable RAW',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('domolia-compact-');
+    final file = '${dir.path}/compact.sqlite';
+    final first = SqliteBookStore(factory: databaseFactoryFfi, databasePath: file);
+    addTearDown(() async {
+      await first.close();
+      await dir.delete(recursive: true);
+    });
+    await first.putBook(const BookDefinition(id: 'book', title: 'Livre'));
+    const session = BookSession(id: 'session', bookId: 'book', title: 'Partie',
+        timeline: [
+          ChatEntry(id: 0, speaker: ChatSpeaker.player,
+            name: 'Vous', text: 'Je regarde'),
+          ChatEntry(id: 1, speaker: ChatSpeaker.narrator,
+            name: 'Narrateur', text: 'Une porte grince.'),
+        ]);
+    await first.putSession(session);
+    await first.saveNarrativeSnapshot(session, const [
+      RawGeneration(playerEventId: 0, rawText: 'Une porte grince.',
+        compactText: 'La porte grince.', firstEventId: 1, lastEventId: 1),
+    ]);
+    await first.close();
+    final reopened = SqliteBookStore(
+        factory: databaseFactoryFfi, databasePath: file);
+    addTearDown(reopened.close);
+    final saved = (await reopened.listRawGenerations('session')).single;
+    expect(saved.rawText, 'Une porte grince.');
+    expect(saved.compactText, 'La porte grince.');
+    expect(saved.isStructured, true);
+  });
+
+  test('SQLite v6 RAW records migrate with null compact memory', () async {
+    final dir = await Directory.systemTemp.createTemp('domolia-v6-compact-');
+    final file = '${dir.path}/v6.sqlite';
+    addTearDown(() async => dir.delete(recursive: true));
+    final legacy = await databaseFactoryFfi.openDatabase(
+      file, options: OpenDatabaseOptions(version: 6,
+      onCreate: (db, version) async {
+        await db.execute(
+          'CREATE TABLE raw_generations ('
+          'session_id TEXT NOT NULL, player_event_id INTEGER NOT NULL, '
+          'raw_text TEXT NOT NULL, first_event_id INTEGER, last_event_id INTEGER, '
+          'PRIMARY KEY(session_id, player_event_id))');
+        await db.insert('raw_generations', {
+          'session_id': 'legacy', 'player_event_id': 1,
+          'raw_text': 'RAW avant migration',
+          'first_event_id': 2, 'last_event_id': 2,
+        });
+      }));
+    await legacy.close();
+
+    final upgraded = SqliteBookStore(
+        factory: databaseFactoryFfi, databasePath: file);
+    addTearDown(upgraded.close);
+    final saved = (await upgraded.listRawGenerations('legacy')).single;
+    expect(saved.rawText, 'RAW avant migration');
+    expect(saved.compactText, isNull);
+    expect(saved.isStructured, true);
   });
 
 }
