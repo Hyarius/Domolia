@@ -231,7 +231,7 @@ class OpenUncensoredApi {
 
   Future<OuCheckout> checkout({required int cents, String? topUpKey}) async {
     if (cents < 500 || cents > 100000) {
-      throw const OpenUncensoredFailure('Choisissez un montant entre 5 $ et 1 000 $.');
+      throw const OpenUncensoredFailure('Choisissez un montant entre 5 USD et 1 000 USD.');
     }
     if (topUpKey != null && !validOpenUncensoredKey(topUpKey)) {
       throw const OpenUncensoredFailure('Clé de recharge invalide.');
