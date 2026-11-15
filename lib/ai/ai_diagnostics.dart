@@ -47,6 +47,8 @@ class AiExchange {
   final String accept;
   final String _secret;
   final BytesBuilder _response = BytesBuilder(copy: false);
+  /// Logical pipeline stage; the HTTP envelope remains unchanged.
+  String? stage;
   int? statusCode;
   bool truncated = false;
   int totalResponseBytes = 0;
@@ -103,6 +105,7 @@ class AiExchange {
     'completedAtUtc': completedAtUtc?.toIso8601String(),
     'durationMs': completedAtUtc?.difference(createdAtUtc).inMilliseconds,
     'provider': provider,
+    if (stage != null) 'stage': stage,
     'credentialsRedacted': true,
     'request': {
       'method': method,
