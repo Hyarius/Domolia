@@ -650,8 +650,8 @@ void main() {
     expect(provider.rawCalls, 1);
     expect(provider.formatCalls, 1);
     final formattedRequest = provider.formatterContext![1].content;
-    expect(formattedRequest, contains('Bloc 0 :'));
-    expect(formattedRequest, contains('Bloc 3 :'));
+    expect(formattedRequest, contains('Partie 0 (prose)'));
+    expect(formattedRequest, contains('Partie 6 (citation)'));
     expect(formattedRequest, isNot(contains('UTF-16')));
     expect(chat.pendingRaw, isNull);
   });
@@ -681,6 +681,90 @@ void main() {
     expect(provider.rawCalls, 1);
     expect(provider.formatCalls, 2);
     expect(chat.messages.skip(1).map((e) => e.text).join(), provider.raw);
+  });
+
+  test('Pipeline persists clean split dialogue, emotion and original RAW',
+      () async {
+    provider.raw = 'Liv, étonnée : « Quoi ?! » ajouta-t-elle. '
+        '« Ce n’est pas possible ! »';
+    provider.structured = jsonEncode({'events': [
+      {'type': 'part', 'part': 0, 'kind': 'aside'},
+      {'type': 'part', 'part': 1, 'kind': 'dialogue',
+        'name': 'Liv', 'status': 'étonnée'},
+      {'type': 'part', 'part': 2, 'kind': 'aside'},
+      {'type': 'part', 'part': 3, 'kind': 'dialogue',
+        'name': 'Liv', 'status': 'incrédule'},
+    ]});
+    await chat.send('Que se passe-t-il ?');
+    expect(chat.error, isNull);
+    final speeches = chat.messages.skip(1).toList();
+    expect(speeches.map((e) => e.name), ['Liv', 'Liv']);
+    expect(speeches.map((e) => e.text),
+        ['Quoi ?!', 'Ce n’est pas possible !']);
+    expect(speeches.map((e) => e.status), ['étonnée', 'incrédule']);
+    expect(chat.rawGenerations.single.rawText, provider.raw);
+    expect(chat.rawGenerations.single.isStructured, isTrue);
+    expect(provider.formatterContext![1].content,
+        contains('Partie 1 (citation)'));
+  });
+
+  test('Future narrator input uses persisted compact turn instead of long RAW',
+      () async {
+    final raw = List.filled(20,
+        'Astrid et Liv demeurent devant la porte close de la chapelle.')
+        .join(' ');
+    const compact = 'Astrid et Liv se trouvent devant la porte close '
+        'de la chapelle. La porte est toujours fermée.';
+    provider.raw = raw;
+    provider.structured = jsonEncode({
+      'events': [
+        {'type': 'message', 'start': 0, 'end': raw.length,
+         'speaker': 'narrator', 'name': 'Narrateur'},
+      ],
+      'compact': compact,
+    });
+    await chat.send('Je regarde les femmes.');
+    expect(chat.error, isNull);
+    expect(chat.messages.last.text, raw);
+    expect(chat.rawGenerations.single.rawText, raw);
+    expect(chat.rawGenerations.single.compactText, compact);
+
+    await chat.send('Je demande si la porte est ouverte.');
+    final nextInput = provider.narrativeContext!
+        .skip(1).map((message) => message.content).join('\n');
+    expect(nextInput, contains(compact));
+    expect(nextInput, isNot(contains(raw)));
+    expect(nextInput, contains('Je regarde les femmes.'));
+  });
+
+  test('Old restored generations without compact memory use original RAW',
+      () {
+    chat.restoreTimeline(const [
+      ChatEntry(id: 0, speaker: ChatSpeaker.player,
+          name: 'Vous', text: 'Je regarde.'),
+      ChatEntry(id: 1, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'La fenêtre grince.'),
+    ], rawGenerations: const [
+      RawGeneration(playerEventId: 0, rawText: 'RAW original intact.',
+          firstEventId: 1, lastEventId: 1),
+    ]);
+    final history = chat.buildNarratorContext().map((e) => e.content).toList();
+    expect(history, contains('RAW original intact.'));
+  });
+
+  test('Invalid compact memory does not block a valid response or its retry',
+      () async {
+    final raw = List.filled(20, 'La pluie frappe les tuiles.').join(' ');
+    provider.raw = raw;
+    provider.structured = jsonEncode({
+      'events': [ {'type': 'message', 'start': 0, 'end': raw.length,
+        'speaker': 'narrator', 'name': 'Narrateur'} ],
+      'compact': 'Trop court',
+    });
+    await chat.send('Je reste immobile.');
+    expect(chat.error, isNull);
+    expect(chat.rawGenerations.single.compactText, isNull);
+    expect(chat.messages.last.text, raw);
   });
 
 }

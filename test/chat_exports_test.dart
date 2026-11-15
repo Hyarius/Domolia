@@ -189,4 +189,26 @@ void main() {
     expect(trace['turns'], isEmpty);
   });
 
+  test('Conversation export includes optional emotion on character messages', () {
+    final exported = exportConversation(const [
+      ChatEntry(id: 2, speaker: ChatSpeaker.character,
+          name: 'Liv', text: 'Quoi ?!', status: 'étonnée'),
+    ]);
+    final events = exported['events'] as List;
+    expect(events.single['status'], 'étonnée');
+    expect(events.single['text'], 'Quoi ?!');
+  });
+
+  test('Pipeline trace exposes RAW and its compact future context together', () {
+    final raw = RawGeneration(playerEventId: 2,
+        rawText: 'Texte original de la scène.',
+        compactText: 'Faits concis.', firstEventId: 3, lastEventId: 3);
+    final trace = exportAiPipelineTrace(timeline, [raw], const []);
+    final turn = (trace['turns'] as List).singleWhere(
+        (value) => value['playerEventId'] == 2);
+    expect(turn['raw']['text'], 'Texte original de la scène.');
+    expect(turn['raw']['compactText'], 'Faits concis.');
+    expect(turn['raw']['status'], 'jsonified');
+  });
+
 }

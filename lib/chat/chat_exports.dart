@@ -68,6 +68,7 @@ Map<String, dynamic> exportConversation(
             'speaker': event.speaker.name,
             'name': event.name,
             'text': event.text,
+            if (event.status != null) 'status': event.status,
           },
     ],
   };
@@ -102,6 +103,7 @@ Map<String, dynamic> exportAiPipelineTrace(
   for (final raw in rawGenerations) {
     turn(raw.playerEventId)['raw'] = {
       'text': raw.rawText,
+      if (raw.compactText != null) 'compactText': raw.compactText,
       'status': raw.isStructured ? 'jsonified' : 'pending_jsonification',
       'firstEventId': raw.firstEventId,
       'lastEventId': raw.lastEventId,

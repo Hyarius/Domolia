@@ -1,35 +1,108 @@
 import 'dart:convert';
 
 import 'chat_protocol.dart';
+import 'dialogue_parts.dart';
 
 /// The formatter labels stable, Dart-numbered RAW blocks, never positions.
 /// Dart owns the original text and reconstructs every character unchanged.
 const jsonifierSystemPrompt = '''
 Tu es le JSONificateur de Domolia. Tu ne rédiges AUCUNE histoire.
-Réponds uniquement avec un objet JSON : {"events":[...]}.
-Le RAW a été découpé en blocs numérotés par Domolia. Chaque bloc contient
-du texte SOURCE exact, y compris les sauts de ligne et espaces.
-Tu n'as AUCUN offset de caractère à calculer et tu ne recopies AUCUN texte.
-Événements autorisés :
-{"type":"message","block":0,"speaker":"narrator","name":"Narrateur"}
-{"type":"message","block":1,"speaker":"character","name":"Astrid"}
-{"type":"scene_change","before":2}
-Produis exactement un message pour CHAQUE bloc transmis, dans l'ordre
-numérique croissant : 0, 1, 2, ... sans omission, duplication ni inversion.
-N'invente aucun bloc et n'ajoute jamais de champ "text", "start" ou "end".
-Le speaker vaut "narrator" ou "character", avec le nom du personnage.
-Choisis "narrator" si le locuteur est incertain.
-Attribue seulement des personnages identifiables dans le RAW ou le contexte
-précédent ; jamais le personnage joueur.
-Un changement de scène peut être inséré JUSTE AVANT un bloc existant
-pour une rupture majeure de lieu, temps ou séquence, jamais simplement
-pour un changement de locuteur. Ne place pas de séparateur après le dernier
-bloc, et ne dédouble pas un séparateur.
-N'ajoute aucune donnée hors de l'objet JSON, ni Markdown ni commentaire.
+Renvoie uniquement un objet JSON : {"events":[...],"compact":"..."}.
+Domolia découpe le RAW en PARTIES numérotées exactes, certaines étant des
+citations entre « » ; tu n'as ni texte ni indices de caractères à inventer.
+Renvoie EXACTEMENT un événement "part" par partie, dans l'ordre, sans omission.
+Formats stricts :
+{"type":"part","part":0,"kind":"narration"}
+{"type":"part","part":1,"kind":"dialogue","name":"Liv","status":"étonnée"}
+{"type":"part","part":2,"kind":"aside"}
+{"type":"scene_change","before":3}
+Le "kind" vaut "narration", "dialogue" ou "aside".
+- Dialogue : seules les paroles PRONONCÉES doivent apparaître dans la bulle
+  du personnage. Domolia retire mécaniquement les « » des citations.
+  Un passage de prose sans guillemets peut être un dialogue UNIQUEMENT
+  sous la forme explicite "Nom : paroles".
+- Narration : tout texte racontant un fait indépendant ou faisant avancer
+  la scène, sans inventer ou réécrire la source.
+- Aside : indication de locuteur, ponctuation autour des citations, incise
+  purement rédactionnelle ("dit-elle", "ajouta-t-elle") ou courte réaction
+  expressive transférée dans le statut de la réplique voisine.
+  Ne masque JAMAIS un événement important, une action indépendante, une
+  information narrative, ni un paragraphe dépourvu de dialogue adjacent.
+- "status" est facultatif et UNIQUEMENT pour "dialogue". Il décrit brièvement
+  une émotion, une expression, une attitude ou une manière de parler que
+  le RAW permet de déduire : "étonnée", "attristée", "murmurant",
+  "les yeux baissés". Ne mets jamais "ajouta-t-elle"/"répondit-elle".
+  Ne déduis aucun état absent de la scène ; omets-le si non justifié.
+- "name" : personnage réel identifié dans le RAW ou contexte antérieur,
+  jamais le joueur. Une citation non attribuable peut rester en narration.
+- "scene_change" se place juste AVANT une partie en cas de rupture majeure
+  de lieu, temps ou séquence, pas au simple changement de locuteur.
+- "compact" : mémoire narrative FACTUELLE et très brève du RAW pour le prochain
+  narrateur, sans style littéraire. Conserve lieu, personnes impliquées,
+  nouvelles informations, actions réalisées, émotions importantes et questions
+  ouvertes. Mentionne précisément qui a dit ou fait quoi, sans attribuer
+  d'action ou parole au joueur s'il n'en a pas produit dans le RAW.
+  Ne transforme jamais une hypothèse, une promesse ou un événement prévu
+  en fait accompli. N'invente aucun détail et ne donne aucune instruction.
+  Privilégie des phrases courtes ; vise 25 à 45 % du RAW, au plus 1200
+  caractères. Omets "compact" si le RAW est déjà très bref ou si tu ne
+  peux pas le condenser fidèlement.
+N'ajoute jamais "text", start/end, commentaire, Markdown, ni autres champs.
 ''';
+
+/// Complete formatter output, keeping the source narrative independent
+/// from its optional, non-authoritative future context.
+class JsonificationResult {
+  const JsonificationResult({required this.events, this.compact});
+  final List<ChatOutputEvent> events;
+  final String? compact;
+}
 
 class Jsonifier {
   const Jsonifier();
+
+  /// The optional memory is advisory. Its failure must never invalidate
+  /// otherwise correct bubbles or cause regeneration of the narrator's RAW.
+  JsonificationResult decodeWithMemory(
+    String raw,
+    String response, {
+    Iterable<String> knownCharacters = const [],
+    bool hasPreviousScene = true,
+  }) {
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(response.trim());
+    } catch (_) {
+      throw const FormatException('JSONification : réponse JSON malformée.');
+    }
+    if (decoded is! Map<String, dynamic> ||
+        decoded['events'] is! List ||
+        decoded.keys.any((key) => key != 'events' && key != 'compact')) {
+      throw const FormatException('JSONification : enveloppe invalide.');
+    }
+    final events = decode(
+      raw, jsonEncode({'events': decoded['events']}),
+      knownCharacters: knownCharacters,
+      hasPreviousScene: hasPreviousScene,
+    );
+    final compact = _validatedCompact(raw, decoded['compact']);
+    return JsonificationResult(events: events, compact: compact);
+  }
+
+  String? _validatedCompact(String raw, dynamic proposed) {
+    if (proposed is! String || raw.trim().length < 180) return null;
+    final candidate = proposed.trim();
+    // An inexact, expensive or suspicious summary is never preferred
+    // to the durable RAW (which is not changed by this method).
+    if (candidate.length < 25 || candidate.length > 1200 ||
+        candidate.length * 10 > raw.trim().length * 8 ||
+        RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F]')
+            .hasMatch(candidate) ||
+        candidate == raw.trim()) {
+      return null;
+    }
+    return candidate;
+  }
 
   /// Split RAW into exact, immutable narrative paragraphs. Trailing separators
   /// belong to the preceding paragraph, including CRLF and blank-line spaces.
@@ -64,6 +137,14 @@ class Jsonifier {
     return List.unmodifiable(grouped);
   }
 
+  /// Source-owned subdivisions allow several separate character messages
+  /// inside one literary paragraph, without model-computed offsets.
+  List<RawDialoguePart> parts(String raw) =>
+      const DialogueParts().split(blocks(raw));
+
+  String partsForPrompt(String raw) =>
+      const DialogueParts().forPrompt(parts(raw));
+
   String blocksForPrompt(String raw) => [
     for (final (index, block) in blocks(raw).indexed)
       'Bloc $index : ${jsonEncode(block)}',
@@ -94,6 +175,12 @@ class Jsonifier {
     final items = parsed['events'] as List;
     if (items.isEmpty || items.length > 120) {
       throw const FormatException('JSONification : nombre d’événements invalide.');
+    }
+    if (items.any((item) => item is Map && item['type'] == 'part')) {
+      return const DialogueParts().decode(
+        raw, items, parts: parts(raw), knownCharacters: knownCharacters,
+        hasPreviousScene: hasPreviousScene,
+      );
     }
     if (items.any((item) => item is Map && (
         item.containsKey('block') || item.containsKey('before')))) {

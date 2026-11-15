@@ -352,7 +352,7 @@ class NarrativeChatController extends ChangeNotifier {
   }
 
   /// The last 24 conversational turns / 16k UTF-16 units are retained.
-  /// Original RAW replaces only the generated events of its own turn.
+  /// Compact narration replaces that turn's RAW when available; RAW is the fallback.
   /// Legacy sessions without RAW fall back to their structured history.
   List<AiMessage> buildNarratorContext() {
     final history = <AiMessage>[];
@@ -368,7 +368,13 @@ class NarrativeChatController extends ChangeNotifier {
       } else if (event is ChatEntry || event is ChatSceneChange) {
         if (active != null) {
           if (!rawEmitted) {
-            history.add(AiMessage(role: 'assistant', content: active.rawText));
+            history.add(AiMessage(
+              role: 'assistant',
+              content: active.compactText == null
+                  ? active.rawText
+                  : 'Résumé narratif factuel du tour :\n'
+                    '${active.compactText}',
+            ));
             rawEmitted = true;
           }
         } else if (event is ChatEntry) {
@@ -419,7 +425,7 @@ class NarrativeChatController extends ChangeNotifier {
         .take(6).toList().reversed;
     final context = [
       for (final entry in previous)
-        '${entry.name} : ${entry.text}',
+        '${entry.name}${entry.status == null ? '' : ' (${entry.status})'} : ${entry.text}',
     ].join('\n');
     return [
       const AiMessage(role: 'system', content: jsonifierSystemPrompt),
@@ -427,9 +433,9 @@ class NarrativeChatController extends ChangeNotifier {
         role: 'user',
         content: 'Contexte précédent (ne pas convertir) :\n'
             '$context\n\n'
-            'Blocs RAW à classifier (texte JSON échappé, '
+            'Parties RAW à classifier (texte JSON échappé, '
             'numéros fournis par Dart) :\n'
-            '${const Jsonifier().blocksForPrompt(raw)}',
+            '${const Jsonifier().partsForPrompt(raw)}',
       ),
     ];
   }
@@ -499,6 +505,7 @@ class NarrativeChatController extends ChangeNotifier {
               'id': event.id, 'type': 'message',
               'speaker': event.speaker.name, 'name': event.name,
               'text': event.text,
+              if (event.status != null) 'status': event.status,
             },
       ],
     );
@@ -651,13 +658,13 @@ class NarrativeChatController extends ChangeNotifier {
         final known = _timeline.whereType<ChatEntry>()
             .where((e) => e.speaker == ChatSpeaker.character)
             .map((e) => e.name);
-        final decoded = const Jsonifier().decode(
+        final jsonified = const Jsonifier().decodeWithMemory(
           rawRecord.rawText, formatted, knownCharacters: known,
           hasPreviousScene: _timeline.isNotEmpty,
         );
         final prepared = <ChatTimelineEvent>[];
         var id = _nextId;
-        for (final entry in decoded) {
+        for (final entry in jsonified.events) {
           if (entry is ChatSceneChangeOutput) {
             if (prepared.isNotEmpty && prepared.last is ChatSceneChange ||
                 prepared.isEmpty && _timeline.isNotEmpty &&
@@ -667,7 +674,7 @@ class NarrativeChatController extends ChangeNotifier {
             prepared.add(ChatSceneChange(id: id++));
           } else if (entry is ChatLine) {
             prepared.add(ChatEntry(id: id++, speaker: entry.speaker,
-                name: entry.name, text: entry.text));
+                name: entry.name, text: entry.text, status: entry.status));
           }
         }
         if (prepared.whereType<ChatEntry>().isEmpty) {
@@ -675,7 +682,8 @@ class NarrativeChatController extends ChangeNotifier {
         }
         final updated = [
           ..._generations.where((g) => g.playerEventId != playerId),
-          rawRecord.structured(_nextId, id - 1),
+          rawRecord.structured(_nextId, id - 1,
+              compactText: jsonified.compact),
         ];
         // Once the final transaction starts, stopping cannot safely undo it.
         // Keep the UI busy until its success/failure is reconciled in memory.

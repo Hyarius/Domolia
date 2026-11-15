@@ -81,6 +81,7 @@ class BookSession {
               'speaker': event.speaker.name,
               'name': event.name,
               'text': event.text,
+              if (event.status != null) 'status': event.status,
             },
       ]);
 
@@ -104,12 +105,15 @@ class BookSession {
       } else if (item['type'] == 'message' &&
           item['speaker'] is String &&
           item['name'] is String && item['text'] is String &&
+          (item['status'] == null || item['status'] is String &&
+              (item['status'] as String).length <= 65) &&
           ChatSpeaker.values.any((s) => s.name == item['speaker'])) {
         result.add(ChatEntry(
           id: id,
           speaker: ChatSpeaker.values.byName(item['speaker'] as String),
           name: item['name'] as String,
           text: item['text'] as String,
+          status: item['status'] as String?,
         ));
       } else {
         throw const FormatException('Événement de partie inconnu.');

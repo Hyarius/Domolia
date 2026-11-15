@@ -694,14 +694,32 @@ class _ChatBubble extends StatelessWidget {
               children: [
                 Padding(
                   padding: const EdgeInsets.only(left: 3, bottom: 6),
-                  child: Text(
-                    entry.name,
-                    key: const ValueKey('chatSpeakerName'),
-                    style: TextStyle(
-                      color: color,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
+                  child: Row(
+                    children: [
+                      Text(
+                        entry.name,
+                        key: const ValueKey('chatSpeakerName'),
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                      if (!isPlayer && entry.status?.isNotEmpty == true)
+                        Flexible(
+                          child: Text(
+                            ' - ${entry.status}',
+                            key: const ValueKey('chatSpeakerStatus'),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: DomoliaColors.cream,
+                              fontSize: 12,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 Container(
@@ -729,7 +747,7 @@ class _ChatBubble extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    entry.text,
+                    isPlayer ? entry.text : _characterText(entry.text, entry.name),
                     key: const ValueKey('chatBubbleText'),
                     style: TextStyle(
                       color: DomoliaColors.cream,
@@ -749,6 +767,16 @@ class _ChatBubble extends StatelessWidget {
       ),
     );
   }
+}
+
+/// UI-only compatibility for older saved bubbles. New JSONification stores
+/// already-clean speeches; the literary RAW is always available separately.
+String _characterText(String text, String name) {
+  var visible = text.trim();
+  final prefix = RegExp('^${RegExp.escape(name)}' r'\s*[:：]\s*',
+      caseSensitive: false);
+  visible = visible.replaceFirst(prefix, '');
+  return visible.replaceAll('«', '').replaceAll('»', '').trim();
 }
 
 class _ChatAvatar extends StatelessWidget {
