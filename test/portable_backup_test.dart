@@ -120,10 +120,10 @@ void main() {
     final dir = await Directory.systemTemp.createTemp('domolia-backup-');
     addTearDown(() => dir.delete(recursive: true));
     final oldStore = SqliteBookStore(
-      factory: databaseFactoryFfi, databasePath: dir.path + '/old.db',
+      factory: databaseFactoryFfi, databasePath: '${dir.path}/old.db',
     );
     final newStore = SqliteBookStore(
-      factory: databaseFactoryFfi, databasePath: dir.path + '/new.db',
+      factory: databaseFactoryFfi, databasePath: '${dir.path}/new.db',
     );
     addTearDown(oldStore.close);
     addTearDown(newStore.close);
@@ -159,7 +159,7 @@ void main() {
     final dir = await Directory.systemTemp.createTemp('domolia-merge-');
     addTearDown(() => dir.delete(recursive: true));
     final store = SqliteBookStore(
-      factory: databaseFactoryFfi, databasePath: dir.path + '/merged.db',
+      factory: databaseFactoryFfi, databasePath: '${dir.path}/merged.db',
     );
     addTearDown(store.close);
     await store.putBook(const BookDefinition(
@@ -189,7 +189,7 @@ void main() {
     final dir = await Directory.systemTemp.createTemp('domolia-replace-');
     addTearDown(() => dir.delete(recursive: true));
     final store = SqliteBookStore(
-      factory: databaseFactoryFfi, databasePath: dir.path + '/replace.db',
+      factory: databaseFactoryFfi, databasePath: '${dir.path}/replace.db',
     );
     addTearDown(store.close);
     await store.putBook(const BookDefinition(
@@ -209,7 +209,7 @@ void main() {
     final dir = await Directory.systemTemp.createTemp('domolia-rollback-');
     addTearDown(() => dir.delete(recursive: true));
     final store = SqliteBookStore(
-      factory: databaseFactoryFfi, databasePath: dir.path + '/rollback.db',
+      factory: databaseFactoryFfi, databasePath: '${dir.path}/rollback.db',
     );
     addTearDown(store.close);
     await store.putBook(const BookDefinition(

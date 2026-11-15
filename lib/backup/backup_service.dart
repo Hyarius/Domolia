@@ -35,7 +35,7 @@ class BackupService {
 
   static String _newProfileId(BackupProfile profile) {
     final bytes = utf8.encode(jsonEncode(profile.toJson()));
-    return 'imported-' + sha256.convert(bytes).toString().substring(0, 24);
+    return 'imported-${sha256.convert(bytes).toString().substring(0, 24)}';
   }
 
   static bool _matches(AiProfile local, BackupProfile imported) =>
@@ -63,7 +63,7 @@ class BackupService {
         final matches = updated.where((e) => e.id == target);
         if (matches.isEmpty || _matches(matches.single, profile)) break;
         suffix++;
-        target = base + '-' + suffix.toString();
+        target = '$base-$suffix';
       }
       mappings[profile.id] = target;
       if (!updated.any((e) => e.id == target)) {

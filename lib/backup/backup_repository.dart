@@ -70,9 +70,9 @@ class BackupRepository {
     String Function(String id) contentsFor,
   ) {
     final digest = _fingerprint([originalId, content]);
-    final base = prefix + '-' + digest.substring(0, 24);
+    final base = '${prefix}-${digest.substring(0, 24)}';
     for (var attempt = 0; attempt < 1000; attempt++) {
-      final candidate = attempt == 0 ? base : base + '-' + attempt.toString();
+      final candidate = attempt == 0 ? base : '$base-$attempt';
       if (!existing.containsKey(candidate) ||
           contentsFor(candidate) == existing[candidate]) {
         return candidate;
@@ -181,7 +181,9 @@ class BackupRepository {
       for (final binding in backup.bookBindings) {
         final targetBookId = bookIds[binding.bookId]!;
         if (mode == BackupRestoreMode.merge &&
-            existingBindings[targetBookId] != null) continue;
+            existingBindings[targetBookId] != null) {
+          continue;
+        }
         await txn.insert('book_bindings', {
           'book_id': targetBookId,
           'profile_id': binding.aiProfileId == null

@@ -47,8 +47,10 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
       if (mounted) setState(() => _message = error.message);
     } catch (_) {
       // No raw exception: platform errors can contain private local paths.
-      if (mounted) setState(() =>
-          _message = 'Opération impossible. Vérifiez le fichier et le stockage local.');
+      if (mounted) {
+        setState(() => _message =
+            'Opération impossible. Vérifiez le fichier et le stockage local.');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -58,10 +60,10 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
     final backup = await _service.capture();
     final data = backup.encode();
     final now = DateTime.now().toUtc();
-    final filename = 'Domolia-backup-' +
-        now.year.toString().padLeft(4, '0') + '-' +
-        now.month.toString().padLeft(2, '0') + '-' +
-        now.day.toString().padLeft(2, '0') + '.domolia';
+    final filename = 'Domolia-backup-'
+        '${now.year.toString().padLeft(4, '0')}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}.domolia';
     final result = await FilePicker.platform.saveFile(
       dialogTitle: 'Sauvegarder mes données',
       fileName: filename,
@@ -70,9 +72,11 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
       bytes: data,
     );
     if (result == null) return;
-    if (mounted) setState(() => _message =
-        'Sauvegarde enregistrée : ' + backup.books.length.toString() +
-        ' Livres et ' + backup.sessions.length.toString() + ' Parties.');
+    if (mounted) {
+      setState(() => _message =
+          'Sauvegarde enregistrée : ${backup.books.length} Livres et '
+          '${backup.sessions.length} Parties.');
+    }
   });
 
   Future<void> _load() => _run(() async {
@@ -82,7 +86,9 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
       withData: true,
       allowMultiple: false,
     );
-    if (chosen == null || !mounted) return;
+    if (chosen == null || !mounted) {
+      return;
+    }
     final picked = chosen.files.single;
     if (!picked.name.toLowerCase().endsWith('.domolia') ||
         picked.size > PortableBackup.maxBytes ||
@@ -103,14 +109,12 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(backup.books.length.toString() + ' Livres, ' +
-                backup.sessions.length.toString() + ' Parties et ' +
-                backup.aiProfiles.length.toString() + ' profils IA.'),
+              Text('${backup.books.length} Livres, '
+                '${backup.sessions.length} Parties et '
+                '${backup.aiProfiles.length} profils IA.'),
               const SizedBox(height: 10),
-              Text(collisions.bookConflicts.toString() +
-                ' conflit(s) de Livres et ' +
-                collisions.sessionConflicts.toString() +
-                ' conflit(s) de Parties à examiner.'),
+              Text('${collisions.bookConflicts} conflit(s) de Livres et '
+                '${collisions.sessionConflicts} conflit(s) de Parties à examiner.'),
               const SizedBox(height: 10),
               const Text('Fusionner conserve vos données actuelles. '
                 'Les entrées incompatibles reçoivent de nouveaux identifiants.'),
@@ -170,10 +174,12 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
     await _service.restore(backup, mode);
     await widget.ai.reloadProfiles();
     await widget.books.reload();
-    if (mounted) setState(() => _message =
-        'Restauration terminée : ' + backup.books.length.toString() +
-        ' Livres et ' + backup.sessions.length.toString() +
-        ' Parties traités. Vérifiez les connexions IA.');
+    if (mounted) {
+      setState(() => _message =
+          'Restauration terminée : ${backup.books.length} Livres et '
+          '${backup.sessions.length} Parties traités. '
+          'Vérifiez les connexions IA.');
+    }
   });
 
   @override
