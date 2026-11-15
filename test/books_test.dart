@@ -757,4 +757,97 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+
+
+  testWidgets('Each Party overrides formatter and optimizer independently',
+      (tester) async {
+    tester.view.physicalSize = const Size(340, 820);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final library = BookLibraryController(store: _MemoryBooks());
+    addTearDown(library.dispose);
+    await library.initialize();
+    final book = await library.create('Deux tâches');
+    final session = await library.newSession(book);
+    const formatter = AiProfile(
+      id: 'fmt', name: 'JSONificateur léger',
+      baseUrl: 'https://example.invalid', model: 'fast-model',
+      apiKey: 'private-formatter-key',
+    );
+    final ai = AiConnectionController(
+      store: _Profiles(const AiProfilesState(
+        profiles: [_profile, formatter], selectedId: 'profile-1',
+      )), provider: _NoNetwork(),
+    );
+    addTearDown(ai.dispose);
+    final chat = NarrativeChatController(
+      provider: _NoNetwork(), configuration: () => null,
+    );
+    addTearDown(chat.dispose);
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: Scaffold(body: ConversationSettingsPage(
+        library: library, ai: ai, chat: chat,
+        bookId: book.id, sessionId: session.id, onBack: () {},
+      )),
+    ));
+    await tester.pumpAndSettle();
+    final formatterSelector = find.byKey(
+      const ValueKey('conversationTask-jsonifier-'));
+    await tester.scrollUntilVisible(formatterSelector, 210);
+    await tester.tap(formatterSelector);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('JSONificateur léger').last);
+    await tester.pumpAndSettle();
+    var stored = (await library.session(session.id))!;
+    expect(stored.aiProfileId, isNull);
+    expect(stored.formatterProfileId, 'fmt');
+    expect(stored.optimizerProfileId, isNull);
+
+    final optimizerSelector = find.byKey(
+      const ValueKey('conversationTask-optimizer-'));
+    await tester.scrollUntilVisible(optimizerSelector, 210);
+    await tester.tap(optimizerSelector);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Désactiver pour cette Partie').last);
+    await tester.pumpAndSettle();
+    stored = (await library.session(session.id))!;
+    expect(stored.optimizerProfileId, '#disabled');
+    expect(stored.formatterProfileId, 'fmt');
+    expect(stored.aiProfileId, isNull);
+
+    await tester.scrollUntilVisible(find.byKey(
+      const ValueKey('conversationRecompileLore')), 180);
+    await tester.tap(find.byKey(const ValueKey('conversationRecompileLore')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('prochain message'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  test('Per-Party task selections and compilation remain private to Book exports',
+      () async {
+    final library = BookLibraryController(store: _MemoryBooks());
+    addTearDown(library.dispose);
+    await library.initialize();
+    final book = await library.create('Livre original');
+    final session = await library.newSession(book);
+    await library.setSessionTaskProfile(session.id, 'jsonifier', 'fmt');
+    await library.setSessionTaskProfile(session.id, 'optimizer', '#disabled');
+    await library.saveOptimizedLore(session.id,
+      'hash-local', 'Cache de narration privé');
+    final stored = (await library.session(session.id))!;
+    expect(stored.formatterProfileId, 'fmt');
+    expect(stored.optimizerProfileId, '#disabled');
+    expect(stored.optimizedLore, 'Cache de narration privé');
+    final exported = library.byId(book.id)!.exportJson();
+    expect(exported, isNot(contains('Cache de narration privé')));
+    expect(exported, isNot(contains('hash-local')));
+    expect(exported, isNot(contains('#disabled')));
+    expect(exported, isNot(contains('fmt')));
+    expect(exported, isNot(contains(session.id)));
+  });
+
 }
