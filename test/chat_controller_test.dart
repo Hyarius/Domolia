@@ -628,9 +628,9 @@ void main() {
 
   test('New numbered-block JSONifier preserves source and character voices',
       () async {
-    provider.raw = 'Les pierres sont froides.\\n\\n'
-        'Astrid : « Vous êtes à Skogheim. »\\n\\n'
-        'Liv observe le plafond.\\n\\n'
+    provider.raw = 'Les pierres sont froides.\n\n'
+        'Astrid : « Vous êtes à Skogheim. »\n\n'
+        'Liv observe le plafond.\n\n'
         'Liv : « Nous avons prié. »';
     provider.structured = jsonEncode({'events': [
       {'type': 'message', 'block': 0,
@@ -658,7 +658,7 @@ void main() {
 
   test('Bad block labels keep RAW intact until retry with correct numbering',
       () async {
-    provider.raw = 'Un couloir.\\n\\nAstrid : « Bonjour ! »';
+    provider.raw = 'Un couloir.\n\nAstrid : « Bonjour ! »';
     provider.structured = jsonEncode({'events': [
       {'type': 'message', 'block': 0,
         'speaker': 'narrator', 'name': 'Narrateur'},
