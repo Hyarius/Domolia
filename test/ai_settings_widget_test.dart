@@ -279,7 +279,8 @@ void main() {
       taskRouting: routing);
 
     final token = find.byKey(const ValueKey('aiTaskTokens-jsonifier-4096'));
-    await tester.scrollUntilVisible(token, 250);
+    await tester.scrollUntilVisible(token, 250,
+      scrollable: find.byType(Scrollable).first);
     await tester.ensureVisible(token);
     await tester.pumpAndSettle();
     await tester.tap(token);
@@ -291,7 +292,8 @@ void main() {
 
     final reasoning = find.byKey(
       const ValueKey('aiTaskReasoning-jsonifier-auto'));
-    await tester.scrollUntilVisible(reasoning, 150);
+    await tester.scrollUntilVisible(reasoning, 150,
+      scrollable: find.byType(Scrollable).first);
     await tester.ensureVisible(reasoning);
     await tester.pumpAndSettle();
     await tester.tap(reasoning);
