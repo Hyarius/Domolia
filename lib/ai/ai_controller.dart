@@ -257,7 +257,10 @@ class AiConnectionController extends ChangeNotifier {
     try {
       final next = [
         for (final item in _profiles)
-          item.id == _selectedId ? item.copyWith(kind: kind) : item,
+          item.id == _selectedId
+              ? item.copyWith(kind: kind,
+                  toolCallingCompatibility: AiToolCallingCompatibility.unknown)
+              : item,
       ];
       await store.write(AiProfilesState(profiles: next, selectedId: _selectedId));
       _profiles = next;
@@ -298,7 +301,8 @@ class AiConnectionController extends ChangeNotifier {
         final next = [
           for (final profile in _profiles)
             profile.id == id
-                ? profile.copyWith(model: fetched.first.id)
+                ? profile.copyWith(model: fetched.first.id,
+                    toolCallingCompatibility: AiToolCallingCompatibility.unknown)
                 : profile,
         ];
         await store.write(AiProfilesState(profiles: next, selectedId: id));
@@ -347,7 +351,12 @@ class AiConnectionController extends ChangeNotifier {
       final value = validatedAiModel(id);
       final next = [
         for (final profile in _profiles)
-          profile.id == _selectedId ? profile.copyWith(model: value) : profile,
+          profile.id == _selectedId
+              ? profile.copyWith(model: value,
+                  toolCallingCompatibility: value == profile.model
+                      ? profile.toolCallingCompatibility
+                      : AiToolCallingCompatibility.unknown)
+              : profile,
       ];
       await store.write(AiProfilesState(profiles: next, selectedId: _selectedId));
       _profiles = next;
@@ -445,6 +454,10 @@ class AiConnectionController extends ChangeNotifier {
         baseUrl: normalizedUrl,
         model: normalizedModel,
         apiKey: key,
+        toolCallingCompatibility: normalizedModel == current.model &&
+                normalizedUrl == current.baseUrl
+            ? current.toolCallingCompatibility
+            : AiToolCallingCompatibility.unknown,
       );
       final changed = nextProfile.baseUrl != current.baseUrl ||
           nextProfile.model != current.model ||

@@ -91,6 +91,48 @@ void main() {
   });
   tearDown(() => controller.dispose());
 
+  test('Tool capability is opt-in per profile and survives store reload', () async {
+    await controller.initialize();
+    expect(controller.selectedProfile.toolCallingCompatibility,
+        AiToolCallingCompatibility.unknown);
+    expect(await controller.setToolCallingCompatibility(
+        AiToolCallingCompatibility.supported), true);
+    expect(storage.state!.profiles.single.toolCallingCompatibility,
+        AiToolCallingCompatibility.supported);
+    await controller.createProfile('Second model');
+    expect(controller.selectedProfile.toolCallingCompatibility,
+        AiToolCallingCompatibility.unknown);
+    await controller.setToolCallingCompatibility(
+        AiToolCallingCompatibility.unsupported);
+    final otherId = controller.selectedProfileId;
+    final restored = AiConnectionController(
+      store: storage, provider: custom,
+      chatGpt: auth, chatGptProvider: chatGptProvider,
+    );
+    await restored.initialize();
+    expect(restored.selectedProfileId, otherId);
+    expect(restored.selectedProfile.toolCallingCompatibility,
+        AiToolCallingCompatibility.unsupported);
+    restored.dispose();
+  });
+
+  test('A change of model or API endpoint invalidates declared tool support', () async {
+    await controller.initialize();
+    await controller.save(defaultAiBaseUrl, 'model-A', 'secret-key');
+    await controller.setToolCallingCompatibility(AiToolCallingCompatibility.supported);
+    await controller.save(defaultAiBaseUrl, 'model-A', '');
+    expect(controller.selectedProfile.toolCallingCompatibility,
+        AiToolCallingCompatibility.supported);
+    await controller.save(defaultAiBaseUrl, 'model-B', '');
+    expect(controller.selectedProfile.toolCallingCompatibility,
+        AiToolCallingCompatibility.unknown);
+    await controller.setToolCallingCompatibility(AiToolCallingCompatibility.supported);
+    await controller.save('https://different.example/v1', 'model-B', '');
+    expect(controller.selectedProfile.toolCallingCompatibility,
+        AiToolCallingCompatibility.unknown);
+    expect(controller.selectedProfile.apiKey, 'secret-key');
+  });
+
   test('Existing named configuration is CustomAI by default', () async {
     await controller.initialize();
     expect(controller.profiles.single.kind, AiProviderKind.customAi);
