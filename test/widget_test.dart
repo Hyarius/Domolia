@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:domolia/main.dart';
-import 'package:domolia/ai/ai_settings_panel.dart';
+import 'package:domolia/ai/openuncensored_credits_page.dart';
 import 'package:domolia/ai/ai_controller.dart';
 import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/theme/domolia_theme.dart';
@@ -252,7 +252,7 @@ void main() {
 
     await tester.tap(find.widgetWithText(ListTile, 'Paramètres'));
     await tester.pumpAndSettle();
-    expect(find.widgetWithText(ListTile, 'Configurations IA'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Crédits IA'), findsOneWidget);
     expect(find.widgetWithText(ListTile, 'Mises à jour'), findsOneWidget);
     expect(find.text('Toutes les versions'), findsNothing);
 
@@ -274,12 +274,12 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(ListTile, 'Configurations IA'));
+    await tester.tap(find.widgetWithText(ListTile, 'Crédits IA'));
     await tester.pumpAndSettle();
-    expect(find.byType(AiSettingsPanel), findsOneWidget);
+    expect(find.byType(OpenUncensoredCreditsPage), findsOneWidget);
     await tester.tap(find.descendant(
-      of: find.byType(AiSettingsPanel),
-      matching: find.text('Retour aux paramètres'),
+      of: find.byType(OpenUncensoredCreditsPage),
+      matching: find.byIcon(Icons.arrow_back),
     ));
     await tester.pumpAndSettle();
     expect(find.widgetWithText(ListTile, 'Mises à jour'), findsOneWidget);
