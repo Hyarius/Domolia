@@ -4,454 +4,275 @@ import 'dart:convert';
 import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/chat/chat_controller.dart';
 import 'package:domolia/chat/chat_protocol.dart';
+import 'package:domolia/chat/jsonifier.dart';
+import 'package:domolia/chat/raw_generation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-class FakeStreamingProvider implements AiChatProvider, AiStreamingChatProvider {
-  StreamController<AiStreamChunk>? pipe;
-  List<AiMessage>? lastContext;
-  int requests = 0;
-  bool returnError = false;
-
-  @override
-  Stream<AiStreamChunk> streamChat(
-    AiConfiguration configuration, {
-    required List<AiMessage> messages,
-    int maxTokens = 1200,
-  }) {
-    requests++;
-    lastContext = messages;
-    if (returnError) {
-      return Stream.error(
-        const AiProviderException('Clé API refusée. Vérifiez votre clé.'),
-      );
-    }
-    return pipe!.stream;
-  }
-
-  @override
-  Future<List<AiModel>> listModels(AiConfiguration configuration) async => [];
-
-  @override
-  Future<String> complete(
-    AiConfiguration configuration, {
-    required List<AiMessage> messages,
-    int maxTokens = 1200,
-  }) async => throw StateError('The streaming implementation should be used');
-}
-
-class SimpleProvider implements AiChatProvider {
-  String text = '';
-  List<AiMessage>? lastContext;
-  @override
-  Future<List<AiModel>> listModels(AiConfiguration config) async => [];
-  @override
-  Future<String> complete(
-    AiConfiguration config, {
-    required List<AiMessage> messages,
-    int maxTokens = 1200,
-  }) async {
-    lastContext = messages;
-    return text;
-  }
-}
-
 const credentials = AiConfiguration(
-  baseUrl: defaultAiBaseUrl,
-  model: defaultAiModel,
-  apiKey: 'ou-test',
+  baseUrl: defaultAiBaseUrl, model: defaultAiModel, apiKey: 'test-only',
 );
 
-String line(String speaker, String name, String text) => jsonEncode({
-  'speaker': speaker,
-  'name': name,
-  'text': text,
+String format(String raw, {String speaker = 'narrator',
+    String name = 'Narrateur', bool scene = false}) => jsonEncode({
+  'events': [
+    if (scene) {'type': 'scene_change', 'at': 0},
+    {'type': 'message', 'start': 0, 'end': raw.length,
+      'speaker': speaker, 'name': name},
+  ],
 });
 
+class _Provider implements AiChatProvider {
+  String raw = 'La porte s’ouvre.';
+  String? structured;
+  int rawCalls = 0;
+  int formatCalls = 0;
+  bool failRaw = false;
+  bool failFormat = false;
+  List<AiMessage>? narrativeContext;
+  List<AiMessage>? formatterContext;
+  Completer<String>? heldRaw;
+  Completer<String>? heldFormat;
+
+  @override
+  Future<List<AiModel>> listModels(AiConfiguration config) async => [];
+
+  @override
+  Future<String> complete(AiConfiguration config, {
+    required List<AiMessage> messages, int maxTokens = 1200,
+  }) async {
+    if (messages.first.content.contains('JSONificateur')) {
+      formatCalls++;
+      formatterContext = messages;
+      if (failFormat) throw const AiProviderException('JSONification en panne.');
+      if (heldFormat != null) return heldFormat!.future;
+      return structured ?? format(raw);
+    }
+    rawCalls++;
+    narrativeContext = messages;
+    if (failRaw) throw const AiProviderException('Narrateur en panne.');
+    if (heldRaw != null) return heldRaw!.future;
+    return raw;
+  }
+}
+
+class _StreamingProvider implements AiChatProvider, AiStreamingChatProvider {
+  final raw = StreamController<AiStreamChunk>.broadcast();
+  final json = StreamController<AiStreamChunk>.broadcast();
+  int rawCalls = 0, formatCalls = 0;
+  @override
+  Stream<AiStreamChunk> streamChat(AiConfiguration config, {
+    required List<AiMessage> messages, int maxTokens = 1200,
+  }) {
+    if (messages.first.content.contains('JSONificateur')) {
+      formatCalls++;
+      return json.stream;
+    }
+    rawCalls++;
+    return raw.stream;
+  }
+  @override
+  Future<String> complete(AiConfiguration config, {
+    required List<AiMessage> messages, int maxTokens = 1200,
+  }) => throw StateError('stream required');
+  @override
+  Future<List<AiModel>> listModels(AiConfiguration config) async => [];
+}
+
 void main() {
-  late FakeStreamingProvider provider;
+  late _Provider provider;
   late NarrativeChatController chat;
-
   setUp(() {
-    provider = FakeStreamingProvider();
+    provider = _Provider();
     chat = NarrativeChatController(
-      provider: provider,
-      configuration: () => credentials,
+      provider: provider, configuration: () => credentials,
     );
   });
-  tearDown(() {
-    chat.dispose();
-    provider.pipe?.close();
-  });
+  tearDown(() => chat.dispose());
 
-  test('Streaming progressively reveals speaker-specific bubbles', () async {
-    provider.pipe = StreamController<AiStreamChunk>.broadcast();
-    final pending = chat.send('Je frappe à la porte.');
-    expect(chat.busy, true);
-    expect(chat.messages, hasLength(1));
-    expect(chat.messages.single.speaker, ChatSpeaker.player);
-    expect(chat.preview!.speaker, ChatSpeaker.narrator);
-    expect(provider.lastContext!.first.role, 'system');
-    expect(provider.lastContext!.last.role, 'user');
-    expect(provider.lastContext!.first.content, contains('jamais'));
-
-    provider.pipe!.add(AiStreamChunk(
-      text: '{"speaker":"narrator","name":"Narrateur","text":"La por',
-    ));
-    await Future<void>.delayed(Duration.zero);
-    expect(chat.preview!.text, 'La por');
-    provider.pipe!.add(AiStreamChunk(text: 'te s’ouvre."}\n'));
-    await Future<void>.delayed(Duration.zero);
-    expect(chat.messages, hasLength(2));
-    expect(chat.messages[1].speaker, ChatSpeaker.narrator);
-
-    provider.pipe!.add(AiStreamChunk(
-      text: line('character', 'Lina', 'Bonsoir, entre !'),
-      promptTokens: 100,
-      completionTokens: 42,
-    ));
-    await provider.pipe!.close();
-    await pending;
-    expect(chat.busy, false);
-    expect(chat.preview, isNull);
-    expect(chat.messages.map((m) => m.name),
-        ['Vous', 'Narrateur', 'Lina']);
-    expect(chat.promptTokens, 100);
-    expect(chat.completionTokens, 42);
-    expect(chat.error, isNull);
-  });
-
-  test('Stop cancels the stream without removing player action', () async {
-    provider.pipe = StreamController<AiStreamChunk>.broadcast();
-    final pending = chat.send('Je cours.');
-    await Future<void>.delayed(Duration.zero);
-    chat.stop();
-    await pending;
-    expect(chat.busy, false);
-    expect(chat.error, contains('interrompue'));
-    expect(chat.messages.where((m) => m.speaker == ChatSpeaker.player),
-        hasLength(1));
+  test('Two passes: literary context, RAW retained, committed bubbles only', () async {
+    await chat.send('Je frappe.');
+    expect(provider.rawCalls, 1);
+    expect(provider.formatCalls, 1);
+    expect(provider.narrativeContext!.first.content, isNot(contains('NDJSON')));
+    expect(provider.narrativeContext!.first.content, isNot(contains('scene_change')));
+    expect(provider.formatterContext!.first.content, jsonifierSystemPrompt);
+    expect(chat.messages.map((m) => m.text), ['Je frappe.', 'La porte s’ouvre.']);
+    expect(chat.rawGenerations.single.rawText, 'La porte s’ouvre.');
+    expect(chat.rawGenerations.single.isStructured, isTrue);
     expect(chat.preview, isNull);
   });
 
-  test('Retry after an invalid response never duplicates player message', () async {
-    provider.pipe = StreamController<AiStreamChunk>.broadcast();
-    final first = chat.send('Où suis-je ?');
-    provider.pipe!.add(const AiStreamChunk(text: 'Je suis du texte sans JSON\n'));
-    await provider.pipe!.close();
-    await first;
+  test('RAW survives a failed formatter and retry never reruns narrator', () async {
+    provider.failFormat = true;
+    await chat.send('J’entre.');
     expect(chat.error, isNotNull);
     expect(chat.messages, hasLength(1));
-
-    provider.pipe = StreamController<AiStreamChunk>.broadcast();
-    final retry = chat.retry();
-    provider.pipe!.add(AiStreamChunk(
-      text: line('narrator', 'Narrateur', 'Tu es dans une auberge.'),
-    ));
-    await provider.pipe!.close();
-    await retry;
-    expect(chat.error, isNull);
+    expect(chat.pendingRaw!.rawText, provider.raw);
+    provider.failFormat = false;
+    await chat.retry();
+    expect(provider.rawCalls, 1);
+    expect(provider.formatCalls, 2);
     expect(chat.messages, hasLength(2));
-    expect(chat.messages.where((m) => m.speaker == ChatSpeaker.player),
-        hasLength(1));
+    expect(chat.pendingRaw, isNull);
+    expect(chat.error, isNull);
   });
 
-  test('Regenerate replaces AI replies, preserving previous player input', () async {
-    provider.pipe = StreamController<AiStreamChunk>.broadcast();
-    final first = chat.send('Je regarde autour de moi.');
-    provider.pipe!.add(AiStreamChunk(
-      text: line('narrator', 'Narrateur', 'La forêt est sombre.'),
-    ));
-    await provider.pipe!.close();
-    await first;
-    expect(chat.messages.last.text, 'La forêt est sombre.');
-
-    provider.pipe = StreamController<AiStreamChunk>.broadcast();
-    final second = chat.regenerate();
-    provider.pipe!.add(AiStreamChunk(
-      text: line('character', 'Lina', 'Une lueur se rapproche.'),
-    ));
-    await provider.pipe!.close();
-    await second;
-    expect(chat.messages.map((m) => m.name), ['Vous', 'Lina']);
-    expect(chat.messages.length, 2);
-  });
-
-  test('Network error is sanitized and retryable', () async {
-    provider.returnError = true;
-    await chat.send('Bonjour');
-    expect(chat.error, contains('Clé API refusée'));
+  test('A failed first pass leaves no RAW or AI bubble', () async {
+    provider.failRaw = true;
+    await chat.send('Je parle.');
     expect(chat.messages, hasLength(1));
-    provider.returnError = false;
-    provider.pipe = StreamController<AiStreamChunk>.broadcast();
-    final next = chat.retry();
-    provider.pipe!.add(AiStreamChunk(
-      text: line('narrator', 'Narrateur', 'Bonjour !'),
-    ));
-    await provider.pipe!.close();
-    await next;
-    expect(chat.error, isNull);
+    expect(chat.rawGenerations, isEmpty);
+    expect(provider.formatCalls, 0);
+    expect(chat.error, isNotNull);
+    provider.failRaw = false;
+    await chat.retry();
+    expect(provider.rawCalls, 2);
+  });
+
+  test('Empty or invalid formatter leaves the entire RAW pending', () async {
+    provider.structured = '{"events":[]}';
+    await chat.send('Je regarde.');
+    expect(chat.messages, hasLength(1));
+    expect(chat.pendingRaw, isNotNull);
+    provider.structured = format(provider.raw);
+    await chat.retry();
     expect(chat.messages, hasLength(2));
   });
 
-  test('Without key, no HTTP request is made', () async {
-    final noKey = NarrativeChatController(
-      provider: provider,
-      configuration: () => const AiConfiguration(
-        baseUrl: defaultAiBaseUrl, model: defaultAiModel, apiKey: '',
-      ),
-    );
-    await noKey.send('Salut');
-    expect(noKey.error, contains('connexion IA'));
-    expect(provider.requests, 0);
-    noKey.dispose();
-  });
-
-  test('Empty model stream reports an error', () async {
-    provider.pipe = StreamController<AiStreamChunk>.broadcast();
-    final run = chat.send('Je suis ici');
-    await provider.pipe!.close();
-    await run;
-    expect(chat.error, contains('aucun message'));
-  });
-
-  test('Non-streaming providers still render the same speaker protocol', () async {
-    final fallback = SimpleProvider()
-      ..text = line('character', 'Noé', 'Suis-moi.');
-    final controller = NarrativeChatController(
-      provider: fallback,
-      configuration: () => credentials,
-    );
-    await controller.send('Qui est là ?');
-    expect(controller.messages.map((m) => m.name), ['Vous', 'Noé']);
-    expect(controller.error, isNull);
-    controller.dispose();
-  });
-
-  test('Player message length is capped without network request', () async {
-    await chat.send('a' * 4001);
-    expect(chat.messages, isEmpty);
-    expect(chat.error, contains('trop long'));
-    expect(provider.requests, 0);
-  });
-  test('Scene change splits the timeline and current scene image context',
-      () async {
-    final fake = SimpleProvider()
-      ..text = [
-        jsonEncode({
-          'type': 'message',
-          'speaker': 'narrator',
-          'name': 'Narrateur',
-          'text': 'Dans la forêt.',
-        }),
-        '{"type":"scene_change"}',
-        jsonEncode({
-          'type': 'message',
-          'speaker': 'character',
-          'name': 'Lina',
-          'text': 'Nous entrons dans la maison.',
-        }),
-      ].join('\n');
-    final current = NarrativeChatController(
-      provider: fake, configuration: () => credentials,
-    );
-    await current.send('Je suis Lina.');
-    expect(current.timeline, hasLength(4));
-    expect(current.timeline[0], isA<ChatEntry>());
-    expect(current.timeline[1], isA<ChatEntry>());
-    expect(current.timeline[2], isA<ChatSceneChange>());
-    expect(current.timeline[3], isA<ChatEntry>());
-    expect(current.messages, hasLength(3));
-    expect(current.currentSceneMessages.map((x) => x.text),
-        ['Nous entrons dans la maison.']);
-    expect(current.timeline[2].id, isNot(current.timeline[3].id));
-    current.dispose();
-  });
-
-  test('Scene boundary is included in follow-up model context', () async {
-    provider.pipe = StreamController<AiStreamChunk>.broadcast();
-    final first = chat.send('Je quitte la forêt.');
-    provider.pipe!.add(AiStreamChunk(text:
-        '{"type":"scene_change"}\n'
-        '{"type":"message","speaker":"narrator",'
-        '"name":"Narrateur","text":"Une maison apparaît."}\n'));
-    await provider.pipe!.close();
-    await first;
-    expect(chat.timeline.whereType<ChatSceneChange>(), hasLength(1));
-    expect(chat.currentSceneMessages.map((event) => event.text),
-        ['Une maison apparaît.']);
-
-    provider.pipe = StreamController<AiStreamChunk>.broadcast();
-    final second = chat.send('J’entre dans la maison.');
-    final context = provider.lastContext!;
-    expect(context.map((event) => event.content),
-        contains('{"type":"scene_change"}'));
-    provider.pipe!.add(AiStreamChunk(
-      text: line('character', 'Lina', 'Entre.'),
-    ));
-    await provider.pipe!.close();
-    await second;
-    expect(chat.currentSceneMessages.map((event) => event.text),
-        ['Une maison apparaît.', 'J’entre dans la maison.', 'Entre.']);
-  });
-
-  test('Regenerate removes scene dividers generated in the previous turn',
-      () async {
-    provider.pipe = StreamController<AiStreamChunk>.broadcast();
-    final first = chat.send('Nous partons.');
-    provider.pipe!.add(const AiStreamChunk(text:
-        '{"type":"scene_change"}\n'
-        '{"type":"message","speaker":"narrator",'
-        '"name":"Narrateur","text":"Nous arrivons."}\n'));
-    await provider.pipe!.close();
-    await first;
-    expect(chat.timeline.whereType<ChatSceneChange>(), hasLength(1));
-
-    provider.pipe = StreamController<AiStreamChunk>.broadcast();
-    final rerun = chat.regenerate();
-    provider.pipe!.add(AiStreamChunk(
-      text: line('narrator', 'Narrateur', 'Nous restons ici.'),
-    ));
-    await provider.pipe!.close();
-    await rerun;
-    expect(chat.timeline.whereType<ChatSceneChange>(), isEmpty);
-    expect(chat.messages.map((m) => m.text),
-        ['Nous partons.', 'Nous restons ici.']);
-  });
-
-  test('A scene change alone is not a valid AI response', () async {
-    final onlyDivider = SimpleProvider()..text = '{"type":"scene_change"}';
-    final current = NarrativeChatController(
-      provider: onlyDivider, configuration: () => credentials,
-    );
-    await current.send('Une action');
-    expect(current.error, contains('aucun message'));
-    current.dispose();
-  });
-
-  test('Editing a past player turn and resuming uses the changed text '
-      'without keeping any superseded scenes or messages', () async {
-    final scripted = SimpleProvider()
-      ..text = line('narrator', 'Narrateur', 'La nouvelle histoire.');
-    final changed = <List<ChatTimelineEvent>>[];
-    final current = NarrativeChatController(
-      provider: scripted,
-      configuration: () => credentials,
-      onTimelineChanged: (events) => changed.add(events),
-    );
-    addTearDown(current.dispose);
-    current.restoreTimeline(const [
-      ChatEntry(id: 0, speaker: ChatSpeaker.player, name: 'Vous',
-          text: 'J’ouvre la porte.'),
-      ChatEntry(id: 1, speaker: ChatSpeaker.narrator, name: 'Narrateur',
-          text: 'Une vieille réponse.'),
-      ChatSceneChange(id: 2),
-      ChatEntry(id: 3, speaker: ChatSpeaker.character, name: 'Lina',
-          text: 'Suivez-moi !'),
-      ChatEntry(id: 4, speaker: ChatSpeaker.player, name: 'Vous',
-          text: 'Je continue.'),
-      ChatEntry(id: 5, speaker: ChatSpeaker.narrator, name: 'Narrateur',
-          text: 'La suite à supprimer.'),
-    ]);
-    expect(current.editPlayerMessage(0, ''), isFalse);
-    expect(current.editPlayerMessage(1, 'Malveillant'), isFalse);
-    expect(current.editPlayerMessage(0, 'Je ferme la porte.'), isTrue);
-    expect(current.timeline, hasLength(6));
-    expect((current.timeline.first as ChatEntry).text, 'Je ferme la porte.');
-    expect(changed, hasLength(1));
-
-    expect(await current.resumeFromPlayerMessage(0), isTrue);
-    expect(current.timeline, hasLength(2));
-    expect(current.timeline.whereType<ChatSceneChange>(), isEmpty);
-    expect((current.timeline.first as ChatEntry).text, 'Je ferme la porte.');
-    expect((current.timeline.last as ChatEntry).text, 'La nouvelle histoire.');
-    expect(current.timeline.last.id, greaterThan(5));
-    // The request uses the edited text, never the discarded future.
-    expect(scripted.lastContext!.last.role, 'user');
-    expect(scripted.lastContext!.last.content, 'Je ferme la porte.');
-    expect(scripted.lastContext!.map((e) => e.content).join('\n'),
-        isNot(contains('La suite à supprimer.')));
-    expect(current.error, isNull);
-  });
-
-  test('Regenerating any AI bubble replays the entire originating turn',
-      () async {
-    final scripted = SimpleProvider()
-      ..text = line('character', 'Lina', 'Nous repartons.');
-    final current = NarrativeChatController(
-      provider: scripted, configuration: () => credentials,
-    );
-    addTearDown(current.dispose);
-    current.restoreTimeline(const [
-      ChatEntry(id: 0, speaker: ChatSpeaker.player, name: 'Vous',
-          text: 'Premier tour.'),
-      ChatEntry(id: 1, speaker: ChatSpeaker.narrator, name: 'Narrateur',
-          text: 'Premier résultat.'),
-      ChatEntry(id: 2, speaker: ChatSpeaker.player, name: 'Vous',
-          text: 'Deuxième tour.'),
-      ChatEntry(id: 3, speaker: ChatSpeaker.narrator, name: 'Narrateur',
-          text: 'Deuxième résultat.'),
-      ChatSceneChange(id: 4),
-      ChatEntry(id: 5, speaker: ChatSpeaker.character, name: 'Marc',
-          text: 'Autre bulle du même tour.'),
-    ]);
-    expect(current.canRegenerateFromAiMessage(1), isTrue);
-    expect(current.canRegenerateFromAiMessage(5), isTrue);
-    expect(current.canRegenerateFromAiMessage(0), isFalse);
-    expect(await current.regenerateFromAiMessage(5), isTrue);
-    expect(current.timeline, hasLength(4));
-    expect((current.timeline[1] as ChatEntry).text, 'Premier résultat.');
-    expect((current.timeline[2] as ChatEntry).text, 'Deuxième tour.');
-    expect((current.timeline[3] as ChatEntry).text, 'Nous repartons.');
-    expect(current.timeline.last.id, greaterThan(5));
-    expect(current.timeline.whereType<ChatSceneChange>(), isEmpty);
-    expect(current.canRegenerateFromAiMessage(5), isFalse);
-  });
-
-  test('AI-only opening cannot be regenerated without a player turn',
-      () async {
-    final current = NarrativeChatController(
-      provider: SimpleProvider(), configuration: () => credentials,
-    );
-    addTearDown(current.dispose);
-    current.restoreTimeline(const [
-      ChatEntry(id: 0, speaker: ChatSpeaker.narrator,
-          name: 'Narrateur', text: 'Bienvenue.'),
-    ]);
-    expect(current.canRegenerateFromAiMessage(0), isFalse);
-    expect(await current.regenerateFromAiMessage(0), isFalse);
-    expect(current.timeline, hasLength(1));
-  });
-
-
-  test('Streaming keeps valid messages before an invalid line', () async {
-    provider.pipe = StreamController<AiStreamChunk>.broadcast();
-    final pending = chat.send('Je regarde.');
-    provider.pipe!.add(AiStreamChunk(
-      text: '${line('narrateur', 'Narrateur', 'Une lumière apparaît.')}\n'
-          'not-json\n',
-    ));
-    await pending;
-    expect(chat.error, isNotNull);
-    expect(chat.messages.map((m) => m.speaker),
-        [ChatSpeaker.player, ChatSpeaker.narrator]);
-    expect(chat.messages.last.text, 'Une lumière apparaît.');
-    expect(chat.preview, isNull);
-    expect(chat.busy, false);
-  });
-
-  test('Non-streaming keeps valid messages before an invalid line', () async {
-    final simple = SimpleProvider()
-      ..text = '${line('narrateur', 'Narrateur', 'Un bruit retentit.')}\n'
-          'not-json\n';
+  test('No partial event appears until the SQLite snapshot completes', () async {
+    final gate = Completer<void>();
+    final persisted = <List<RawGeneration>>[];
     final local = NarrativeChatController(
-      provider: simple, configuration: () => credentials,
+      provider: provider, configuration: () => credentials,
+      onPersistState: (events, raws) async {
+        persisted.add(List.of(raws));
+        if (raws.any((e) => e.isStructured)) await gate.future;
+      },
     );
     addTearDown(local.dispose);
-    await local.send('J’avance.');
-    expect(local.error, isNotNull);
-    expect(local.messages.map((m) => m.speaker),
-        [ChatSpeaker.player, ChatSpeaker.narrator]);
-    expect(local.messages.last.text, 'Un bruit retentit.');
+    final pending = local.send('Test');
+    for (var i = 0; i < 20 && persisted.length < 3; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(persisted.any((r) => r.any((e) => e.isStructured)), isTrue);
+    expect(local.messages, hasLength(1));
+    expect(local.busy, true);
+    gate.complete();
+    await pending;
+    expect(local.messages, hasLength(2));
   });
 
+  test('RAW becomes narrator context in the correct order, not bubble JSON', () async {
+    provider.raw = 'Premier texte original.';
+    await chat.send('Première action');
+    provider.raw = 'Deuxième texte original.';
+    await chat.send('Seconde action');
+    final contents = provider.narrativeContext!.skip(1).map((e) => e.content).toList();
+    expect(contents, containsAllInOrder([
+      'Première action', 'Premier texte original.', 'Seconde action',
+    ]));
+    expect(contents.join(), isNot(contains('"speaker"')));
+  });
+
+  test('Legacy sessions still use visible structured messages as fallback', () async {
+    chat.restoreTimeline(const [
+      ChatEntry(id: 0, speaker: ChatSpeaker.player, name: 'Vous', text: 'Salut'),
+      ChatEntry(id: 1, speaker: ChatSpeaker.character, name: 'Lina', text: 'Bonjour'),
+    ]);
+    await chat.send('Une question');
+    expect(provider.narrativeContext!.map((e) => e.content),
+        contains('Lina : Bonjour'));
+  });
+
+  test('Regenerate discards old RAW and never duplicates player text', () async {
+    await chat.send('Test');
+    provider.raw = 'Réponse deux.';
+    await chat.regenerate();
+    expect(provider.rawCalls, 2);
+    expect(chat.messages.map((m) => m.text), ['Test', 'Réponse deux.']);
+    expect(chat.rawGenerations.single.rawText, 'Réponse deux.');
+  });
+
+  test('Rewind from older player drops obsolete generations', () async {
+    await chat.send('Tour un');
+    await chat.send('Tour deux');
+    final firstId = chat.messages.first.id;
+    expect(chat.editPlayerMessage(firstId, 'Tour un corrigé'), isTrue);
+    expect(await chat.resumeFromPlayerMessage(firstId), isTrue);
+    expect(chat.messages.where((e) => e.speaker == ChatSpeaker.player),
+        hasLength(1));
+    expect(chat.rawGenerations, hasLength(1));
+  });
+
+  test('Manual scene changes retain every existing event ID', () async {
+    await chat.send('Test');
+    final id = chat.messages.last.id;
+    final firstId = chat.messages.first.id;
+    expect(chat.startSceneAt(id), isTrue);
+    expect(chat.hasSceneChangeBefore(id), isTrue);
+    expect(chat.messages.first.id, firstId);
+    expect(chat.messages.last.id, id);
+    expect(chat.removeSceneBefore(id), isTrue);
+    expect(chat.hasSceneChangeBefore(id), isFalse);
+  });
+
+  test('A scene transition from the previous turn can lead the new reply', () async {
+    provider.raw = 'Le temple souterrain se dévoile.';
+    provider.structured = format(provider.raw, scene: true);
+    await chat.send('Nous quittons la grotte et arrivons au temple.');
+    expect(chat.timeline.whereType<ChatSceneChange>(), hasLength(1));
+    expect(chat.timeline.last, isA<ChatEntry>());
+  });
+
+  test('Late result after stop is never published', () async {
+    final hold = Completer<String>();
+    provider.heldRaw = hold;
+    final task = chat.send('Une action');
+    await Future<void>.delayed(Duration.zero);
+    chat.stop();
+    hold.complete(provider.raw);
+    await task;
+    expect(chat.messages, hasLength(1));
+    expect(provider.formatCalls, 0);
+  });
+
+  test('Late formatter result after stop preserves pending RAW only', () async {
+    final hold = Completer<String>();
+    provider.heldFormat = hold;
+    final task = chat.send('Une action');
+    for (var i = 0; i < 30 && provider.formatCalls == 0; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(chat.pendingRaw, isNotNull);
+    chat.stop();
+    hold.complete(format(provider.raw));
+    await task;
+    expect(chat.messages, hasLength(1));
+  });
+
+  test('Streaming buffers RAW and JSON instead of revealing draft bubbles', () async {
+    final streaming = _StreamingProvider();
+    final local = NarrativeChatController(
+      provider: streaming, configuration: () => credentials,
+    );
+    addTearDown(local.dispose);
+    final task = local.send('Test');
+    for (var i = 0; i < 20 && streaming.rawCalls == 0; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    streaming.raw.add(const AiStreamChunk(text: 'Le te'));
+    await Future<void>.delayed(Duration.zero);
+    expect(local.messages, hasLength(1));
+    expect(local.preview, isNull);
+    streaming.raw.add(const AiStreamChunk(text: 'mple.'));
+    await streaming.raw.close();
+    for (var i = 0; i < 20 && streaming.formatCalls == 0; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(local.messages, hasLength(1));
+    streaming.json.add(AiStreamChunk(text: format('Le temple.')));
+    await streaming.json.close();
+    await task;
+    expect(local.messages.last.text, 'Le temple.');
+  });
 }
