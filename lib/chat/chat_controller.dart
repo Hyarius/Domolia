@@ -10,6 +10,8 @@ import 'chat_protocol.dart';
 import 'jsonifier.dart';
 import 'narrator.dart';
 import 'raw_generation.dart';
+import '../books/book_lore.dart';
+import '../books/lore_context_builder.dart';
 
 class NarrativeAiEndpoint {
   const NarrativeAiEndpoint({required this.provider, required this.configuration});
@@ -29,6 +31,8 @@ class NarrativeChatController extends ChangeNotifier {
     this.resolveFormatterConnection,
     this.narrator = const Narrator(),
     this.narratorProvider,
+    this.loreProvider,
+    this.loreContextBudget = 8000,
     this.onTimelineChanged,
     this.onPersistState,
     this.onExchangeCaptured,
@@ -43,6 +47,8 @@ class NarrativeChatController extends ChangeNotifier {
   final Future<NarrativeAiEndpoint> Function()? resolveFormatterConnection;
   final Narrator narrator;
   final Narrator Function()? narratorProvider;
+  final BookLore Function()? loreProvider;
+  final int loreContextBudget;
   final AiExchangeRecorder? diagnostics;
   final void Function(AiExchange exchange)? onExchangeCaptured;
   final void Function(List<ChatTimelineEvent> events)? onTimelineChanged;
@@ -354,9 +360,15 @@ class NarrativeChatController extends ChangeNotifier {
       selected.add(entry);
       used += entry.content.length;
     }
+    final lore = loreProvider?.call();
+    final loreContext = lore == null ? '' : LoreContextBuilder(
+      maxCharacters: loreContextBudget,
+    ).build(lore, selected.reversed.map((entry) => entry.content));
     return [
-      AiMessage(role: 'system',
-          content: (narratorProvider?.call() ?? narrator).systemPrompt),
+      AiMessage(role: 'system', content: [
+        (narratorProvider?.call() ?? narrator).systemPrompt,
+        if (loreContext.isNotEmpty) loreContext,
+      ].join('\n\n')),
       ...selected.reversed,
     ];
   }
