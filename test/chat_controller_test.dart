@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:domolia/ai/ai_provider.dart';
+import 'package:domolia/books/book_lore.dart';
+import 'package:domolia/books/lore_context_optimizer.dart';
 import 'package:domolia/chat/chat_controller.dart';
 import 'package:domolia/chat/chat_protocol.dart';
 import 'package:domolia/chat/jsonifier.dart';
@@ -77,6 +79,34 @@ class _StreamingProvider implements AiChatProvider, AiStreamingChatProvider {
   @override
   Future<List<AiModel>> listModels(AiConfiguration config) async => [];
 }
+
+class _ContextProvider implements AiChatProvider {
+  _ContextProvider(this.summary);
+  String summary;
+  int calls = 0;
+  @override
+  Future<List<AiModel>> listModels(AiConfiguration config) async => const [];
+  @override
+  Future<String> complete(AiConfiguration config, {
+    required List<AiMessage> messages, int maxTokens = 1200,
+  }) async {
+    calls++;
+    expect(messages.first.content, contains('compresseur'));
+    return summary;
+  }
+}
+
+BookLore _largeLore() => BookLore(
+  global: LoreGlobal(
+    universe: 'Skogheim',
+    overview: List.filled(650, 'Pierres, montagnes et fjord').join(' '),
+    rules: 'Les événements restent hypothétiques.',
+  ),
+  characters: const [
+    LoreCharacter(id:'astrid',name:'Astrid',
+      description:'Prêtresse principale de Skogheim.'),
+  ],
+);
 
 void main() {
   late _Provider provider;
@@ -463,6 +493,92 @@ void main() {
     expect(local.rawGenerations.single.isStructured, isTrue);
     expect(local.pendingRaw, isNull);
     expect(local.busy, isFalse);
+  });
+
+
+  test('Lore optimization is compiled once, cached across turns and restarts',
+      () async {
+    final lore = _largeLore();
+    final summary = 'Skogheim. Astrid, prêtresse principale. '
+        '${List.filled(75, "Vie ordinaire").join(" ")}';
+    final optimizer = _ContextProvider(summary);
+    String? cached, hash;
+    final local = NarrativeChatController(
+      provider: provider, configuration: () => credentials,
+      loreProvider: () => lore,
+      resolveOptimizerConnection: () async =>
+          NarrativeAiEndpoint(provider: optimizer, configuration: credentials),
+      onOptimizedLore: (h, s) async { hash = h; cached = s; },
+    );
+    addTearDown(local.dispose);
+    await local.send('Bonjour');
+    expect(optimizer.calls, 1);
+    expect(cached, summary);
+    expect(hash, const LoreContextOptimizer().sourceHash(lore));
+    expect(provider.narrativeContext!.first.content,
+      contains('LORE CANONIQUE RÉSUMÉ'));
+    await local.send('Je m’assieds.');
+    expect(optimizer.calls, 1);
+
+    final reopened = NarrativeChatController(
+      provider: provider, configuration: () => credentials,
+      loreProvider: () => lore,
+      resolveOptimizerConnection: () async =>
+          NarrativeAiEndpoint(provider: optimizer, configuration: credentials),
+      initialOptimizedLore: cached, initialOptimizedLoreHash: hash,
+    );
+    addTearDown(reopened.dispose);
+    await reopened.send('Je regarde dehors.');
+    expect(optimizer.calls, 1);
+    expect(reopened.messages.last.text, provider.raw);
+
+    expect(local.requestLoreRecompilation(), true);
+    await local.send('Une nouvelle journée commence.');
+    expect(optimizer.calls, 2);
+  });
+
+  test('Invalid summary never prevents storytelling or replaces canonical Lore',
+      () async {
+    final lore = _largeLore();
+    final optimizer = _ContextProvider('Résumé incomplet');
+    String? persisted;
+    final local = NarrativeChatController(
+      provider: provider, configuration: () => credentials,
+      loreProvider: () => lore,
+      resolveOptimizerConnection: () async =>
+          NarrativeAiEndpoint(provider: optimizer, configuration: credentials),
+      onOptimizedLore: (h, s) async { persisted = s; },
+    );
+    addTearDown(local.dispose);
+    await local.send('Un pas.');
+    expect(optimizer.calls, 1);
+    expect(persisted, isEmpty);
+    expect(local.messages.last.text, provider.raw);
+    expect(provider.narrativeContext!.first.content,
+      contains('CANON DU MONDE'));
+    expect(provider.narrativeContext!.first.content,
+      isNot(contains('LORE CANONIQUE RÉSUMÉ')));
+  });
+
+  test('Disabling optimization ignores an existing cached summary',
+      () async {
+    final lore = _largeLore();
+    final local = NarrativeChatController(
+      provider: provider, configuration: () => credentials,
+      loreProvider: () => lore,
+      initialOptimizedLore: 'Skogheim Astrid résumé ancien. '
+        '${List.filled(75, "Résumé").join(" ")}',
+      initialOptimizedLoreHash:
+        const LoreContextOptimizer().sourceHash(lore),
+      resolveOptimizerConnection: () async => null,
+    );
+    addTearDown(local.dispose);
+    await local.send('Je me présente.');
+    expect(local.messages.last.text, provider.raw);
+    expect(provider.narrativeContext!.first.content,
+      contains('CANON DU MONDE'));
+    expect(provider.narrativeContext!.first.content,
+      isNot(contains('LORE CANONIQUE RÉSUMÉ')));
   });
 
 }
