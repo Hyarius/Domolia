@@ -435,4 +435,34 @@ void main() {
     expect(local.messages.last.text, provider.raw);
   });
 
+
+  test('Stop during the final transaction cannot leave a committed but invisible reply',
+      () async {
+    final commitStarted = Completer<void>();
+    final releaseCommit = Completer<void>();
+    final local = NarrativeChatController(
+      provider: provider,
+      configuration: () => credentials,
+      onPersistState: (events, raws) async {
+        if (raws.any((r) => r.isStructured)) {
+          commitStarted.complete();
+          await releaseCommit.future;
+        }
+      },
+    );
+    addTearDown(local.dispose);
+    final task = local.send('Je regarde la salle');
+    await commitStarted.future;
+    expect(local.messages, hasLength(1));
+    local.stop();
+    expect(local.busy, isTrue,
+        reason: 'The final SQLite commit is already irreversible.');
+    releaseCommit.complete();
+    await task;
+    expect(local.messages.last.text, provider.raw);
+    expect(local.rawGenerations.single.isStructured, isTrue);
+    expect(local.pendingRaw, isNull);
+    expect(local.busy, isFalse);
+  });
+
 }
