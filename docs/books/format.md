@@ -1,44 +1,62 @@
 # Domolia — Format portable des Livres
 
-## Contrat v1
+## Contrat v2 (Lore canonique)
 
-Un export de Livre est un fichier UTF-8 JSON, objet racine unique, de **2 Mio maximum**. `format` vaut `domolia.book` et `version` vaut `1`. Une version inconnue est rejetée, pas interprétée approximativement.
+Un Livre exporté est un JSON UTF-8 `domolia.book` **version 2**, limité à **2 Mio**. Les anciens fichiers **v1 restent importables** et deviennent v2 à la prochaine sauvegarde, avec un Lore vide. Aucun historique de Partie n'entre dans cette définition.
 
 ```json
 {
   "format": "domolia.book",
-  "version": 1,
+  "version": 2,
   "id": "book-123",
   "title": "Le Monde d'ambre",
   "tags": [],
   "cover": null,
-  "narrative": {
-    "style": "Narration immersive en français.",
-    "detailLevel": 3
-  },
+  "narrative": {"style": "Narration immersive.", "detailLevel": 3},
   "openingMessages": ["Une porte s'ouvre."],
-  "extensions": {}
+  "extensions": {},
+  "lore": {
+    "global": {
+      "universe": "Ambre", "overview": "Un empire divisé.",
+      "genre": "Fantastique", "era": "Âge des rois",
+      "initialContext": "Le couronnement approche.",
+      "history": "", "rules": "", "conflicts": "",
+      "directions": "", "secrets": ""
+    },
+    "characters": [], "places": [], "scenarios": [], "events": []
+  }
 }
 ```
 
-- `id` : identifiant stable de 1 à 100 caractères ASCII alphanumériques, underscore ou tiret ; une collision à l'import génère un nouvel ID local, sans écrasement.
-- `title` : 1 à 120 caractères. `tags` : liste d'identifiants connus, actuellement `nsfw` uniquement et désactivé par défaut.
-- `cover` : `null`, ou `{"mime":"image/png|image/jpeg|image/webp","base64":"..."}`. Taille décodée 1 Mio maximum ; type MIME et signature de fichier doivent correspondre.
-- `narrative.style` : 1 à 8 000 caractères ; `detailLevel` : entier de 1 à 5.
-- `openingMessages` : 1 à 30 entrées de 1 à 2 000 caractères.
-- `extensions` : **objet vide obligatoire en v1**. Les scénarios et personnages de PR07 exigeront des champs explicitement validés et une évolution de version.
+### Types et références
 
-L'import refuse les champs inconnus, types incorrects, couvertures trop grandes ou mal identifiées, extensions non prises en charge et documents hors limites. Aucun code du JSON n'est exécuté.
+Tous les éléments ont un identifiant stable ASCII (`id`), un nom (`name`), une description, des alias, des tags et des secrets. Les listes de références portent **des IDs**, jamais des noms :
 
-## Frontières de confidentialité
+- Personnage : `appearance`, `personality`, `background`, `role`, `motivations`, `values`, `relatedCharacterIds`, `homePlaceId`.
+- Lieu : `type`, `atmosphere`, `history`, `features`, `characterIds`, `placeIds`.
+- Scénario : `summary`, `importance` (`main` / `secondary`), `initialContext`, `objectives`, `introduction`, `characterIds`, `placeIds`, `eventIds`.
+- Événement : `trigger` (`planned`, `conditional`, `optional`), `condition`, `mandatory` (booléen), `timing`, `consequences`, `priority` (0–10), `characterIds`, `placeIds`, `scenarioIds`.
 
-L'export contient uniquement la définition partageable. Il n'inclut jamais clé API, jeton OAuth, compte ChatGPT, liaison locale `profile_id`, historique de conversations, scènes personnelles, progression, fiches du joueur, mémoire de Partie ou identifiant de session.
+Les données de Lore sont strictement typées : aucun champ inconnu, aucun ID en double ou lien vers une fiche inexistante n'est accepté. Chaque section comporte au plus **250 fiches** ; le Lore encodé est plafonné à **1,5 Mio**. Le format v1 conserve ses limites : couverture décodée de 1 Mio, style jusqu'à 8 000 caractères, 1 à 30 ouvertures de 1 à 2 000 caractères. Les textes de Lore sont limités à 12 000 caractères par champ long. Les alias et tags sont limités et validés.
 
-Les liaisons IA sont stockées séparément dans SQLite local et font référence à des configurations existantes du stockage chiffré. Un import ne crée **aucune** liaison à une IA. La personne qui importe choisit son propre profil.
+La suppression d'une fiche référencée nécessite confirmation et détache les liens dans une opération de sauvegarde unique. Un échec laisse l'ancienne définition intacte. Des modifications dans une Partie ne modifient jamais le canon du Livre.
 
-## Versionnement et migrations
+### Intégration RAW et budget
 
-- SQLite local : `user_version = 1` ; les tables `books`, `book_bindings` et `sessions` sont distinctes. Toute modification du schéma passera par une migration non destructive dans `onUpgrade`.
-- JSON portable : `version = 1`. Toute évolution de schéma partagé exige un parseur et un validateur explicites, des tests v1→vN et un contrat de compatibilité documenté.
-- Configuration globale du narrateur PR04 : reste lisible pour migration volontaire vers le Livre `legacy-narrator-v1`. La création est idempotente, l'original n'est pas supprimé.
-- Les configurations IA existantes et leurs secrets ne font pas l'objet d'une migration non chiffrée.
+La première passe du narrateur reçoit le Lore. **Le JSONificateur n'en reçoit aucune instruction**. Le sélecteur déterministe travaille avec un budget distinct (par défaut **8 000 caractères UTF-16**). Ordre de sélection :
+
+1. Directives de confidentialité et de souveraineté du joueur.
+2. Lore global canonique : faits, contexte, règles, intentions séparées, secrets du narrateur.
+3. Personnages et lieux explicitement reconnus dans les derniers tours (nom/alias, comparaison insensible aux accents) ; une fiche retenue est transmise entière.
+4. Scénarios principaux, scénarios mentionnés ou liés à ces fiches.
+5. Événements mentionnés ou liés (priorité décroissante).
+
+Les fiches secondaires sont omises entièrement si le budget est insuffisant, avec indication explicite ou rejet clair si cet avertissement ne tient pas. **Les faits globaux et les fiches mentionnées ne sont pas tronqués** : un budget insuffisant provoque une erreur explicite, jamais une version amputée présentée comme complète. L'identification d'un mot n'établit jamais qu'une condition s'est produite. Les événements conditionnels sont présentés comme des possibilités non validées. L'IA doit toujours respecter les secrets et la liberté du joueur ; aucun moteur de progression ne prétend garantir un événement obligatoire.
+
+### Persistance, compatibilité et confidentialité
+
+SQLite conserve le schéma **v4** ; la colonne `books.definition_json` contient désormais du JSON v2. Une migration des tables n'est pas nécessaire : les anciennes définitions v1 sont interprétées sans perte et réécrites au format v2 lors de leur édition. Les tables `sessions`, `book_bindings` et `raw_generations` restent indépendantes.
+
+L'export n'inclut jamais clé API, OAuth, profils IA, `profile_id`, diagnostics, échanges techniques, mémoires ou Parties. Les profils AI restent une liaison **locale**, non portée par le Livre. Une collision d'ID de Livre lors d'un import génère un nouvel ID sans écraser l'existant. Les versions futures inconnues sont rejetées.
+
+**Évolution ultérieure :** conserver la définition canonique immuable dans le Livre et référencer ses IDs dans la mémoire dynamique propre à chaque Partie. Les découvertes, déplacements, relations et événements effectivement réalisés nécessiteront un état de progression explicite, non disponible dans cette PR.
