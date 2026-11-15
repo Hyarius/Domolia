@@ -227,22 +227,22 @@ void main() {
   });
 
   test('Dart splits paragraphs and preserves all whitespace and Unicode', () {
-    const raw = '  🌧️ La porte.\\r\\n\\r\\n'
-        'Astrid : « Bienvenue ! »\\n  \\n'
-        'Liv sourit.\\n\\n'
+    const raw = '  🌧️ La porte.\r\n\r\n'
+        'Astrid : « Bienvenue ! »\n  \n'
+        'Liv sourit.\n\n'
         'Runa : « Bonjour. »  ';
     final blocks = decoder.blocks(raw);
     expect(blocks, hasLength(4));
     expect(blocks.join(), raw);
     expect(blocks.first, startsWith('  🌧️'));
     expect(decoder.blocksForPrompt(raw), contains('Bloc 2'));
-    expect(decoder.blocksForPrompt(raw), contains('\\\\r\\\\n'));
+    expect(decoder.blocksForPrompt(raw), contains('\\\r\\\n'));
   });
 
   test('Numbered block response reproduces the RAW, not AI text offsets', () {
-    const raw = 'Les pierres sont froides.\\n\\n'
-        'Astrid : « Entrez. »\\n\\n'
-        'La cheminée fume.\\n\\n'
+    const raw = 'Les pierres sont froides.\n\n'
+        'Astrid : « Entrez. »\n\n'
+        'La cheminée fume.\n\n'
         'Runa : « Un peu de thé ? »';
     expect(decoder.blocks(raw), hasLength(4));
     final converted = decoder.decode(raw, response([
@@ -263,7 +263,7 @@ void main() {
   });
 
   test('Block references reject invented IDs, gaps, repeats and scene errors', () {
-    const raw = 'Un couloir.\\n\\nUne porte.';
+    const raw = 'Un couloir.\n\nUne porte.';
     Map<String, dynamic> msg(int block, {String name = 'Narrateur',
         String role = 'narrator'}) => {
       'type': 'message', 'block': block, 'speaker': role, 'name': name,
@@ -288,7 +288,7 @@ void main() {
 
   test('Very many short RAW paragraphs are grouped to a bounded block count',
       () {
-    final raw = List.filled(250, 'Une phrase.').join('\\n\\n');
+    final raw = List.filled(250, 'Une phrase.').join('\n\n');
     final blocks = decoder.blocks(raw);
     expect(blocks.length, lessThanOrEqualTo(80));
     expect(blocks.join(), raw);
