@@ -124,9 +124,13 @@ class _Service extends BackupService {
 }
 
 Future<_Fixture> _fixture(WidgetTester tester) async {
-  final fixture = _Fixture(
-    await Directory.systemTemp.createTemp('domolia-backup-ui-'),
+  final directory = await tester.runAsync(
+    () => Directory.systemTemp.createTemp('domolia-backup-ui-'),
   );
+  if (directory == null) {
+    throw StateError('Impossible de préparer le test de sauvegarde.');
+  }
+  final fixture = _Fixture(directory);
   addTearDown(fixture.close);
   // FFI SQLite runs in a real isolate; initialize outside the fake-async zone
   // used to pump widget frames.
