@@ -423,9 +423,14 @@ class NarrativeChatController extends ChangeNotifier {
     ].join('\n');
     return [
       const AiMessage(role: 'system', content: jsonifierSystemPrompt),
-      AiMessage(role: 'user',
-          content: 'Contexte précédent (ne pas convertir) :\n' 
-              '$context\n\nBlocs RAW à classifier (texte JSON échappé, '\n              'numéros fournis par Dart) :\n'\n              '${const Jsonifier().blocksForPrompt(raw)}'),
+      AiMessage(
+        role: 'user',
+        content: 'Contexte précédent (ne pas convertir) :\n'
+            '$context\n\n'
+            'Blocs RAW à classifier (texte JSON échappé, '
+            'numéros fournis par Dart) :\n'
+            '${const Jsonifier().blocksForPrompt(raw)}',
+      ),
     ];
   }
 
