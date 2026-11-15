@@ -419,7 +419,7 @@ class NarrativeChatController extends ChangeNotifier {
         .take(6).toList().reversed;
     final context = [
       for (final entry in previous)
-        '${entry.name} : ${entry.text}',
+        '${entry.name}${entry.status == null ? '' : ' (${entry.status})'} : ${entry.text}',
     ].join('\n');
     return [
       const AiMessage(role: 'system', content: jsonifierSystemPrompt),
@@ -427,9 +427,9 @@ class NarrativeChatController extends ChangeNotifier {
         role: 'user',
         content: 'Contexte précédent (ne pas convertir) :\n'
             '$context\n\n'
-            'Blocs RAW à classifier (texte JSON échappé, '
+            'Parties RAW à classifier (texte JSON échappé, '
             'numéros fournis par Dart) :\n'
-            '${const Jsonifier().blocksForPrompt(raw)}',
+            '${const Jsonifier().partsForPrompt(raw)}',
       ),
     ];
   }
@@ -499,6 +499,7 @@ class NarrativeChatController extends ChangeNotifier {
               'id': event.id, 'type': 'message',
               'speaker': event.speaker.name, 'name': event.name,
               'text': event.text,
+              if (event.status != null) 'status': event.status,
             },
       ],
     );
@@ -667,7 +668,7 @@ class NarrativeChatController extends ChangeNotifier {
             prepared.add(ChatSceneChange(id: id++));
           } else if (entry is ChatLine) {
             prepared.add(ChatEntry(id: id++, speaker: entry.speaker,
-                name: entry.name, text: entry.text));
+                name: entry.name, text: entry.text, status: entry.status));
           }
         }
         if (prepared.whereType<ChatEntry>().isEmpty) {
