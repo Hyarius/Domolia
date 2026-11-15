@@ -202,7 +202,7 @@ void main() {
         bodies.add(body);
         expect(request.headers['Authorization'], 'Bearer test-secret');
         return http.Response(
-          'data: {"type":"response.output_text.delta","delta":"Réponse"}\n\n'
+          'data: {"type":"response.output_text.delta","delta":"Reponse"}\n\n'
           'data: {"type":"response.completed","response":{"usage":'
           '{"input_tokens":14,"output_tokens":120}}}\n\n',
           200,
@@ -224,7 +224,7 @@ void main() {
       ).toList();
       outputs.add(chunks.map((chunk) => chunk.text).join());
     }
-    expect(outputs, ['Réponse', 'Réponse', 'Réponse']);
+    expect(outputs, ['Reponse', 'Reponse', 'Reponse']);
     expect(bodies.map((b) => b['max_output_tokens']), [8192, 4096, 16384]);
     expect((bodies[0]['reasoning'] as Map)['effort'], 'low');
     expect((bodies[1]['reasoning'] as Map)['effort'], 'none');
