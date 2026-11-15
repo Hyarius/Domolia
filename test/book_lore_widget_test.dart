@@ -206,4 +206,43 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+
+  testWidgets('Deleting the last matching tag resets the filter',
+      (tester) async {
+    var lore = const BookLore(characters: [
+      LoreCharacter(id:'c1',name:'Ana',tags:['cour']),
+      LoreCharacter(id:'c2',name:'Béatrice',tags:['rare']),
+    ]);
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: StatefulBuilder(builder: (context, rebuild) => Scaffold(
+        body: ListView(children: [
+          BookLoreTab(lore: lore,
+            onSave: (next) async => rebuild(() => lore = next)),
+        ]),
+      )),
+    ));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(
+      const ValueKey('loreSection-characters')));
+    await tester.tap(find.byKey(const ValueKey('loreSection-characters')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(
+      const ValueKey('loreTags-characters')));
+    await tester.tap(find.byKey(const ValueKey('loreTags-characters')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('rare').last);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('loreItem-c2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('loreItem-c1')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('loreDelete-c2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Supprimer et détacher'));
+    await tester.pumpAndSettle();
+    expect(lore.characters.single.id, 'c1');
+    expect(find.byKey(const ValueKey('loreItem-c1')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
 }
