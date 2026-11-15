@@ -25,7 +25,10 @@ import 'ai/ai_task_routing.dart';
 import 'ai/ai_diagnostics.dart';
 import 'ai/ai_diagnostic_settings.dart';
 import 'ai/ai_provider.dart';
-import 'ai/ai_settings_panel.dart';
+import 'ai/openuncensored_api.dart';
+import 'ai/openuncensored_controller.dart';
+import 'ai/openuncensored_vault.dart';
+import 'ai/openuncensored_credits_page.dart';
 import 'ai/ai_storage.dart';
 import 'ai/chatgpt_auth.dart';
 import 'ai/chatgpt_responses.dart';
@@ -128,6 +131,7 @@ class _HomePageState extends State<HomePage> {
   final AiExchangeRecorder _aiDiagnostics = AiExchangeRecorder();
   final AiTaskRouting _taskRouting = AiTaskRouting();
   late final AiConnectionController _ai;
+  late final OuCreditsController _credits;
   late final bool _ownsAi;
   late NarrativeChatController _chat;
   late final bool _ownsChat;
@@ -153,6 +157,10 @@ class _HomePageState extends State<HomePage> {
       provider: OpenAiCompatibleChatProvider(diagnostics: _aiDiagnostics),
       chatGpt: ChatGptAuthService(store: SecureChatGptSessionStore()),
       chatGptProvider: ChatGptResponsesProvider(diagnostics: _aiDiagnostics),
+    );
+    _credits = OuCreditsController(
+      api: OpenUncensoredApi(), vault: SecureOuVaultStore(),
+      ai: _ai, routing: _taskRouting,
     );
     _ownsNarratorSettings = widget.narratorSettings == null;
     _narratorSettings = widget.narratorSettings ?? NarratorSettingsController(
@@ -188,6 +196,7 @@ class _HomePageState extends State<HomePage> {
       }
       _books.dispose();
     }
+    _credits.dispose();
     if (_ownsAi) _ai.dispose();
     _taskRouting.dispose();
     super.dispose();
@@ -388,7 +397,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _openAiSettings() {
-    unawaited(_ai.initialize());
+    unawaited(_credits.initialize());
     setState(() {
       _aiReturnPage = _page == _Page.chat ? _Page.chat : _Page.settings;
       _page = _Page.ai;
@@ -494,9 +503,8 @@ class _HomePageState extends State<HomePage> {
               onViewAllVersions: () => _openUrl(_allReleasesUrl),
               onCheckManually: _checkForUpdates,
             )
-          : _page == _Page.ai ? AiSettingsPanel(
-              controller: _ai,
-              taskRouting: _taskRouting,
+          : _page == _Page.ai ? OpenUncensoredCreditsPage(
+              controller: _credits,
               onBack: () => setState(() => _page = _aiReturnPage),
             )
           : _page == _Page.diagnostics ? AiDiagnosticsSettingsPage(
@@ -623,8 +631,8 @@ class _HomePageState extends State<HomePage> {
         const SizedBox(height: 20),
         ListTile(
           leading: const Icon(Icons.smart_toy_outlined, color: DomoliaColors.gold),
-          title: const Text('Configurations IA'),
-          subtitle: const Text('Profils, fournisseurs et modèles'),
+          title: const Text('Crédits IA'),
+          subtitle: const Text('OpenUncensored, clés et modèles'),
           trailing: const Icon(Icons.chevron_right),
           onTap: _openAiSettings,
         ),
