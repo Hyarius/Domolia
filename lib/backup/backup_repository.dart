@@ -126,9 +126,7 @@ class BackupRepository {
       };
       final bookIds = <String, String>{};
       var bookConflicts = 0;
-      // listBooks() is newest-first by SQLite rowid. Insert in reverse
-      // archive order so a new device displays the same library ordering.
-      for (final book in backup.books.reversed) {
+      for (final book in backup.books) {
         final json = book.exportJson();
         var target = book.id;
         if (bookContent.containsKey(target) &&
@@ -231,7 +229,9 @@ class BackupRepository {
           row['id'] as String: row['definition_json'] as String,
       };
       final bookIds = <String, String>{};
-      for (final book in backup.books) {
+      // The library is displayed by descending rowid; insert the archive
+      // newest-first sequence in reverse to preserve the visible ordering.
+      for (final book in backup.books.reversed) {
         final json = book.exportJson();
         String target = book.id;
         if (bookContent.containsKey(target) &&
