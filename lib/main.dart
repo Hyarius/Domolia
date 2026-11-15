@@ -467,6 +467,7 @@ class _HomePageState extends State<HomePage> {
                   library: _books,
                   ai: _ai,
                   chat: _chat,
+                  taskRouting: _taskRouting,
                   bookId: _selectedBookId!,
                   sessionId: _activeSessionId!,
                   bookTitle: _activeBookTitle,
