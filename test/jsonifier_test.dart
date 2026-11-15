@@ -300,4 +300,75 @@ void main() {
     expect(rendered.whereType<ChatLine>().map((e) => e.text).join(), raw);
   });
 
+  test('Quoted dialogue splits literary paragraph into clean character SMS', () {
+    const raw = 'Liv, étonnée : « Quoi ?! » murmure-t-elle. '
+        '« Mais pourquoi ? »';
+    final parts = decoder.parts(raw);
+    expect(parts, hasLength(4));
+    expect(parts.map((part) => part.text).join(), raw);
+    expect(parts.map((part) => part.quoted),
+        [false, true, false, true]);
+    expect(decoder.partsForPrompt(raw), contains('Partie 3 (citation)'));
+    final parsed = decoder.decode(raw, response([
+      {'type': 'part', 'part': 0, 'kind': 'aside'},
+      {'type': 'part', 'part': 1, 'kind': 'dialogue',
+       'name': 'Liv', 'status': 'étonnée'},
+      {'type': 'part', 'part': 2, 'kind': 'aside'},
+      {'type': 'part', 'part': 3, 'kind': 'dialogue',
+       'name': 'Liv', 'status': 'murmurant'},
+    ]));
+    final lines = parsed.whereType<ChatLine>().toList();
+    expect(lines, hasLength(2));
+    expect(lines.map((line) => line.text), ['Quoi ?!', 'Mais pourquoi ?']);
+    expect(lines.map((line) => line.status), ['étonnée', 'murmurant']);
+    expect(lines.every((line) => line.speaker == ChatSpeaker.character), true);
+  });
+
+  test('Meaningful narration remains visible while trivial incises vanish', () {
+    const raw = 'Liv baisse les yeux.\n\n'
+        'Liv : « Cela me fait de la peine. » répondit-elle.';
+    final parts = decoder.parts(raw);
+    expect(parts, hasLength(4));
+    final parsed = decoder.decode(raw, response([
+      {'type': 'part', 'part': 0, 'kind': 'narration'},
+      {'type': 'part', 'part': 1, 'kind': 'aside'},
+      {'type': 'part', 'part': 2, 'kind': 'dialogue',
+       'name': 'Liv', 'status': 'attristée'},
+      {'type': 'part', 'part': 3, 'kind': 'aside'},
+    ]));
+    final lines = parsed.whereType<ChatLine>().toList();
+    expect(lines.map((line) => line.name), ['Narrateur', 'Liv']);
+    expect(lines.first.text, 'Liv baisse les yeux.');
+    expect(lines.last.text, 'Cela me fait de la peine.');
+    expect(lines.last.status, 'attristée');
+  });
+
+  test('Part classifier rejects missing parts, invented characters and lost prose', () {
+    const raw = 'Liv se lève.\n\nLiv : « Bonjour. »';
+    final valid = <Map<String, dynamic>>[
+      {'type': 'part', 'part': 0, 'kind': 'narration'},
+      {'type': 'part', 'part': 1, 'kind': 'aside'},
+      {'type': 'part', 'part': 2, 'kind': 'dialogue', 'name': 'Liv'},
+    ];
+    expect(decoder.parts(raw), hasLength(3));
+    expect(() => decoder.decode(raw, response(valid)), returnsNormally);
+    for (final invalid in [
+      [valid[0], valid[2]],
+      [valid[0], valid[1], {...valid[2], 'part': 3}],
+      [valid[0], valid[1], {...valid[2], 'name': 'Inconnu'}],
+      [{...valid[0], 'kind': 'aside'}, valid[1], valid[2]],
+      [valid[0], valid[1], {...valid[2], 'status': '<script>'}],
+    ]) {
+      expect(() => decoder.decode(raw, response(invalid)), throwsFormatException);
+    }
+  });
+
+  test('Unquoted labelled speech stays compatible with pure SMS display', () {
+    const raw = 'Liv : Je ne comprends pas.';
+    final parsed = decoder.decode(raw, response([
+      {'type': 'part', 'part': 0, 'kind': 'dialogue', 'name': 'Liv'},
+    ]));
+    expect((parsed.single as ChatLine).text, 'Je ne comprends pas.');
+  });
+
 }
