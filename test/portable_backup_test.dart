@@ -669,4 +669,55 @@ void main() {
     await service.restore(incoming, BackupRestoreMode.merge);
     expect(await store.listSessions('book1'), hasLength(1));
   });
+
+  test('reimport after reconnecting an AI profile preserves key and v3 part',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('domolia-rekey-');
+    final store = SqliteBookStore(
+      factory: databaseFactoryFfi,
+      databasePath: path.join(directory.path, 'rekey.db'),
+    );
+    addTearDown(() async {
+      await store.close();
+      await directory.delete(recursive: true);
+    });
+    await (await store.database).execute(
+        'ALTER TABLE sessions ADD COLUMN profile_id TEXT');
+    final standard = archive();
+    final bound = PortableBackup(
+      createdAtUtc: standard.createdAtUtc,
+      books: standard.books,
+      bookBindings: standard.bookBindings,
+      aiProfiles: standard.aiProfiles,
+      sessions: [
+        BackupSession(
+          session: standard.sessions.single.session,
+          updatedAtMicros: standard.sessions.single.updatedAtMicros,
+          aiProfileId: 'profile',
+        ),
+      ],
+    );
+    final profiles = _MemoryProfiles(local);
+    final service = BackupService(books: store, profileStore: profiles);
+    await service.restore(bound, BackupRestoreMode.merge);
+    final imported = profiles.state!.profiles.last;
+    expect(imported.apiKey, isEmpty);
+    await profiles.write(AiProfilesState(
+      selectedId: profiles.state!.selectedId,
+      profiles: [
+        profiles.state!.profiles.first,
+        imported.copyWith(apiKey: 'ONLY-ON-THIS-DEVICE'),
+      ],
+    ));
+    await service.restore(bound, BackupRestoreMode.merge);
+    expect(profiles.state!.profiles, hasLength(2));
+    expect(profiles.state!.profiles.last.id, imported.id);
+    expect(profiles.state!.profiles.last.apiKey, 'ONLY-ON-THIS-DEVICE');
+    expect(await store.listBooks(), hasLength(1));
+    expect(await store.listSessions('book1'), hasLength(1));
+    final saved = await service.capture();
+    expect(saved.sessions.single.aiProfileId, imported.id);
+    expect(utf8.decode(saved.encode()),
+        isNot(contains('ONLY-ON-THIS-DEVICE')));
+  });
 }

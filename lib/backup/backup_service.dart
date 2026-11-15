@@ -38,8 +38,12 @@ class BackupService {
     return 'imported-${sha256.convert(bytes).toString().substring(0, 24)}';
   }
 
+  // Reuse an already imported profile after the user has configured a key
+  // locally. Secrets never come from the backup and are never overwritten.
+  // Matching the deterministic imported ID plus all non-secret metadata
+  // keeps repeated imports idempotent without linking an unrelated profile.
   static bool _matches(AiProfile local, BackupProfile imported) =>
-      local.apiKey.isEmpty && local.name == imported.name &&
+      local.name == imported.name &&
       local.kind == imported.kind && local.baseUrl == imported.baseUrl &&
       local.model == imported.model &&
       local.nsfwCompatibility == imported.nsfwCompatibility;
