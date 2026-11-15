@@ -213,7 +213,9 @@ class NarrativeChatController extends ChangeNotifier {
     // A pending RAW belongs to the exact player history that produced it.
     // Editing any previous action would silently attach stale prose to new input.
     if (_closed || busy || pendingRaw != null ||
-        value.isEmpty || value.length > 4000) return false;
+        value.isEmpty || value.length > 4000) {
+      return false;
+    }
     final index = _playerIndex(id);
     if (index < 0) return false;
     final old = _timeline[index] as ChatEntry;
