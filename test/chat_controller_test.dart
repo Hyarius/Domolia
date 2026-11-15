@@ -708,4 +708,63 @@ void main() {
         contains('Partie 1 (citation)'));
   });
 
+  test('Future narrator input uses persisted compact turn instead of long RAW',
+      () async {
+    final raw = List.filled(20,
+        'Astrid et Liv demeurent devant la porte close de la chapelle.')
+        .join(' ');
+    const compact = 'Astrid et Liv se trouvent devant la porte close '
+        'de la chapelle. La porte est toujours fermée.';
+    provider.raw = raw;
+    provider.structured = jsonEncode({
+      'events': [
+        {'type': 'message', 'start': 0, 'end': raw.length,
+         'speaker': 'narrator', 'name': 'Narrateur'},
+      ],
+      'compact': compact,
+    });
+    await chat.send('Je regarde les femmes.');
+    expect(chat.error, isNull);
+    expect(chat.messages.last.text, raw);
+    expect(chat.rawGenerations.single.rawText, raw);
+    expect(chat.rawGenerations.single.compactText, compact);
+
+    await chat.send('Je demande si la porte est ouverte.');
+    final nextInput = provider.narrativeContext!
+        .skip(1).map((message) => message.content).join('\n');
+    expect(nextInput, contains(compact));
+    expect(nextInput, isNot(contains(raw)));
+    expect(nextInput, contains('Je regarde les femmes.'));
+  });
+
+  test('Old restored generations without compact memory use original RAW',
+      () {
+    chat.restoreTimeline(const [
+      ChatEntry(id: 0, speaker: ChatSpeaker.player,
+          name: 'Vous', text: 'Je regarde.'),
+      ChatEntry(id: 1, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'La fenêtre grince.'),
+    ], rawGenerations: const [
+      RawGeneration(playerEventId: 0, rawText: 'RAW original intact.',
+          firstEventId: 1, lastEventId: 1),
+    ]);
+    final history = chat.buildNarratorContext().map((e) => e.content).toList();
+    expect(history, contains('RAW original intact.'));
+  });
+
+  test('Invalid compact memory does not block a valid response or its retry',
+      () async {
+    final raw = List.filled(20, 'La pluie frappe les tuiles.').join(' ');
+    provider.raw = raw;
+    provider.structured = jsonEncode({
+      'events': [ {'type': 'message', 'start': 0, 'end': raw.length,
+        'speaker': 'narrator', 'name': 'Narrateur'} ],
+      'compact': 'Trop court',
+    });
+    await chat.send('Je reste immobile.');
+    expect(chat.error, isNull);
+    expect(chat.rawGenerations.single.compactText, isNull);
+    expect(chat.messages.last.text, raw);
+  });
+
 }
