@@ -1,3 +1,4 @@
+import '../chat/raw_generation.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
@@ -28,7 +29,14 @@ abstract interface class BookStore {
   Future<void> pruneDiagnostics(int retentionLimit);
 }
 
-class SqliteBookStore implements BookStore {
+/// Optional persistence protocol; test-only BookStore implementations remain valid.
+abstract interface class NarrativeSnapshotStore {
+  Future<List<RawGeneration>> listRawGenerations(String sessionId);
+  Future<void> saveNarrativeSnapshot(
+      BookSession session, List<RawGeneration> generations);
+}
+
+class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
   SqliteBookStore({DatabaseFactory? factory, this.databasePath})
       : _factoryOverride = factory;
 
@@ -47,6 +55,62 @@ class SqliteBookStore implements BookStore {
       'CREATE INDEX ai_diagnostics_by_session '
       'ON ai_diagnostics(session_id, created_at DESC)',
     );
+  }
+
+  static Future<void> _createRawGenerations(Database db) async {
+    await db.execute(
+      'CREATE TABLE raw_generations ('
+      'session_id TEXT NOT NULL, player_event_id INTEGER NOT NULL, '
+      'raw_text TEXT NOT NULL, first_event_id INTEGER, last_event_id INTEGER, '
+      'PRIMARY KEY(session_id, player_event_id), '
+      'FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE)',
+    );
+  }
+
+  @override
+  Future<List<RawGeneration>> listRawGenerations(String sessionId) async {
+    final rows = await (await database).query(
+      'raw_generations', where: 'session_id = ?', whereArgs: [sessionId],
+      orderBy: 'player_event_id ASC',
+    );
+    return [
+      for (final row in rows)
+        RawGeneration(
+          playerEventId: row['player_event_id'] as int,
+          rawText: row['raw_text'] as String,
+          firstEventId: row['first_event_id'] as int?,
+          lastEventId: row['last_event_id'] as int?,
+        ),
+    ];
+  }
+
+  /// Never publish a generated event without its source RAW in this same
+  /// transaction. Rewind atomically prunes obsolete RAW source rows.
+  @override
+  Future<void> saveNarrativeSnapshot(
+      BookSession session, List<RawGeneration> generations) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      final updated = await txn.update('sessions', {
+        'timeline_json': session.encodeTimeline(),
+        'updated_at': DateTime.now().microsecondsSinceEpoch,
+      }, where: 'id = ? AND book_id = ?',
+        whereArgs: [session.id, session.bookId]);
+      if (updated != 1) {
+        throw StateError('Partie supprimée ou introuvable.');
+      }
+      await txn.delete('raw_generations',
+        where: 'session_id = ?', whereArgs: [session.id]);
+      for (final raw in generations) {
+        await txn.insert('raw_generations', {
+          'session_id': session.id,
+          'player_event_id': raw.playerEventId,
+          'raw_text': raw.rawText,
+          'first_event_id': raw.firstEventId,
+          'last_event_id': raw.lastEventId,
+        });
+      }
+    });
   }
 
   static Future<void> _pruneSession(
@@ -68,7 +132,7 @@ class SqliteBookStore implements BookStore {
     return _db ??= await (_factoryOverride ?? databaseFactory).openDatabase(
       location,
       options: OpenDatabaseOptions(
-      version: 3,
+      version: 4,
       onConfigure: (db) async =>
           db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, version) async {
@@ -90,12 +154,14 @@ class SqliteBookStore implements BookStore {
           'CREATE INDEX sessions_by_book ON sessions(book_id, updated_at)',
         );
         await _createDiagnostics(db);
+        await _createRawGenerations(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await _createDiagnostics(db);
         if (oldVersion < 3) {
           await db.execute('ALTER TABLE sessions ADD COLUMN profile_id TEXT');
         }
+        if (oldVersion < 4) await _createRawGenerations(db);
       },
       ),
     );

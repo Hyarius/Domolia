@@ -47,6 +47,10 @@ class AiExchange {
   final String accept;
   final String _secret;
   final BytesBuilder _response = BytesBuilder(copy: false);
+  /// Logical pipeline stage; the HTTP envelope remains unchanged.
+  String? stage;
+  /// Stable originating player message, shared by both AI exchanges.
+  int? playerEventId;
   int? statusCode;
   bool truncated = false;
   int totalResponseBytes = 0;
@@ -103,6 +107,8 @@ class AiExchange {
     'completedAtUtc': completedAtUtc?.toIso8601String(),
     'durationMs': completedAtUtc?.difference(createdAtUtc).inMilliseconds,
     'provider': provider,
+    if (stage != null) 'stage': stage,
+    if (playerEventId != null) 'playerEventId': playerEventId,
     'credentialsRedacted': true,
     'request': {
       'method': method,
@@ -171,6 +177,10 @@ class StoredAiDiagnostic {
     final response = data['response'];
     return response is Map<String, dynamic> ? response['statusCode'] as int? : null;
   }
+
+  bool isNarratorForTurn(int playerId) =>
+      data['stage'] == 'narrator_raw' &&
+      data['playerEventId'] == playerId;
 
   /// An AI request can produce multiple chat bubbles; each keeps its own
   /// event ID in the interpreted events of the exact captured HTTP exchange.

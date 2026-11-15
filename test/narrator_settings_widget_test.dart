@@ -34,8 +34,11 @@ class _NoNetworkProvider implements AiChatProvider {
     int maxTokens = 1200,
   }) async {
     calls++;
-    return '{"type":"message","speaker":"narrator","name":"Narrateur",'
-        '"text":"Bienvenue !"}';
+    if (messages.first.content.contains('JSONificateur')) {
+      return '{"events":[{"type":"message","start":0,"end":11,'
+          '"speaker":"narrator","name":"Narrateur"}]}';
+    }
+    return 'Bienvenue !';
   }
 }
 
@@ -135,7 +138,7 @@ void main() {
         'J’ouvre la porte.');
     await tester.tap(find.byKey(const ValueKey('groupChatSend')));
     await tester.pumpAndSettle();
-    expect(fake.calls, 1);
+    expect(fake.calls, 2);
     expect(chat.messages.map((item) => item.name),
         ['Narrateur', 'Vous', 'Narrateur']);
     expect(find.text('La salle est silencieuse.'), findsOneWidget);

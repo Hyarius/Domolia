@@ -20,7 +20,7 @@ L'application est exécutée sur le téléphone avec des données locales (SQLit
 
 Le **Livre** est une définition partageable (identité, couverture, tags, narrateur, scénario et personnages à venir). Une **Partie / BookSession** est la progression privée d'un joueur, associée à un Livre. Plusieurs Parties peuvent utiliser la même définition. Les configurations IA appartiennent exclusivement au joueur : un Livre ne stocke qu'une liaison locale à un ID de profil, jamais le profil ni ses secrets. Voir [format portable des Livres](../books/format.md).
 
-La refonte autour des Livres est intégrée à la fin de PR04, avant les compléments de PR05. PR05 termine la gestion multi-parties et la robustesse SQLite ; PR06 enrichit le narrateur déjà propre à chaque Livre ; PR07 fournit les onglets Scénario/Personnages ; PR08 construit un contexte explicite Livre+Partie.
+La refonte autour des Livres est intégrée à la fin de PR04, avant les compléments de PR05. PR05 termine la gestion multi-parties et la robustesse SQLite ; PR06 enrichit le narrateur déjà propre à chaque Livre ; PR07 fournit les onglets Scénario/Personnages ; PR08 livre le pipeline narratif RAW → JSONificateur, la continuité littéraire et SQLite v4.
 
 ## Jalons
 
@@ -42,7 +42,7 @@ La refonte autour des Livres est intégrée à la fin de PR04, avant les complé
 - **[PR05 — Aventures et conversations persistantes](PR05.md)** — socle Livres livré, suite à développer : Les aventures peuvent être créées, nommées, rouvertes et poursuivies après fermeture de Domolia.
 - **[PR06 — Narrateur RP, liberté du joueur et préférences](PR06.md)** : Le chat devient un véritable jeu de rôle narratif en français : aventures, exploration, quotidien et relations, sans voler les décisions du personnage joueur.
 - **[PR07 — Création de monde, aventure et personnage joueur](PR07.md)** : L'utilisateur façonne le cadre de son aventure et définit son personnage avant de commencer à jouer.
-- **[PR08 — Constructeur de contexte et continuité narrative](PR08.md)** : Le narrateur reçoit automatiquement les informations pertinentes sur l'aventure, sans devoir relire tout l'historique à chaque tour.
+- **[PR08 — Pipeline narratif multiphase RAW → JSONificateur](PR08.md)** : Le narrateur écrit librement, puis une deuxième IA convertit la prose en bulles et séparateurs de scène, sans texte perdu ; le RAW est sauvegardé.
 - **[PR09 — Répertoire de PNJ et de lieux, éditable](PR09.md)** : Créer soi-même des PNJ, des lieux et des relations simples depuis un carnet du monde, puis les retrouver dans l'histoire.
 - **[PR10 — Mémoire automatique, événements et nouveaux PNJ](PR10.md)** : Domolia suggère de mémoriser les événements importants, et détecte les nouveaux PNJ/lieux sans casser la continuité.
 - **[PR11 — État de scène, déplacements et chronologie](PR11.md)** : Le monde suit où sont les gens, quand se déroulent les événements et ce qui a changé physiquement dans la scène.

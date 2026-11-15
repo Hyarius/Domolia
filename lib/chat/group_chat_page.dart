@@ -146,6 +146,45 @@ class _GroupChatPageState extends State<GroupChatPage> {
     }
   }
 
+  /// Expose the original literary HTTP exchange for the same player turn,
+  /// independently from the formatter exchange used by bubble export.
+  Future<void> _exportNarratorRaw(ChatEntry entry) async {
+    final playerId = widget.controller.playerIdForAiMessage(entry.id);
+    if (playerId == null) return;
+    try {
+      final choices = <StoredAiDiagnostic>[];
+      final last = widget.controller.lastExchange;
+      if (last != null) {
+        choices.add(StoredAiDiagnostic(
+          id: 'latest', sessionId: '', createdAtUtc: last.createdAtUtc,
+          content: last.exportJson(),
+        ));
+      }
+      if (widget.onLoadDiagnostics != null) {
+        choices.addAll(await widget.onLoadDiagnostics!());
+      }
+      if (!mounted) return;
+      StoredAiDiagnostic? selected;
+      for (final candidate in choices) {
+        if (candidate.isNarratorForTurn(playerId)) {
+          selected = candidate;
+          break;
+        }
+      }
+      if (selected == null) {
+        _showExportMessage('Aucun diagnostic RAW conservé pour ce tour '
+            '(traces purgées ou conservation désactivée).');
+        return;
+      }
+      await _saveDiagnostic(
+        'domolia-tour-$playerId-narrateur-raw.json',
+        selected.data,
+      );
+    } catch (_) {
+      _showExportMessage('Impossible de lire le diagnostic RAW.');
+    }
+  }
+
   Future<void> _editPlayerMessage(ChatEntry entry) async {
     final updated = await showDialog<String>(
       context: context,
@@ -220,6 +259,26 @@ class _GroupChatPageState extends State<GroupChatPage> {
               subtitle: Text(entry.text,
                 maxLines: 2, overflow: TextOverflow.ellipsis),
             ),
+            if (!widget.controller.hasSceneChangeBefore(entry.id)) 
+              ListTile(
+                key: const ValueKey('chatActionStartScene'),
+                leading: const Icon(Icons.segment),
+                title: const Text('Commencer une scène ici'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.controller.startSceneAt(entry.id);
+                },
+              )
+            else
+              ListTile(
+                key: const ValueKey('chatActionRemoveScene'),
+                leading: const Icon(Icons.remove),
+                title: const Text('Supprimer le changement de scène'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.controller.removeSceneBefore(entry.id);
+                },
+              ),
             if (isPlayer) ...[
               ListTile(
                 key: const ValueKey('chatActionEdit'),
@@ -259,6 +318,16 @@ class _GroupChatPageState extends State<GroupChatPage> {
                   await _exportAiMessage(entry);
                 },
               ),
+              if (widget.controller.playerIdForAiMessage(entry.id) != null)
+                ListTile(
+                  key: const ValueKey('chatActionExportNarratorRaw'),
+                  leading: const Icon(Icons.article_outlined),
+                  title: const Text('Exporter le narrateur RAW'),
+                  onTap: () async {
+                    Navigator.pop(sheetContext);
+                    await _exportNarratorRaw(entry);
+                  },
+                ),
             ],
           ],
         ),
@@ -305,10 +374,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
     return AnimatedBuilder(
       animation: chat,
       builder: (context, _) {
-        final transcript = [
-          ...chat.timeline,
-          if (chat.preview != null) chat.preview!,
-        ];
+        final transcript = chat.timeline;
         return SafeArea(
           child: Column(
             children: [
@@ -410,6 +476,25 @@ class _GroupChatPageState extends State<GroupChatPage> {
                         },
                       ),
               ),
+              if (chat.busy)
+                const Padding(
+                  key: ValueKey('chatWritingIndicator'),
+                  padding: EdgeInsets.fromLTRB(18, 8, 18, 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit_note_rounded,
+                        color: DomoliaColors.goldLight, size: 22),
+                      SizedBox(width: 8),
+                      Text('Le narrateur écrit…',
+                        style: TextStyle(color: DomoliaColors.goldLight,
+                          fontStyle: FontStyle.italic)),
+                      SizedBox(width: 10),
+                      SizedBox(width: 14, height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 1.5,
+                          color: DomoliaColors.goldDark)),
+                    ],
+                  ),
+                ),
               if (chat.error != null)
                 Container(
                   key: const ValueKey('chatErrorBanner'),

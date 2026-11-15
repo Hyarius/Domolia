@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -8,7 +7,9 @@ import '../ai/ai_provider.dart';
 import '../ai/ai_diagnostics.dart';
 import '../logging/app_logger.dart';
 import 'chat_protocol.dart';
+import 'jsonifier.dart';
 import 'narrator.dart';
+import 'raw_generation.dart';
 
 class NarrativeAiEndpoint {
   const NarrativeAiEndpoint({required this.provider, required this.configuration});
@@ -16,14 +17,20 @@ class NarrativeAiEndpoint {
   final AiConfiguration configuration;
 }
 
+class _Cancelled implements Exception {}
+
+/// A two-call pipeline. No AI event is observable before the RAW and its
+/// complete validated representation have been written to durable storage.
 class NarrativeChatController extends ChangeNotifier {
   NarrativeChatController({
     required this.provider,
     required this.configuration,
     this.resolveConnection,
+    this.resolveFormatterConnection,
     this.narrator = const Narrator(),
     this.narratorProvider,
     this.onTimelineChanged,
+    this.onPersistState,
     this.onExchangeCaptured,
     this.diagnostics,
     int Function(int count)? selectOpeningIndex,
@@ -32,98 +39,48 @@ class NarrativeChatController extends ChangeNotifier {
   final AiChatProvider provider;
   final AiConfiguration? Function() configuration;
   final Future<NarrativeAiEndpoint> Function()? resolveConnection;
+  /// Optional distinct profile for later; defaults to the narrator endpoint.
+  final Future<NarrativeAiEndpoint> Function()? resolveFormatterConnection;
   final Narrator narrator;
-  final AiExchangeRecorder? diagnostics;
-  /// Called once for each actually emitted HTTP request after decoding.
-  final void Function(AiExchange exchange)? onExchangeCaptured;
-  AiExchange? lastExchange;
-
-  /// Hide purged traces from the current screen as well as from SQLite.
-  void forgetLastExchange() {
-    lastExchange = null;
-    diagnostics?.last = null;
-    _notify();
-  }
-
-
-  /// Reads the latest saved narrator settings for each new model request.
   final Narrator Function()? narratorProvider;
-  final int Function(int count) _selectOpeningIndex;
-
-  /// Store only committed events, never streaming previews.
+  final AiExchangeRecorder? diagnostics;
+  final void Function(AiExchange exchange)? onExchangeCaptured;
   final void Function(List<ChatTimelineEvent> events)? onTimelineChanged;
 
-  void _timelineChanged() =>
-      onTimelineChanged?.call(List<ChatTimelineEvent>.unmodifiable(_timeline));
+  /// Production persists timeline + RAW records in one SQLite transaction.
+  /// A pending RAW is saved before the JSONification HTTP request begins.
+  final Future<void> Function(
+    List<ChatTimelineEvent> timeline,
+    List<RawGeneration> generations,
+  )? onPersistState;
 
-  /// Restore a saved session before beginConversation without triggering AI.
-  void restoreTimeline(List<ChatTimelineEvent> events) {
-    if (_closed || busy || _timeline.isNotEmpty) {
-      throw StateError('La conversation est déjà ouverte.');
-    }
-    _timeline.addAll(events);
-    _started = events.isNotEmpty;
-    if (events.isNotEmpty) {
-      _nextId = events.last.id + 1;
-      final last = _timeline.lastIndexWhere(
-        (item) => item is ChatEntry && item.speaker == ChatSpeaker.player,
-      );
-      _lastPlayerIndex = last < 0 ? null : last;
-    }
-    _notify();
-  }
-  bool _started = false;
-
-  /// Adds one local narrator bubble at the beginning of the conversation.
-  /// Calling this after navigating away and back is always a no-op.
-  void beginConversation() {
-    if (_closed || _started || _timeline.isNotEmpty) return;
-    _started = true;
-    final candidates = (narratorProvider?.call() ?? narrator).openingMessages
-        .where((message) => message.trim().isNotEmpty)
-        .toList(growable: false);
-    if (candidates.isEmpty) return;
-    final index = _selectOpeningIndex(candidates.length);
-    if (index < 0 || index >= candidates.length) {
-      throw RangeError.range(index, 0, candidates.length - 1, 'openingIndex');
-    }
-    _timeline.add(ChatEntry(
-      id: _nextId++,
-      speaker: ChatSpeaker.narrator,
-      name: 'Narrateur',
-      text: candidates[index].trim(),
-    ));
-    _timelineChanged();
-    _notify();
-  }
-
+  final int Function(int count) _selectOpeningIndex;
   final List<ChatTimelineEvent> _timeline = [];
-  List<ChatTimelineEvent> get timeline => List.unmodifiable(_timeline);
+  final List<RawGeneration> _generations = [];
 
-  /// Only dialogue bubbles. Old callers need not know about scene dividers.
+  List<ChatTimelineEvent> get timeline => List.unmodifiable(_timeline);
+  List<RawGeneration> get rawGenerations => List.unmodifiable(_generations);
   List<ChatEntry> get messages =>
       List.unmodifiable(_timeline.whereType<ChatEntry>());
-
-  /// A future image prompt builder can read just the current scene's dialogue.
   List<ChatEntry> get currentSceneMessages {
-    final boundary = _timeline.lastIndexWhere(
-      (event) => event is ChatSceneChange,
-    );
-    return List.unmodifiable(
-      _timeline.skip(boundary + 1).whereType<ChatEntry>(),
-    );
+    final boundary = _timeline.lastIndexWhere((e) => e is ChatSceneChange);
+    return List.unmodifiable(_timeline.skip(boundary + 1).whereType<ChatEntry>());
   }
-  ChatEntry? preview;
+
+  /// The old streaming preview API is intentionally inert.
+  ChatEntry? get preview => null;
   bool busy = false;
   String? error;
   int? promptTokens;
   int? completionTokens;
   String? modelUsed;
+  AiExchange? lastExchange;
   bool _closed = false;
+  bool _started = false;
+  bool _committingSnapshot = false;
   int _nextId = 0;
   int? _lastPlayerIndex;
-  int _currentTurnCount = 0;
-  bool _cancelled = false;
+  int _generationToken = 0;
   StreamSubscription<AiStreamChunk>? _subscription;
   Completer<void>? _done;
 
@@ -131,9 +88,90 @@ class NarrativeChatController extends ChangeNotifier {
     if (!_closed) notifyListeners();
   }
 
+  void _timelineChanged() =>
+      onTimelineChanged?.call(List.unmodifiable(_timeline));
+
+  void forgetLastExchange() {
+    lastExchange = null;
+    diagnostics?.last = null;
+    _notify();
+  }
+
+  void restoreTimeline(List<ChatTimelineEvent> events, {
+    List<RawGeneration> rawGenerations = const [],
+  }) {
+    if (_closed || busy || _timeline.isNotEmpty) {
+      throw StateError('La conversation est déjà ouverte.');
+    }
+    _timeline.addAll(events);
+    _generations.addAll(rawGenerations);
+    _started = events.isNotEmpty;
+    for (final event in events) {
+      if (event.id >= _nextId) _nextId = event.id + 1;
+    }
+    final last = _timeline.lastIndexWhere(
+      (e) => e is ChatEntry && e.speaker == ChatSpeaker.player,
+    );
+    _lastPlayerIndex = last < 0 ? null : last;
+    if (pendingRaw != null) {
+      error = 'Une réponse attend sa mise en forme. '
+          'Réessayez sans régénérer le récit.';
+    }
+    _notify();
+  }
+
+  void beginConversation() {
+    if (_closed || _started || _timeline.isNotEmpty) return;
+    _started = true;
+    final openings = (narratorProvider?.call() ?? narrator).openingMessages
+        .where((s) => s.trim().isNotEmpty).toList(growable: false);
+    if (openings.isEmpty) return;
+    final index = _selectOpeningIndex(openings.length);
+    if (index < 0 || index >= openings.length) {
+      throw RangeError.range(index, 0, openings.length - 1);
+    }
+    _timeline.add(ChatEntry(
+      id: _nextId++, speaker: ChatSpeaker.narrator,
+      name: 'Narrateur', text: openings[index].trim(),
+    ));
+    _timelineChanged();
+    _notify();
+  }
+
+  int _playerIndex(int id) => _timeline.indexWhere(
+    (e) => e is ChatEntry && e.id == id &&
+        e.speaker == ChatSpeaker.player,
+  );
+
+  int? get _playerEventId => _lastPlayerIndex == null
+      ? null : (_timeline[_lastPlayerIndex!] as ChatEntry).id;
+
+  RawGeneration? get pendingRaw {
+    final playerId = _playerEventId;
+    if (playerId == null) return null;
+    for (final generation in _generations.reversed) {
+      if (generation.playerEventId == playerId && !generation.isStructured) {
+        return generation;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _save(
+    List<ChatTimelineEvent> events,
+    List<RawGeneration> raws,
+  ) async {
+    await onPersistState?.call(List.unmodifiable(events), List.unmodifiable(raws));
+  }
+
   Future<void> send(String text) async {
     final action = text.trim();
     if (_closed || busy || action.isEmpty) return;
+    if (pendingRaw != null) {
+      error = 'Terminez ou régénérez la réponse en attente avant de continuer.';
+      _notify();
+      return;
+    }
     if (action.length > 4000) {
       error = 'Le message est trop long (maximum 4 000 caractères).';
       _notify();
@@ -141,344 +179,433 @@ class NarrativeChatController extends ChangeNotifier {
     }
     _lastPlayerIndex = _timeline.length;
     _timeline.add(ChatEntry(
-      id: _nextId++,
-      speaker: ChatSpeaker.player,
-      name: 'Vous',
-      text: action,
+      id: _nextId++, speaker: ChatSpeaker.player,
+      name: 'Vous', text: action,
     ));
     _timelineChanged();
+    _notify();
     await _generate();
+  }
+
+  Future<void> retry() async {
+    if (_closed || busy || _lastPlayerIndex == null) return;
+    if (pendingRaw != null) {
+      await _generate(reuseRaw: true);
+    } else {
+      await regenerate();
+    }
   }
 
   Future<void> regenerate() async {
     if (_closed || busy || _lastPlayerIndex == null) return;
-    // Keep the original player message. Never add it a second time.
     _timeline.removeRange(_lastPlayerIndex! + 1, _timeline.length);
+    _dropGenerationsFromPlayer(_playerEventId!);
     _timelineChanged();
+    _notify();
     await _generate();
   }
 
-  Future<void> retry() => regenerate();
+  void _dropGenerationsFromPlayer(int playerId) {
+    _generations.removeWhere((e) => e.playerEventId >= playerId);
+  }
 
-  int _playerIndex(int id) => _timeline.indexWhere(
-    (event) => event is ChatEntry &&
-        event.id == id && event.speaker == ChatSpeaker.player,
-  );
-
-  /// Edits a previously committed player message without altering history.
-  /// The player can then choose « Reprendre ici » to rebuild the future.
   bool editPlayerMessage(int id, String text) {
     final value = text.trim();
-    if (_closed || busy || value.isEmpty || value.length > 4000) return false;
+    // A pending RAW belongs to the exact player history that produced it.
+    // Editing any previous action would silently attach stale prose to new input.
+    if (_closed || busy || pendingRaw != null ||
+        value.isEmpty || value.length > 4000) {
+      return false;
+    }
     final index = _playerIndex(id);
     if (index < 0) return false;
     final old = _timeline[index] as ChatEntry;
-    if (old.text == value) return true;
-    _timeline[index] = ChatEntry(
-      id: old.id, speaker: old.speaker, name: old.name, text: value,
-    );
-    _timelineChanged();
-    _notify();
+    if (old.text != value) {
+      _timeline[index] = ChatEntry(
+        id: old.id, speaker: old.speaker, name: old.name, text: value,
+      );
+      _timelineChanged();
+      _notify();
+    }
     return true;
   }
 
-  /// Discards every event after the chosen player entry (including scene
-  /// changes), then generates a new turn from its possibly edited text.
-  /// Event IDs remain monotonic to keep older diagnostics unambiguous.
   Future<bool> resumeFromPlayerMessage(int id) async {
     if (_closed || busy) return false;
     final index = _playerIndex(id);
     if (index < 0) return false;
     _timeline.removeRange(index + 1, _timeline.length);
     _lastPlayerIndex = index;
+    _dropGenerationsFromPlayer(id);
     _timelineChanged();
     _notify();
     await _generate();
     return true;
   }
 
-  /// AI output is a multi-message turn, so regeneration replaces the whole
-  /// turn, not just one bubble (which could duplicate dialogue or dividers).
+  /// Return the origin of a structured reply for diagnostics, not its
+  /// positional index (manual scene edits preserve original message IDs).
+  int? playerIdForAiMessage(int id) {
+    final index = _timeline.indexWhere((event) => event.id == id);
+    if (index < 0 || _timeline[index] is! ChatEntry ||
+        (_timeline[index] as ChatEntry).speaker == ChatSpeaker.player) {
+      return null;
+    }
+    for (var i = index - 1; i >= 0; i--) {
+      final event = _timeline[i];
+      if (event is ChatEntry && event.speaker == ChatSpeaker.player) {
+        return event.id;
+      }
+    }
+    return null;
+  }
+
   bool canRegenerateFromAiMessage(int id) {
     if (_closed || busy) return false;
     final index = _timeline.indexWhere(
-      (event) => event is ChatEntry &&
-          event.id == id && event.speaker != ChatSpeaker.player,
+      (e) => e is ChatEntry && e.id == id &&
+          e.speaker != ChatSpeaker.player,
     );
-    if (index < 0) return false;
-    return _timeline.take(index).any(
-      (event) => event is ChatEntry && event.speaker == ChatSpeaker.player,
+    return index >= 0 && _timeline.take(index).any(
+      (e) => e is ChatEntry && e.speaker == ChatSpeaker.player,
     );
   }
 
   Future<bool> regenerateFromAiMessage(int id) async {
     if (!canRegenerateFromAiMessage(id)) return false;
-    final index = _timeline.indexWhere((event) => event.id == id);
+    final index = _timeline.indexWhere((e) => e.id == id);
     final player = _timeline.take(index).lastWhere(
-      (event) => event is ChatEntry && event.speaker == ChatSpeaker.player,
+      (e) => e is ChatEntry && e.speaker == ChatSpeaker.player,
     ) as ChatEntry;
     return resumeFromPlayerMessage(player.id);
   }
 
-  List<AiMessage> _buildContext() {
-    final recent = _timeline.length > 35
-        ? _timeline.sublist(_timeline.length - 35)
-        : _timeline;
+  bool hasSceneChangeBefore(int messageId) {
+    final index = _timeline.indexWhere((e) => e.id == messageId);
+    return index > 0 && _timeline[index - 1] is ChatSceneChange;
+  }
+
+  bool startSceneAt(int messageId) {
+    if (_closed || busy) return false;
+    final index = _timeline.indexWhere(
+      (e) => e.id == messageId && e is ChatEntry,
+    );
+    if (index <= 0 || _timeline[index - 1] is ChatSceneChange) return false;
+    _timeline.insert(index, ChatSceneChange(id: _nextId++));
+    // The index is positional, whereas event IDs remain stable after edits.
+    if (_lastPlayerIndex != null && index <= _lastPlayerIndex!) {
+      _lastPlayerIndex = _lastPlayerIndex! + 1;
+    }
+    _timelineChanged();
+    _notify();
+    return true;
+  }
+
+  bool removeSceneBefore(int messageId) {
+    if (_closed || busy) return false;
+    final index = _timeline.indexWhere((e) => e.id == messageId);
+    if (index <= 0 || _timeline[index - 1] is! ChatSceneChange) return false;
+    _timeline.removeAt(index - 1);
+    if (_lastPlayerIndex != null && index - 1 < _lastPlayerIndex!) {
+      _lastPlayerIndex = _lastPlayerIndex! - 1;
+    }
+    _timelineChanged();
+    _notify();
+    return true;
+  }
+
+  /// The last 24 conversational turns / 16k UTF-16 units are retained.
+  /// Original RAW replaces only the generated events of its own turn.
+  /// Legacy sessions without RAW fall back to their structured history.
+  List<AiMessage> buildNarratorContext() {
+    final history = <AiMessage>[];
+    final raws = {for (final r in _generations)
+      if (r.isStructured) r.playerEventId: r};
+    RawGeneration? active;
+    var rawEmitted = false;
+    for (final event in _timeline) {
+      if (event is ChatEntry && event.speaker == ChatSpeaker.player) {
+        active = raws[event.id];
+        rawEmitted = false;
+        history.add(AiMessage(role: 'user', content: event.text));
+      } else if (event is ChatEntry || event is ChatSceneChange) {
+        if (active != null) {
+          if (!rawEmitted) {
+            history.add(AiMessage(role: 'assistant', content: active.rawText));
+            rawEmitted = true;
+          }
+        } else if (event is ChatEntry) {
+          history.add(AiMessage(role: 'assistant',
+              content: event.speaker == ChatSpeaker.narrator
+                  ? event.text : '${event.name} : ${event.text}'));
+        } else {
+          history.add(const AiMessage(role: 'assistant',
+              content: 'Une nouvelle scène commence.'));
+        }
+      }
+    }
+    final selected = <AiMessage>[];
+    var used = 0;
+    for (final entry in history.reversed) {
+      if (selected.length >= 24 || used + entry.content.length > 16000 &&
+          selected.isNotEmpty) {
+        break;
+      }
+      selected.add(entry);
+      used += entry.content.length;
+    }
     return [
-      AiMessage(
-        role: 'system',
-        content: (narratorProvider?.call() ?? narrator).systemPrompt,
-      ),
-      for (final event in recent)
-        if (event is ChatSceneChange)
-          const AiMessage(
-            role: 'assistant',
-            content: '{"type":"scene_change"}',
-          )
-        else if (event is ChatEntry)
-          AiMessage(
-            role: event.speaker == ChatSpeaker.player ? 'user' : 'assistant',
-            content: event.speaker == ChatSpeaker.player
-                ? event.text
-                : jsonEncode({
-                    'type': 'message',
-                    'speaker': event.speaker == ChatSpeaker.narrator
-                        ? 'narrator'
-                        : 'character',
-                    'name': event.name,
-                    'text': event.text,
-                  }),
-          ),
+      AiMessage(role: 'system',
+          content: (narratorProvider?.call() ?? narrator).systemPrompt),
+      ...selected.reversed,
     ];
   }
 
-  void _addLines(Iterable<ChatOutputEvent> events) {
-    var changed = false;
-    for (final event in events) {
-      changed = true;
-      if (event is ChatSceneChangeOutput) {
-        if (_timeline.isEmpty || _timeline.last is ChatSceneChange) {
-          throw const FormatException('Changement de scène consécutif ou isolé.');
-        }
-        _timeline.add(ChatSceneChange(id: _nextId++));
-      } else if (event is ChatLine) {
-        _currentTurnCount++;
-        _timeline.add(ChatEntry(
-          id: _nextId++,
-          speaker: event.speaker,
-          name: event.name,
-          text: event.text,
-        ));
-      }
-    }
-    if (changed) _timelineChanged();
+  List<AiMessage> _jsonifierContext(String raw) {
+    final previous = _timeline.reversed.whereType<ChatEntry>()
+        .take(6).toList().reversed;
+    final context = [
+      for (final entry in previous)
+        '${entry.name} : ${entry.text}',
+    ].join('\n');
+    return [
+      const AiMessage(role: 'system', content: jsonifierSystemPrompt),
+      AiMessage(role: 'user',
+          content: 'Contexte précédent (ne pas convertir) :\n' 
+              '$context\n\nTexte RAW à convertir :\n$raw'),
+    ];
   }
 
-  Future<void> _generate() async {
-    lastExchange = null;
-    error = null;
-    busy = true;
-    _cancelled = false;
-    _currentTurnCount = 0;
-    promptTokens = null;
-    completionTokens = null;
-    preview = ChatEntry(
-      id: -1, speaker: ChatSpeaker.narrator, name: 'Narrateur',
-      text: 'Rédaction en cours…', inProgress: true,
-    );
-    _notify();
+  void _check(int token) {
+    if (_closed || token != _generationToken) throw _Cancelled();
+  }
 
-    NarrativeAiEndpoint? endpoint;
-    try {
-      if (resolveConnection != null) {
-        endpoint = await resolveConnection!();
-      } else {
-        final config = configuration();
-        if (config != null) {
-          endpoint = NarrativeAiEndpoint(
-            provider: provider,
-            configuration: config,
-          );
-        }
-      }
-    } on AiProviderException catch (failure) {
-      error = failure.userMessage;
-    } catch (_) {
-      error = 'Impossible de préparer la connexion IA.';
-    }
-    if (_closed || _cancelled) return;
-    if (endpoint == null || endpoint.configuration.apiKey.isEmpty) {
-      error ??= 'Configurez une connexion IA valide dans les paramètres.';
-      preview = null;
-      busy = false;
-      _notify();
-      return;
-    }
-    final selectedProvider = endpoint.provider;
-    final config = endpoint.configuration;
-    modelUsed = config.model;
-
-    AppLogger.info('Début de génération IA', component: 'chat');
-    final decoder = ChatLineDecoder();
-    final context = _buildContext();
-    final priorExchange = diagnostics?.last;
-    final responseStart = _timeline.length;
-    try {
-      if (selectedProvider is AiStreamingChatProvider) {
-        final complete = Completer<void>();
-        _done = complete;
-        _subscription = (selectedProvider as AiStreamingChatProvider)
-            .streamChat(config, messages: context, maxTokens: 1200)
-            .listen(
-          (chunk) {
-            if (_cancelled || _closed) return;
-            try {
-              if (chunk.promptTokens != null) promptTokens = chunk.promptTokens;
-              if (chunk.completionTokens != null) {
-                completionTokens = chunk.completionTokens;
-              }
-              if (chunk.text.isNotEmpty) {
-                _addLines(decoder.add(chunk.text));
-                final current = decoder.preview;
-                preview = decoder.isPendingSceneChange
-                    ? null
-                    : current == null
-                        ? ChatEntry(
-                        id: -1,
-                        speaker: ChatSpeaker.narrator,
-                        name: 'Narrateur',
-                        text: 'Rédaction en cours…',
-                        inProgress: true,
-                      )
-                    : ChatEntry(
-                        id: -1,
-                        speaker: current.speaker,
-                        name: current.name,
-                        text: current.text.isEmpty ? '…' : current.text,
-                        inProgress: true,
-                      );
-              }
-              _notify();
-            } catch (failure, stackTrace) {
-              // The parser may have decoded a valid prefix in this same chunk.
-              _addLines(decoder.takeAcceptedBeforeError());
-              error = failure is FormatException
-                  ? failure.message
-                  : 'Le format de la réponse IA est invalide.';
-              AppLogger.error('Décodage de génération IA rejeté',
-                component: 'chat', error: failure, stackTrace: stackTrace,
-                details: {
-                  'reason': failure is ChatProtocolException
-                      ? failure.problem.name : 'invalidOutput',
-                  'preservedEvents': _currentTurnCount,
-                });
-              _subscription?.cancel();
-              if (!complete.isCompleted) complete.complete();
+  /// Same HTTP provider and diagnostic recorder for both phases.
+  Future<String> _requestText(NarrativeAiEndpoint endpoint,
+      List<AiMessage> context, int token, int maxTokens) async {
+    final buffer = StringBuffer();
+    if (endpoint.provider is AiStreamingChatProvider) {
+      final finished = Completer<void>();
+      _done = finished;
+      Object? failure;
+      _subscription = (endpoint.provider as AiStreamingChatProvider)
+          .streamChat(endpoint.configuration,
+              messages: context, maxTokens: maxTokens)
+          .listen((chunk) {
+            if (_closed || token != _generationToken) return;
+            if (chunk.promptTokens != null) promptTokens = chunk.promptTokens;
+            if (chunk.completionTokens != null) {
+              completionTokens = chunk.completionTokens;
             }
-          },
-          onError: (Object failure, StackTrace trace) {
-            if (!_cancelled) {
-              error = failure is AiProviderException
-                  ? failure.userMessage
-                  : 'La connexion a été interrompue. Réessayez.';
+            buffer.write(chunk.text);
+            if (buffer.length > 131072) {
+              failure = const FormatException('Réponse IA trop volumineuse.');
+              unawaited(_subscription?.cancel() ?? Future<void>.value());
+              if (!finished.isCompleted) finished.complete();
             }
-            if (!complete.isCompleted) complete.complete();
-          },
-          onDone: () {
-            if (!_cancelled && error == null) {
-              try {
-                _addLines(decoder.finish());
-              } on FormatException catch (failure, stackTrace) {
-                error = failure.message;
-                AppLogger.error('Dernière ligne IA rejetée',
-                  component: 'chat', error: failure, stackTrace: stackTrace,
-                  details: {'reason': failure is ChatProtocolException
-                      ? failure.problem.name : 'invalidOutput'});
-              }
-            }
-            if (!complete.isCompleted) complete.complete();
-          },
-          cancelOnError: true,
-        );
-        await complete.future;
-      } else {
-        // A provider can implement only AiChatProvider.complete(). In that
-        // case the same strict format is decoded after its single response.
-        final text = await selectedProvider.complete(
-          config, messages: context, maxTokens: 1200,
-        );
-        if (!_cancelled) {
-          _addLines(decoder.add(text));
-          _addLines(decoder.finish());
-        }
-      }
-      if (!_cancelled && error == null && _currentTurnCount == 0) {
-        error = 'Le modèle n’a retourné aucun message exploitable.';
-      }
-    } on AiProviderException catch (failure) {
-      if (!_cancelled) error = failure.userMessage;
-      AppLogger.warning('Fournisseur IA indisponible', component: 'chat',
-        details: {'exceptionType': failure.runtimeType.toString()});
-    } on FormatException catch (failure, stackTrace) {
-      _addLines(decoder.takeAcceptedBeforeError());
-      if (!_cancelled) error = failure.message;
-      AppLogger.error('Protocole narratif rejeté', component: 'chat',
-        error: failure, stackTrace: stackTrace,
-        details: {'reason': failure is ChatProtocolException
-            ? failure.problem.name : 'invalidOutput'});
-    } catch (failure, stackTrace) {
-      if (!_cancelled) error = 'Impossible de générer la réponse. Réessayez.';
-      AppLogger.error('Génération IA échouée', component: 'chat',
-          error: failure, stackTrace: stackTrace);
-    } finally {
-      AppLogger.info(_cancelled ? 'Génération interrompue'
-          : error == null ? 'Génération terminée' : 'Génération terminée en erreur',
-          component: 'chat', details: {'acceptedMessages': _currentTurnCount});
-      if (diagnostics?.last != null && diagnostics?.last != priorExchange) {
-        final exchange = diagnostics!.last!;
-        exchange.complete(
-          promptTokens: promptTokens,
-          completionTokens: completionTokens,
-          error: error,
-          cancelled: _cancelled,
-          interpretedEvents: [
-            for (final event in _timeline.skip(responseStart))
-              if (event is ChatSceneChange)
-                <String, dynamic>{
-                  'id': event.id,
-                  'type': 'scene_change',
-                }
-              else if (event is ChatEntry)
-                <String, dynamic>{
-                  'id': event.id,
-                  'type': 'message',
-                  'speaker': event.speaker.name,
-                  'name': event.name,
-                  'text': event.text,
-                },
-          ],
-        );
-        lastExchange = exchange;
-        try {
-          onExchangeCaptured?.call(exchange);
-        } catch (_) {
-          // Diagnostic persistence must never interrupt the conversation.
-        }
-      }
+          }, onError: (Object e, StackTrace st) {
+            failure = e;
+            if (!finished.isCompleted) finished.complete();
+          }, onDone: () {
+            if (!finished.isCompleted) finished.complete();
+          }, cancelOnError: true);
+      await finished.future;
       _subscription = null;
       _done = null;
-      preview = null;
-      busy = false;
-      _notify();
+      _check(token);
+      if (failure != null) throw failure!;
+      return buffer.toString();
+    }
+    final result = await endpoint.provider.complete(endpoint.configuration,
+        messages: context, maxTokens: maxTokens);
+    _check(token);
+    return result;
+  }
+
+  void _capture(String stage, AiExchange? before,
+      {Object? failure, List<ChatTimelineEvent> events = const []}) {
+    final current = diagnostics?.last;
+    if (current == null || identical(before, current)) return;
+    current.stage = stage;
+    current.playerEventId = _playerEventId;
+    current.complete(
+      promptTokens: promptTokens, completionTokens: completionTokens,
+      error: failure?.toString(),
+      cancelled: failure is _Cancelled,
+      interpretedEvents: [
+        for (final event in events)
+          if (event is ChatSceneChange)
+            <String, dynamic>{'id': event.id, 'type': 'scene_change'}
+          else if (event is ChatEntry)
+            <String, dynamic>{
+              'id': event.id, 'type': 'message',
+              'speaker': event.speaker.name, 'name': event.name,
+              'text': event.text,
+            },
+      ],
+    );
+    lastExchange = current;
+    try {
+      onExchangeCaptured?.call(current);
+    } catch (_) {
+      // Logging persistence cannot invalidate an otherwise committed turn.
+    }
+  }
+
+  Future<void> _generate({bool reuseRaw = false}) async {
+    if (_closed || busy || _lastPlayerIndex == null) return;
+    final token = ++_generationToken;
+    error = null;
+    busy = true;
+    promptTokens = null;
+    completionTokens = null;
+    _notify();
+    final playerId = _playerEventId!;
+    RawGeneration? rawRecord = reuseRaw ? pendingRaw : null;
+    var stage = 'raw';
+    try {
+      // Persist rewinds/pruning before issuing another request.
+      await _save(_timeline, _generations);
+      _check(token);
+      final endpoint = resolveConnection != null
+          ? await resolveConnection!()
+          : configuration() == null ? null
+              : NarrativeAiEndpoint(
+                  provider: provider, configuration: configuration()!);
+      _check(token);
+      if (endpoint == null || endpoint.configuration.apiKey.isEmpty) {
+        throw const AiProviderException(
+          'Configurez une connexion IA valide dans les paramètres.');
+      }
+      modelUsed = endpoint.configuration.model;
+      if (rawRecord == null) {
+        AppLogger.info('Début narration RAW', component: 'chat');
+        final before = diagnostics?.last;
+        Object? failed;
+        try {
+          final response = await _requestText(
+              endpoint, buildNarratorContext(), token, 2400);
+          _check(token);
+          if (response.trim().isEmpty) {
+            throw const FormatException('Le narrateur a répondu sans texte.');
+          }
+          rawRecord = RawGeneration(
+            playerEventId: playerId, rawText: response);
+          final changed = [
+            ..._generations.where((r) => r.playerEventId != playerId),
+            rawRecord,
+          ];
+          await _save(_timeline, changed);
+          // A successful durable write must also survive cancellation in this
+          // controller: retry must never silently regenerate a saved RAW.
+          _generations
+            ..clear()
+            ..addAll(changed);
+          _check(token);
+          AppLogger.info('Narration RAW conservée', component: 'chat');
+        } catch (e) {
+          failed = e;
+          rethrow;
+        } finally {
+          _capture('narrator_raw', before, failure: failed);
+        }
+      }
+      _check(token);
+      stage = 'jsonifier';
+      final formatterEndpoint = resolveFormatterConnection == null
+          ? endpoint : await resolveFormatterConnection!();
+      _check(token);
+      AppLogger.info('Début JSONification', component: 'chat');
+      final before = diagnostics?.last;
+      Object? failed;
+      List<ChatTimelineEvent> additions = const [];
+      try {
+        final formatted = await _requestText(
+            formatterEndpoint, _jsonifierContext(rawRecord.rawText), token, 2400);
+        _check(token);
+        final known = _timeline.whereType<ChatEntry>()
+            .where((e) => e.speaker == ChatSpeaker.character)
+            .map((e) => e.name);
+        final decoded = const Jsonifier().decode(
+          rawRecord.rawText, formatted, knownCharacters: known,
+          hasPreviousScene: _timeline.isNotEmpty,
+        );
+        final prepared = <ChatTimelineEvent>[];
+        var id = _nextId;
+        for (final entry in decoded) {
+          if (entry is ChatSceneChangeOutput) {
+            if (prepared.isNotEmpty && prepared.last is ChatSceneChange ||
+                prepared.isEmpty && _timeline.isNotEmpty &&
+                    _timeline.last is ChatSceneChange) {
+              throw const FormatException('Séparateurs consécutifs.');
+            }
+            prepared.add(ChatSceneChange(id: id++));
+          } else if (entry is ChatLine) {
+            prepared.add(ChatEntry(id: id++, speaker: entry.speaker,
+                name: entry.name, text: entry.text));
+          }
+        }
+        if (prepared.whereType<ChatEntry>().isEmpty) {
+          throw const FormatException('JSONification sans message.');
+        }
+        final updated = [
+          ..._generations.where((g) => g.playerEventId != playerId),
+          rawRecord.structured(_nextId, id - 1),
+        ];
+        // Once the final transaction starts, stopping cannot safely undo it.
+        // Keep the UI busy until its success/failure is reconciled in memory.
+        _committingSnapshot = true;
+        try {
+          await _save([..._timeline, ...prepared], updated);
+        } finally {
+          _committingSnapshot = false;
+        }
+        _check(token);
+        _nextId = id;
+        _generations
+          ..clear()
+          ..addAll(updated);
+        _timeline.addAll(prepared);
+        additions = prepared;
+        _timelineChanged();
+        _notify();
+        AppLogger.info('JSONification validée et publiée', component: 'chat',
+            details: {'eventCount': prepared.length});
+      } catch (e, stack) {
+        failed = e;
+        AppLogger.error('JSONification rejetée', component: 'chat',
+            error: e, stackTrace: stack);
+        rethrow;
+      } finally {
+        _capture('jsonifier', before, failure: failed, events: additions);
+      }
+    } on _Cancelled {
+      // A late response is never committed to this or a different session.
+    } on AiProviderException catch (failure) {
+      error = failure.userMessage;
+    } on FormatException catch (failure) {
+      error = failure.message;
+    } catch (failure, stack) {
+      AppLogger.error('Pipeline narratif échoué', component: 'chat',
+          error: failure, stackTrace: stack);
+      error = stage == 'jsonifier'
+          ? 'JSONification impossible. Réessayez sans régénérer le récit.'
+          : 'Génération impossible. Réessayez.';
+    } finally {
+      if (!_closed && token == _generationToken) {
+        busy = false;
+        _notify();
+      }
     }
   }
 
   void stop() {
-    if (!busy || _closed) return;
-    _cancelled = true;
-    AppLogger.info('Génération interrompue par le joueur', component: 'chat');
+    // A committed database transaction is irreversible. Finish publication
+    // instead of showing an aborted turn that reappears after app restart.
+    if (!busy || _closed || _committingSnapshot) return;
+    ++_generationToken;
+    AppLogger.info('Génération interrompue', component: 'chat');
     error = 'Génération interrompue.';
-    preview = null;
     busy = false;
     unawaited(_subscription?.cancel() ?? Future<void>.value());
     if (_done != null && !_done!.isCompleted) _done!.complete();
@@ -488,7 +615,7 @@ class NarrativeChatController extends ChangeNotifier {
   @override
   void dispose() {
     _closed = true;
-    _cancelled = true;
+    ++_generationToken;
     unawaited(_subscription?.cancel() ?? Future<void>.value());
     if (_done != null && !_done!.isCompleted) _done!.complete();
     super.dispose();
