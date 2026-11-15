@@ -439,6 +439,67 @@ void main() {
     expect((await reopened.findBook(book.id))!.title, book.title);
   });
 
+  test('SQLite stores compressed narrator context with immutable RAW',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('domolia-compact-');
+    final file = '${dir.path}/compact.sqlite';
+    final first = SqliteBookStore(factory: databaseFactoryFfi, databasePath: file);
+    addTearDown(() async {
+      await first.close();
+      await dir.delete(recursive: true);
+    });
+    await first.putBook(const BookDefinition(id: 'book', title: 'Livre'));
+    const session = BookSession(id: 'session', bookId: 'book', title: 'Partie',
+        timeline: [
+          ChatEntry(id: 0, speaker: ChatSpeaker.player,
+            name: 'Vous', text: 'Je regarde'),
+          ChatEntry(id: 1, speaker: ChatSpeaker.narrator,
+            name: 'Narrateur', text: 'Une porte grince.'),
+        ]);
+    await first.putSession(session);
+    await first.saveNarrativeSnapshot(session, const [
+      RawGeneration(playerEventId: 0, rawText: 'Une porte grince.',
+        compactText: 'La porte grince.', firstEventId: 1, lastEventId: 1),
+    ]);
+    await first.close();
+    final reopened = SqliteBookStore(
+        factory: databaseFactoryFfi, databasePath: file);
+    addTearDown(reopened.close);
+    final saved = (await reopened.listRawGenerations('session')).single;
+    expect(saved.rawText, 'Une porte grince.');
+    expect(saved.compactText, 'La porte grince.');
+    expect(saved.isStructured, true);
+  });
+
+  test('SQLite v6 RAW records migrate with null compact memory', () async {
+    final dir = await Directory.systemTemp.createTemp('domolia-v6-compact-');
+    final file = '${dir.path}/v6.sqlite';
+    addTearDown(() async => dir.delete(recursive: true));
+    final legacy = await databaseFactoryFfi.openDatabase(
+      file, options: OpenDatabaseOptions(version: 6,
+      onCreate: (db, version) async {
+        await db.execute(
+          'CREATE TABLE raw_generations ('
+          'session_id TEXT NOT NULL, player_event_id INTEGER NOT NULL, '
+          'raw_text TEXT NOT NULL, first_event_id INTEGER, last_event_id INTEGER, '
+          'PRIMARY KEY(session_id, player_event_id))');
+        await db.insert('raw_generations', {
+          'session_id': 'legacy', 'player_event_id': 1,
+          'raw_text': 'RAW avant migration',
+          'first_event_id': 2, 'last_event_id': 2,
+        });
+      }));
+    await legacy.close();
+
+    final upgraded = SqliteBookStore(
+        factory: databaseFactoryFfi, databasePath: file);
+    addTearDown(upgraded.close);
+    final saved = (await upgraded.listRawGenerations('legacy')).single;
+    expect(saved.rawText, 'RAW avant migration');
+    expect(saved.compactText, isNull);
+    expect(saved.isStructured, true);
+  });
+
 }
 
 
