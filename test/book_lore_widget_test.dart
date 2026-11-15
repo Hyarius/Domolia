@@ -29,7 +29,6 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('loreCreate-characters')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('loreField-name')),'Éloïse');
-    await tester.enterText(find.byKey(const ValueKey('loreField-role')),'Garde');
     await tester.tap(find.byKey(const ValueKey('loreFormSave')));
     await tester.pumpAndSettle();
     expect(lore.characters.single.name,'Éloïse');
