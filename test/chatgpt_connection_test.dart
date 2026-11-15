@@ -202,9 +202,9 @@ void main() {
         bodies.add(body);
         expect(request.headers['Authorization'], 'Bearer test-secret');
         return http.Response(
-          'data: {"type":"response.output_text.delta","delta":"Réponse"}\\n\\n'
+          'data: {"type":"response.output_text.delta","delta":"Réponse"}\n\n'
           'data: {"type":"response.completed","response":{"usage":'
-          '{"input_tokens":14,"output_tokens":120}}}\\n\\n',
+          '{"input_tokens":14,"output_tokens":120}}}\n\n',
           200,
         );
       }),
@@ -261,7 +261,7 @@ void main() {
       client: MockClient((_) async => http.Response(
         'data: {"type":"response.incomplete","response":'
         '{"status":"incomplete","incomplete_details":'
-        '{"reason":"max_output_tokens"}}}\\n\\n', 200,
+        '{"reason":"max_output_tokens"}}}\n\n', 200,
       )),
     );
     await expectLater(
