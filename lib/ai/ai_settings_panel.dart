@@ -495,11 +495,10 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               try {
                 await routing.setProfile(task, id == '' ? null : id);
               } catch (_) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text(
-                      'Impossible d’enregistrer ce profil de tâche.')));
-                }
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text(
+                    'Impossible d’enregistrer ce profil de tâche.')));
               }
             },
           );
