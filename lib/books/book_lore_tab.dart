@@ -306,10 +306,15 @@ class _BookLoreTabState extends State<BookLoreTab> {
     final query = _normalize(_queries[key] ?? '');
     final tags = items.expand((e) => e.tags).toSet().toList()..sort();
     final types = items.map(_type).where((s) => s.isNotEmpty).toSet().toList()..sort();
+    // A deleted/edited record may remove the selected filter from the options.
+    final savedTag = _tagFilters[key] ?? '';
+    final selectedTag = tags.contains(savedTag) ? savedTag : '';
+    final savedType = _typeFilters[key] ?? '';
+    final selectedType = types.contains(savedType) ? savedType : '';
     final filtered = items.where((e) =>
       (query.isEmpty || _normalize([e.name,...e.aliases].join(' ')).contains(query)) &&
-      ((_tagFilters[key] ?? '').isEmpty || e.tags.contains(_tagFilters[key])) &&
-      ((_typeFilters[key] ?? '').isEmpty || _type(e) == _typeFilters[key])
+      (selectedTag.isEmpty || e.tags.contains(selectedTag)) &&
+      (selectedType.isEmpty || _type(e) == selectedType)
     ).toList()..sort((a,b) => _normalize(a.name).compareTo(_normalize(b.name)));
     return Card(
       child: ExpansionTile(
@@ -331,9 +336,11 @@ class _BookLoreTabState extends State<BookLoreTab> {
             )),
           if (tags.isNotEmpty) Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: DropdownButtonFormField<String>(
+            child: KeyedSubtree(
+              key: ValueKey('loreTagOptions-$key-${tags.join("|")}'),
+              child: DropdownButtonFormField<String>(
               key: ValueKey('loreTags-$key'),
-              initialValue: _tagFilters[key] ?? '',
+              initialValue: selectedTag,
               isExpanded:true,
               decoration:const InputDecoration(labelText:'Filtrer par tag'),
               items: [
@@ -342,12 +349,14 @@ class _BookLoreTabState extends State<BookLoreTab> {
                   child:Text(tag,overflow:TextOverflow.ellipsis)),
               ],
               onChanged:(v) => setState(() => _tagFilters[key] = v ?? ''),
-            )),
+            ))),
           if (types.isNotEmpty) Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: DropdownButtonFormField<String>(
+            child: KeyedSubtree(
+              key: ValueKey('loreTypeOptions-$key-${types.join("|")}'),
+              child: DropdownButtonFormField<String>(
               key: ValueKey('loreTypes-$key'),
-              initialValue: _typeFilters[key] ?? '',
+              initialValue: selectedType,
               isExpanded:true,
               decoration:const InputDecoration(labelText:'Rôle / catégorie'),
               items: [
@@ -356,7 +365,7 @@ class _BookLoreTabState extends State<BookLoreTab> {
                   child:Text(type,overflow:TextOverflow.ellipsis)),
               ],
               onChanged:(v) => setState(() => _typeFilters[key] = v ?? ''),
-            )),
+            ))),
           Align(alignment:Alignment.centerRight,
             child:TextButton.icon(
               key:ValueKey('loreCreate-$key'),
@@ -529,12 +538,13 @@ class _LoreFormState extends State<_LoreForm> {
           content:SizedBox(width:450,height:400,child:Column(children:[
             TextField(decoration:const InputDecoration(
               prefixIcon:Icon(Icons.search),labelText:'Rechercher une fiche'),
-              onChanged:(text)=>update(()=>query=text.toLowerCase())),
+              onChanged:(text)=>update(
+                ()=>query=_BookLoreTabState._normalize(text))),
             Expanded(child:ListView.builder(
               itemCount:field.options.length,
               itemBuilder:(context,index) {
                 final option=field.options[index];
-                if(!option.name.toLowerCase().contains(query)) {
+                if(!_BookLoreTabState._normalize(option.name).contains(query)) {
                   return const SizedBox.shrink();
                 }
                 return CheckboxListTile(
