@@ -37,8 +37,8 @@ void main() {
         }},
       ];
       return http.Response(
-        frames.map((f) => 'data: ${jsonEncode(f)}\n\n').join() +
-            'data: [DONE]\n\n', 200,
+        '${frames.map((f) => 'data: ${jsonEncode(f)}\n\n').join()}data: [DONE]\n\n',
+        200,
       );
     }));
     final chunks = await provider.streamToolChat(config,
