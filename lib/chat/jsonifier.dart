@@ -96,7 +96,7 @@ class Jsonifier {
     // to the durable RAW (which is not changed by this method).
     if (candidate.length < 25 || candidate.length > 1200 ||
         candidate.length * 10 > raw.trim().length * 8 ||
-        RegExp(r'[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]')
+        RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F]')
             .hasMatch(candidate) ||
         candidate == raw.trim()) {
       return null;
