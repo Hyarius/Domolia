@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:domolia/ai/ai_controller.dart';
 import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/ai/ai_settings_panel.dart';
+import 'package:domolia/ai/ai_task_routing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:domolia/theme/domolia_theme.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -58,7 +60,8 @@ void main() {
   });
   tearDown(() => controller.dispose());
 
-  Future<void> showPage(WidgetTester tester, {Size size = const Size(1000, 2400)}) async {
+  Future<void> showPage(WidgetTester tester, {Size size = const Size(1000, 2400),
+      AiTaskRouting? taskRouting}) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
@@ -71,6 +74,7 @@ void main() {
         body: AiSettingsPanel(
           controller: controller,
           onBack: () {},
+          taskRouting: taskRouting,
         ),
       ),
     ));
@@ -266,4 +270,44 @@ void main() {
     expect(find.text(longName), findsWidgets);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('Application task token and reasoning controls persist on a phone',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final routing = AiTaskRouting();
+    addTearDown(routing.dispose);
+    await showPage(tester, size: const Size(430, 1100),
+      taskRouting: routing);
+
+    final token = find.byKey(const ValueKey('aiTaskTokens-jsonifier-4096'));
+    await tester.scrollUntilVisible(token, 250);
+    await tester.ensureVisible(token);
+    await tester.pumpAndSettle();
+    await tester.tap(token);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('8192 tokens').last);
+    await tester.pumpAndSettle();
+    expect(routing.generationFor(AiNarrativeTask.jsonifier).maxOutputTokens,
+      8192);
+
+    final reasoning = find.byKey(
+      const ValueKey('aiTaskReasoning-jsonifier-auto'));
+    await tester.scrollUntilVisible(reasoning, 150);
+    await tester.ensureVisible(reasoning);
+    await tester.pumpAndSettle();
+    await tester.tap(reasoning);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('NONE').last);
+    await tester.pumpAndSettle();
+    expect(routing.generationFor(AiNarrativeTask.jsonifier).reasoningEffort,
+      'none');
+    final reopened = AiTaskRouting();
+    addTearDown(reopened.dispose);
+    await reopened.initialize();
+    expect(reopened.generationFor(AiNarrativeTask.jsonifier).maxOutputTokens,
+      8192);
+    expect(reopened.generationFor(AiNarrativeTask.jsonifier).reasoningEffort,
+      'none');
+    expect(tester.takeException(), isNull);
+  });
+
 }
