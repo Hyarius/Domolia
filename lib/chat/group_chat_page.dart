@@ -146,6 +146,45 @@ class _GroupChatPageState extends State<GroupChatPage> {
     }
   }
 
+  /// Expose the original literary HTTP exchange for the same player turn,
+  /// independently from the formatter exchange used by bubble export.
+  Future<void> _exportNarratorRaw(ChatEntry entry) async {
+    final playerId = widget.controller.playerIdForAiMessage(entry.id);
+    if (playerId == null) return;
+    try {
+      final choices = <StoredAiDiagnostic>[];
+      final last = widget.controller.lastExchange;
+      if (last != null) {
+        choices.add(StoredAiDiagnostic(
+          id: 'latest', sessionId: '', createdAtUtc: last.createdAtUtc,
+          content: last.exportJson(),
+        ));
+      }
+      if (widget.onLoadDiagnostics != null) {
+        choices.addAll(await widget.onLoadDiagnostics!());
+      }
+      if (!mounted) return;
+      StoredAiDiagnostic? selected;
+      for (final candidate in choices) {
+        if (candidate.isNarratorForTurn(playerId)) {
+          selected = candidate;
+          break;
+        }
+      }
+      if (selected == null) {
+        _showExportMessage('Aucun diagnostic RAW conservé pour ce tour '
+            '(traces purgées ou conservation désactivée).');
+        return;
+      }
+      await _saveDiagnostic(
+        'domolia-tour-$playerId-narrateur-raw.json',
+        selected.data,
+      );
+    } catch (_) {
+      _showExportMessage('Impossible de lire le diagnostic RAW.');
+    }
+  }
+
   Future<void> _editPlayerMessage(ChatEntry entry) async {
     final updated = await showDialog<String>(
       context: context,
@@ -279,6 +318,16 @@ class _GroupChatPageState extends State<GroupChatPage> {
                   await _exportAiMessage(entry);
                 },
               ),
+              if (widget.controller.playerIdForAiMessage(entry.id) != null)
+                ListTile(
+                  key: const ValueKey('chatActionExportNarratorRaw'),
+                  leading: const Icon(Icons.article_outlined),
+                  title: const Text('Exporter le narrateur RAW'),
+                  onTap: () async {
+                    Navigator.pop(sheetContext);
+                    await _exportNarratorRaw(entry);
+                  },
+                ),
             ],
           ],
         ),
