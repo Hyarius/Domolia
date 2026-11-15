@@ -101,16 +101,17 @@ class Jsonifier {
       final proposed = (item['name'] as String).trim();
       if (role == 'narrator' && proposed == 'Narrateur') {
         result.add(ChatLine(speaker: ChatSpeaker.narrator,
-            name: 'Narrateur', text: text.trim()));
+            name: 'Narrateur', text: text));
       } else if (role == 'character' &&
           proposed.isNotEmpty && proposed.length <= 50 &&
           !RegExp(r'[\r\n]').hasMatch(proposed) &&
           !{'vous', 'joueur', 'player', 'narrateur'}
               .contains(proposed.toLowerCase()) &&
           (raw.toLowerCase().contains(proposed.toLowerCase()) ||
-              known.contains(proposed.toLowerCase()))) {
+              known.contains(proposed.toLowerCase())) &&
+          _matchesExplicitAttribution(text, proposed)) {
         result.add(ChatLine(speaker: ChatSpeaker.character,
-            name: proposed, text: text.trim()));
+            name: proposed, text: text));
       } else {
         throw const FormatException(
           'JSONification : personnage ou locuteur non vérifiable.',
@@ -126,6 +127,16 @@ class Jsonifier {
       );
     }
     return List.unmodifiable(result);
+  }
+
+  /// Reject a clear conflicting "Name: dialogue" attribution; less explicit
+  /// pronoun-based speakers are left to the formatter and known cast.
+  bool _matchesExplicitAttribution(String text, String proposed) {
+    final label = RegExp(
+      r'^\\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9_\\-]{0,49})\\s*[:：]',
+    ).firstMatch(text);
+    return label == null ||
+        label.group(1)!.toLowerCase() == proposed.toLowerCase();
   }
 
   bool _isUtf16Boundary(String raw, int index) {
