@@ -355,6 +355,79 @@ void main() {
     expect((await db.listRawGenerations('s')).single.rawText, before.rawText);
   });
 
+
+  test('SQLite v4 upgrades task profiles and Lore cache without losing a Party',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('domolia-tasks-migration-');
+    final file = '${dir.path}/tasks.sqlite';
+    addTearDown(() async => dir.delete(recursive: true));
+    final legacy = await databaseFactoryFfi.openDatabase(
+      file,
+      options: OpenDatabaseOptions(version: 4, onCreate: (db, version) async {
+        await db.execute('CREATE TABLE books '
+          '(id TEXT PRIMARY KEY, definition_json TEXT NOT NULL)');
+        await db.execute('CREATE TABLE book_bindings '
+          '(book_id TEXT PRIMARY KEY, profile_id TEXT)');
+        await db.execute('CREATE TABLE sessions '
+          '(id TEXT PRIMARY KEY, book_id TEXT NOT NULL, title TEXT NOT NULL, '
+          'timeline_json TEXT NOT NULL, updated_at INTEGER NOT NULL, '
+          'profile_id TEXT)');
+        await db.execute('CREATE TABLE ai_diagnostics '
+          '(id TEXT PRIMARY KEY, session_id TEXT NOT NULL, '
+          'created_at INTEGER NOT NULL, payload_json TEXT NOT NULL)');
+        await db.execute('CREATE TABLE raw_generations '
+          '(session_id TEXT NOT NULL, player_event_id INTEGER NOT NULL, '
+          'raw_text TEXT NOT NULL, first_event_id INTEGER, '
+          'last_event_id INTEGER, '
+          'PRIMARY KEY(session_id, player_event_id))');
+      }),
+    );
+    const book = BookDefinition(id: 'old-book', title: 'Avant les tâches');
+    await legacy.insert('books', {
+      'id': book.id, 'definition_json': book.exportJson(),
+    });
+    await legacy.insert('sessions', {
+      'id': 'old-session', 'book_id': book.id,
+      'title': 'Partie sauvegardée', 'timeline_json': '[]',
+      'updated_at': 100, 'profile_id': 'writer',
+    });
+    await legacy.insert('raw_generations', {
+      'session_id': 'old-session', 'player_event_id': 3,
+      'raw_text': 'Texte déjà généré',
+    });
+    await legacy.close();
+
+    final db = SqliteBookStore(
+      factory: databaseFactoryFfi, databasePath: file);
+    final old = (await db.findSession('old-session'))!;
+    expect(old.title, 'Partie sauvegardée');
+    expect(old.aiProfileId, 'writer');
+    expect(old.formatterProfileId, isNull);
+    expect(old.optimizerProfileId, isNull);
+    expect(old.optimizedLore, isNull);
+    expect((await db.listRawGenerations(old.id)).single.rawText,
+      'Texte déjà généré');
+
+    await db.putSession(old.copyWith(
+      formatterProfileId: 'json-only', optimizerProfileId: 'compact-only',
+      optimizedLoreHash: 'hash-123', optimizedLore: 'Résumé compact',
+    ));
+    expect((await db.listRawGenerations(old.id)), hasLength(1));
+    await db.close();
+
+    final reopened = SqliteBookStore(
+      factory: databaseFactoryFfi, databasePath: file);
+    addTearDown(reopened.close);
+    final saved = (await reopened.findSession('old-session'))!;
+    expect(saved.aiProfileId, 'writer');
+    expect(saved.formatterProfileId, 'json-only');
+    expect(saved.optimizerProfileId, 'compact-only');
+    expect(saved.optimizedLoreHash, 'hash-123');
+    expect(saved.optimizedLore, 'Résumé compact');
+    expect((await reopened.listRawGenerations(old.id)), hasLength(1));
+    expect((await reopened.findBook(book.id))!.title, book.title);
+  });
+
 }
 
 
