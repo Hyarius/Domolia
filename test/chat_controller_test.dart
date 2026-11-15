@@ -99,12 +99,12 @@ class _ContextProvider implements AiChatProvider {
 BookLore _largeLore() => BookLore(
   global: LoreGlobal(
     universe: 'Skogheim',
-    overview: List.filled(650, 'Pierres, montagnes et fjord').join(' '),
+    overview: List.filled(115, 'Pierres, montagnes et fjord').join(' '),
     rules: 'Les événements restent hypothétiques.',
   ),
-  characters: const [
+  characters: [
     LoreCharacter(id:'astrid',name:'Astrid',
-      description:'Prêtresse principale de Skogheim.'),
+      description: List.filled(280, 'Astrid veille au foyer.').join(' ')),
   ],
 );
 
