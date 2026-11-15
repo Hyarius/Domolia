@@ -255,4 +255,24 @@ void main() {
     expect(calls, 0);
   });
 
+  test('Incomplete Luna responses identify consumed output/reasoning budget',
+      () async {
+    final provider = ChatGptResponsesProvider(
+      client: MockClient((_) async => http.Response(
+        'data: {"type":"response.incomplete","response":'
+        '{"status":"incomplete","incomplete_details":'
+        '{"reason":"max_output_tokens"}}}\\n\\n', 200,
+      )),
+    );
+    await expectLater(
+      provider.streamChat(const AiConfiguration(
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-5.6-luna', apiKey: 'secret',
+      ), messages: const [AiMessage(role: 'user', content: 'Bonjour')],
+        maxTokens: 4096).toList(),
+      throwsA(isA<AiProviderException>().having(
+        (e) => e.userMessage, 'budget message', contains('raisonnement'))),
+    );
+  });
+
 }
