@@ -400,10 +400,12 @@ class OuCreditsController extends ChangeNotifier {
     return result.status;
   });
 
+  /// Suspend monitoring, but NEVER delete a claim token that might still
+  /// unlock a one-time new key. Expired sessions are cleared by checkPending.
   Future<bool> abandonPending() async => await _run(() async {
     if (_state.pending == null) return true;
-    await _write(_state.copyWith(clearPending: true));
-    notice = 'Suivi local abandonné. Un paiement effectué peut toujours être encaissé.';
+    notice = 'Vérifications suspendues. La session et son jeton de récupération '
+        'restent enregistrés jusqu’à expiration ou confirmation.';
     return true;
   }) ?? false;
 
@@ -448,6 +450,7 @@ class OuCreditsController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    api.close();
     super.dispose();
   }
 }
