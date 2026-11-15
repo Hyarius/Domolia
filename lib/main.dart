@@ -67,6 +67,7 @@ class DomoliaApp extends StatelessWidget {
     super.key,
     this.updateController,
     this.aiController,
+    this.creditsController,
     this.chatController,
     this.narratorSettingsController,
     this.bookLibraryController,
@@ -74,6 +75,7 @@ class DomoliaApp extends StatelessWidget {
 
   final UpdateController? updateController;
   final AiConnectionController? aiController;
+  final OuCreditsController? creditsController;
   final NarrativeChatController? chatController;
   final NarratorSettingsController? narratorSettingsController;
   final BookLibraryController? bookLibraryController;
@@ -94,6 +96,7 @@ class DomoliaApp extends StatelessWidget {
       home: HomePage(
         updates: updateController,
         ai: aiController,
+        credits: creditsController,
         chat: chatController,
         narratorSettings: narratorSettingsController,
         books: bookLibraryController,
@@ -109,12 +112,14 @@ class HomePage extends StatefulWidget {
     super.key,
     this.updates,
     this.ai,
+    this.credits,
     this.chat,
     this.narratorSettings,
     this.books,
   });
   final UpdateController? updates;
   final AiConnectionController? ai;
+  final OuCreditsController? credits;
   final NarrativeChatController? chat;
   final NarratorSettingsController? narratorSettings;
   final BookLibraryController? books;
@@ -132,6 +137,7 @@ class _HomePageState extends State<HomePage> {
   final AiTaskRouting _taskRouting = AiTaskRouting();
   late final AiConnectionController _ai;
   late final OuCreditsController _credits;
+  late final bool _ownsCredits;
   late final bool _ownsAi;
   late NarrativeChatController _chat;
   late final bool _ownsChat;
@@ -158,7 +164,8 @@ class _HomePageState extends State<HomePage> {
       chatGpt: ChatGptAuthService(store: SecureChatGptSessionStore()),
       chatGptProvider: ChatGptResponsesProvider(diagnostics: _aiDiagnostics),
     );
-    _credits = OuCreditsController(
+    _ownsCredits = widget.credits == null;
+    _credits = widget.credits ?? OuCreditsController(
       api: OpenUncensoredApi(), vault: SecureOuVaultStore(),
       ai: _ai, routing: _taskRouting,
     );
@@ -197,7 +204,7 @@ class _HomePageState extends State<HomePage> {
       }
       _books.dispose();
     }
-    _credits.dispose();
+    if (_ownsCredits) _credits.dispose();
     if (_ownsAi) _ai.dispose();
     _taskRouting.dispose();
     super.dispose();
