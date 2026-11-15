@@ -427,6 +427,25 @@ class _GroupChatPageState extends State<GroupChatPage> {
                         },
                       ),
               ),
+              if (chat.busy)
+                const Padding(
+                  key: ValueKey('chatWritingIndicator'),
+                  padding: EdgeInsets.fromLTRB(18, 8, 18, 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit_note_rounded,
+                        color: DomoliaColors.goldLight, size: 22),
+                      SizedBox(width: 8),
+                      Text('Le narrateur écrit…',
+                        style: TextStyle(color: DomoliaColors.goldLight,
+                          fontStyle: FontStyle.italic)),
+                      SizedBox(width: 10),
+                      SizedBox(width: 14, height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 1.5,
+                          color: DomoliaColors.goldDark)),
+                    ],
+                  ),
+                ),
               if (chat.error != null)
                 Container(
                   key: const ValueKey('chatErrorBanner'),
