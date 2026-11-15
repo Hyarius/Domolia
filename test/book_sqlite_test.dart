@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 
 import 'package:domolia/ai/ai_provider.dart';
+import 'package:domolia/ai/ai_task_generation.dart';
 import 'package:domolia/chat/chat_controller.dart';
 
 import 'package:domolia/ai/ai_diagnostics.dart';
@@ -411,6 +412,12 @@ void main() {
     await db.putSession(old.copyWith(
       formatterProfileId: 'json-only', optimizerProfileId: 'compact-only',
       optimizedLoreHash: 'hash-123', optimizedLore: 'Résumé compact',
+      generationOverrides: {
+        AiNarrativeTask.narrator: const AiTaskGenerationOverride(
+          maxOutputTokens: 16384),
+        AiNarrativeTask.jsonifier: const AiTaskGenerationOverride(
+          reasoningEffort: 'none'),
+      },
     ));
     expect((await db.listRawGenerations(old.id)), hasLength(1));
     await db.close();
@@ -424,6 +431,10 @@ void main() {
     expect(saved.optimizerProfileId, 'compact-only');
     expect(saved.optimizedLoreHash, 'hash-123');
     expect(saved.optimizedLore, 'Résumé compact');
+    expect(saved.generationOverrides[AiNarrativeTask.narrator]!
+        .maxOutputTokens, 16384);
+    expect(saved.generationOverrides[AiNarrativeTask.jsonifier]!
+        .reasoningEffort, 'none');
     expect((await reopened.listRawGenerations(old.id)), hasLength(1));
     expect((await reopened.findBook(book.id))!.title, book.title);
   });
