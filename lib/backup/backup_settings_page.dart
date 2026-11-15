@@ -24,6 +24,8 @@ class BackupSettingsPage extends StatefulWidget {
     this.onAfterRestore,
     this.saveArchive,
     this.pickArchive,
+    this.backupService,
+    this.reloadData,
   });
 
   final BookLibraryController books;
@@ -37,6 +39,8 @@ class BackupSettingsPage extends StatefulWidget {
   /// exact selected bytes without invoking a native dialog.
   final Future<bool> Function(Uint8List bytes, String name)? saveArchive;
   final Future<({String name, Uint8List bytes})?> Function()? pickArchive;
+  final BackupService? backupService;
+  final Future<void> Function()? reloadData;
 
   @override
   State<BackupSettingsPage> createState() => _BackupSettingsPageState();
@@ -46,7 +50,7 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
   bool _busy = false;
   String? _message;
 
-  BackupService get _service => BackupService(
+  BackupService get _service => widget.backupService ?? BackupService(
     books: widget.books.store as SqliteBookStore,
     profileStore: widget.ai.store,
   );
@@ -234,8 +238,7 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
     await widget.onBeforeRestore?.call();
     await _service.restore(backup, mode);
     widget.onAfterRestore?.call();
-    await widget.ai.reloadProfiles();
-    await widget.books.reload();
+    await (widget.reloadData?.call() ?? _reloadData());
     if (mounted) {
       setState(() => _message =
           'Restauration terminée : ${backup.books.length} Livres et '
@@ -243,6 +246,11 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
           'Vérifiez les connexions IA.');
     }
   });
+
+  Future<void> _reloadData() async {
+    await widget.ai.reloadProfiles();
+    await widget.books.reload();
+  }
 
   @override
   Widget build(BuildContext context) => SafeArea(
