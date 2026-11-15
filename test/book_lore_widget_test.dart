@@ -90,4 +90,116 @@ void main() {
     expect(find.byKey(const ValueKey('loreItem-p2')),findsOneWidget);
     expect(find.byKey(const ValueKey('loreItem-p1')),findsNothing);
   });
+
+  testWidgets('Invalid character name keeps form and allows correction',
+      (tester) async {
+    var lore = const BookLore();
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: StatefulBuilder(builder: (context, rebuild) => Scaffold(
+        body: ListView(children: [
+          BookLoreTab(lore: lore,
+            onSave: (next) async => rebuild(() => lore = next)),
+        ]),
+      )),
+    ));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(
+      const ValueKey('loreSection-characters')));
+    await tester.tap(find.byKey(const ValueKey('loreSection-characters')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(
+      const ValueKey('loreCreate-characters')));
+    await tester.tap(find.byKey(const ValueKey('loreCreate-characters')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('loreFormSave')));
+    await tester.pumpAndSettle();
+    expect(lore.characters, isEmpty);
+    expect(find.byKey(const ValueKey('loreField-name')), findsOneWidget);
+
+    await tester.enterText(find.byKey(const ValueKey('loreField-name')),
+      'Éloïse');
+    await tester.tap(find.byKey(const ValueKey('loreFormSave')));
+    await tester.pumpAndSettle();
+    expect(lore.characters.single.name, 'Éloïse');
+    expect(find.byKey(const ValueKey('loreField-name')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Disk save failure retains unsaved global lore in editor',
+      (tester) async {
+    var lore = const BookLore();
+    var fail = true;
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: StatefulBuilder(builder: (context, rebuild) => Scaffold(
+        body: ListView(children: [
+          BookLoreTab(lore: lore, onSave: (next) async {
+            if (fail) throw StateError('Simulated database failure');
+            rebuild(() => lore = next);
+          }),
+        ]),
+      )),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('loreEditGlobal')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('loreField-universe')),
+      'Érévia');
+    await tester.tap(find.byKey(const ValueKey('loreFormSave')));
+    await tester.pumpAndSettle();
+    expect(lore.global.universe, isEmpty);
+    expect(find.byKey(const ValueKey('loreField-universe')), findsOneWidget);
+    expect(find.text('Érévia'), findsOneWidget);
+
+    fail = false;
+    await tester.tap(find.byKey(const ValueKey('loreFormSave')));
+    await tester.pumpAndSettle();
+    expect(lore.global.universe, 'Érévia');
+    expect(find.byKey(const ValueKey('loreField-universe')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Conditional event without condition stays editable',
+      (tester) async {
+    var lore = const BookLore();
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: StatefulBuilder(builder: (context, rebuild) => Scaffold(
+        body: ListView(children: [
+          BookLoreTab(lore: lore,
+            onSave: (next) async => rebuild(() => lore = next)),
+        ]),
+      )),
+    ));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(
+      const ValueKey('loreSection-events')));
+    await tester.tap(find.byKey(const ValueKey('loreSection-events')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('loreCreate-events')));
+    await tester.tap(find.byKey(const ValueKey('loreCreate-events')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('loreField-name')),
+      'Éclipse');
+    await tester.tap(find.byKey(const ValueKey('loreField-trigger')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Conditionnel').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('loreFormSave')));
+    await tester.pumpAndSettle();
+    expect(lore.events, isEmpty);
+    expect(find.byKey(const ValueKey('loreField-condition')), findsOneWidget);
+
+    await tester.enterText(find.byKey(const ValueKey('loreField-condition')),
+      'Le joueur découvre la prophétie');
+    await tester.tap(find.byKey(const ValueKey('loreFormSave')));
+    await tester.pumpAndSettle();
+    expect(lore.events.single.trigger, LoreEventTrigger.conditional);
+    expect(lore.events.single.condition,
+      'Le joueur découvre la prophétie');
+    expect(tester.takeException(), isNull);
+  });
+
 }
