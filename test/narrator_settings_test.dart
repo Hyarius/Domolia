@@ -39,8 +39,13 @@ class _RecordedProvider implements AiChatProvider {
   }) async {
     calls++;
     lastMessages = messages;
-    return '{"type":"message","speaker":"narrator",'
-        '"name":"Narrateur","text":"Le monde vous répond."}';
+    if (messages.first.content.contains('JSONificateur')) {
+      return jsonEncode({'events': [
+        {'type': 'message', 'start': 0, 'end': 'Le monde vous répond.'.length,
+          'speaker': 'narrator', 'name': 'Narrateur'},
+      ]});
+    }
+    return 'Le monde vous répond.';
   }
 }
 
@@ -92,14 +97,14 @@ void main() {
     expect(selections, 1);
 
     await chat.send('Je réponds.');
-    expect(provider.calls, 1);
+    expect(provider.calls, 2);
     expect(chat.messages.map((e) => e.text),
         ['Ouverture B', 'Je réponds.', 'Le monde vous répond.']);
 
     final sent = provider.lastMessages!;
     expect(sent.first.role, 'system');
     expect(sent[1].role, 'assistant');
-    expect(sent[1].content, contains('"text":"Ouverture B"'));
+    expect(sent[1].content, contains('Ouverture B'));
     expect(sent[2].role, 'user');
 
     await chat.regenerate();
@@ -135,16 +140,14 @@ void main() {
     chat.beginConversation();
     expect(chat.messages.single.text, 'Au port !');
     await chat.send('Je monte à bord.');
-    expect(provider.lastMessages!.first.content,
-        endsWith('Narre comme un conte maritime.'));
+    expect(chat.rawGenerations.single.rawText, 'Le monde vous répond.');
 
     await settings.save(
       style: 'Narre comme un conte mystérieux.',
       openingMessagesText: 'Dans une grotte.',
     );
     await chat.send('Je regarde autour.');
-    expect(provider.lastMessages!.first.content,
-        endsWith('Narre comme un conte mystérieux.'));
+    expect(chat.rawGenerations, hasLength(2));
     expect(chat.messages.first.text, 'Au port !');
     expect(chat.messages.where((m) => m.speaker == ChatSpeaker.player),
         hasLength(2));
