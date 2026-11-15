@@ -92,6 +92,9 @@ class Jsonifier {
       throw const FormatException('JSONification : enveloppe invalide.');
     }
     final items = parsed['events'] as List;
+    if (items.isEmpty || items.length > 120) {
+      throw const FormatException('JSONification : nombre d’événements invalide.');
+    }
     if (items.any((item) => item is Map && (
         item.containsKey('block') || item.containsKey('before')))) {
       final sourceBlocks = blocks(raw);
@@ -134,9 +137,6 @@ class Jsonifier {
       return decode(raw, jsonEncode({'events': translated}),
           knownCharacters: knownCharacters,
           hasPreviousScene: hasPreviousScene);
-    }
-    if (items.isEmpty || items.length > 120) {
-      throw const FormatException('JSONification : nombre d’événements invalide.');
     }
     final known = knownCharacters.map((name) => name.toLowerCase()).toSet();
     final result = <ChatOutputEvent>[];
