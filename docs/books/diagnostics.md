@@ -14,6 +14,11 @@ Aucun diagnostic n'est envoyé à un serveur Domolia.
   message**, y compris s'il fait partie d'une réponse avec plusieurs bulles.
   Si le diagnostic correspondant a été purgé ou n'a jamais été enregistré,
   l'application le signale au lieu d'exporter une autre requête.
+- **Appui long sur une bulle IA → Exporter le narrateur RAW** : exporte la
+  requête et la réponse HTTP/SSE originales de la première passe pour le même
+  tour du joueur ; les diagnostics des deux passes sont liés par l'ID
+  `playerEventId`. Le RAW conservé en SQLite reste disponible pour reprendre
+  le récit même si les traces réseau ont été purgées.
 - **Appui long sur un message → Commencer une scène ici** : insère un
   séparateur persistant avant le message. Si un séparateur est déjà présent,
   le menu propose **Supprimer le changement de scène**. Cette correction
@@ -61,7 +66,7 @@ ordonnée `events`. Les messages ont `id`, `type: message`, `speaker`,
 
 ## Format `domolia-ai-exchange-v1`
 
-Pour le pipeline à deux passes, chaque requête est un échange distinct et le champ facultatif `stage` vaut `narrator_raw` ou `jsonifier`. Les diagnostics anciens n'ont pas ce champ et restent lisibles. L'export lié à une bulle renvoie la passe `jsonifier` ayant publié son événement ; le RAW est enregistré séparément en SQLite.
+Pour le pipeline à deux passes, chaque requête est un échange distinct et le champ facultatif `stage` vaut `narrator_raw` ou `jsonifier`. Le champ facultatif `playerEventId` rattache chaque échange au message joueur. Les diagnostics anciens n'ont pas ce champ et restent lisibles. L'export lié à une bulle renvoie la passe `jsonifier` ayant publié son événement ; le RAW est enregistré séparément en SQLite.
 
 Un export contient :
 
