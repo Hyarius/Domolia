@@ -234,4 +234,26 @@ void main() {
     expect(find.text(provider.raw), findsNothing);
     expect(find.byKey(const ValueKey('chatWritingIndicator')), findsNothing);
   });
+  testWidgets('Speech bubble displays emotion beside name without quotes',
+      (tester) async {
+    final provider = _Provider();
+    final chat = NarrativeChatController(
+      provider: provider, configuration: () => config,
+    );
+    addTearDown(chat.dispose);
+    chat.restoreTimeline(const [
+      ChatEntry(id: 0, speaker: ChatSpeaker.character,
+          name: 'Liv', text: 'Quoi ?!', status: 'étonnée'),
+      ChatEntry(id: 1, speaker: ChatSpeaker.character,
+          name: 'Runa', text: '« Je comprends. »'),
+    ]);
+    await showChat(tester, chat);
+    expect(find.text('Liv'), findsOneWidget);
+    expect(find.text(' - étonnée'), findsOneWidget);
+    expect(find.text('Quoi ?!'), findsOneWidget);
+    expect(find.text('Je comprends.'), findsOneWidget);
+    expect(find.text('« Je comprends. »'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
 }
