@@ -178,7 +178,10 @@ void main() {
       const ValueKey('loreSection-events')));
     await tester.tap(find.byKey(const ValueKey('loreSection-events')));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const ValueKey('loreCreate-events')));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('loreCreate-events')), 120,
+      scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('loreCreate-events')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('loreField-name')),
