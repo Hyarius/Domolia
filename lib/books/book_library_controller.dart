@@ -1,3 +1,4 @@
+import '../chat/raw_generation.dart';
 import 'package:flutter/foundation.dart';
 
 import '../ai/ai_diagnostics.dart';
@@ -192,6 +193,24 @@ class BookLibraryController extends ChangeNotifier {
           error: failure, stackTrace: stackTrace);
       _deletedSessions.remove(id);
       rethrow;
+    }
+  }
+
+  Future<List<RawGeneration>> rawGenerations(String sessionId) =>
+      store is NarrativeSnapshotStore
+          ? (store as NarrativeSnapshotStore).listRawGenerations(sessionId)
+          : Future.value(const []);
+
+  Future<void> saveSessionState(
+      BookSession session, List<RawGeneration> generations) async {
+    if (_deletedSessions.contains(session.id)) {
+      throw StateError('Partie supprimée.');
+    }
+    if (store is NarrativeSnapshotStore) {
+      await (store as NarrativeSnapshotStore)
+          .saveNarrativeSnapshot(session, generations);
+    } else {
+      await store.updateSession(session);
     }
   }
 
