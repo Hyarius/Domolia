@@ -210,7 +210,10 @@ class NarrativeChatController extends ChangeNotifier {
 
   bool editPlayerMessage(int id, String text) {
     final value = text.trim();
-    if (_closed || busy || value.isEmpty || value.length > 4000) return false;
+    // A pending RAW belongs to the exact player history that produced it.
+    // Editing any previous action would silently attach stale prose to new input.
+    if (_closed || busy || pendingRaw != null ||
+        value.isEmpty || value.length > 4000) return false;
     final index = _playerIndex(id);
     if (index < 0) return false;
     final old = _timeline[index] as ChatEntry;
@@ -286,6 +289,10 @@ class NarrativeChatController extends ChangeNotifier {
     );
     if (index <= 0 || _timeline[index - 1] is ChatSceneChange) return false;
     _timeline.insert(index, ChatSceneChange(id: _nextId++));
+    // The index is positional, whereas event IDs remain stable after edits.
+    if (_lastPlayerIndex != null && index <= _lastPlayerIndex!) {
+      _lastPlayerIndex = _lastPlayerIndex! + 1;
+    }
     _timelineChanged();
     _notify();
     return true;
@@ -296,6 +303,9 @@ class NarrativeChatController extends ChangeNotifier {
     final index = _timeline.indexWhere((e) => e.id == messageId);
     if (index <= 0 || _timeline[index - 1] is! ChatSceneChange) return false;
     _timeline.removeAt(index - 1);
+    if (_lastPlayerIndex != null && index - 1 < _lastPlayerIndex!) {
+      _lastPlayerIndex = _lastPlayerIndex! - 1;
+    }
     _timelineChanged();
     _notify();
     return true;
@@ -483,10 +493,12 @@ class NarrativeChatController extends ChangeNotifier {
             rawRecord,
           ];
           await _save(_timeline, changed);
-          _check(token);
+          // A successful durable write must also survive cancellation in this
+          // controller: retry must never silently regenerate a saved RAW.
           _generations
             ..clear()
             ..addAll(changed);
+          _check(token);
           AppLogger.info('Narration RAW conservée', component: 'chat');
         } catch (e) {
           failed = e;
