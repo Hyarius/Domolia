@@ -288,7 +288,7 @@ void main() {
     expect(opened!.title, 'Livre A');
   });
 
-  testWidgets('Three editable tabs and NSFW warning work on narrow Android',
+  testWidgets('Four editable tabs and NSFW warning work on narrow Android',
       (tester) async {
     tester.view.physicalSize = const Size(320, 780);
     tester.view.devicePixelRatio = 1;
@@ -330,7 +330,7 @@ void main() {
     expect(library.byId(book.id)!.nsfw, true);
     await tester.tap(find.text('Système'));
     await tester.pumpAndSettle();
-    await tester.drag(find.byKey(const ValueKey('bookTab-2')),
+    await tester.drag(find.byKey(const ValueKey('bookTab-3')),
         const Offset(0, -500));
     await tester.pumpAndSettle();
     expect(find.textContaining('ne prend pas en charge le mode NSFW'),
