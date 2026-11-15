@@ -21,11 +21,14 @@ class ChatEntry extends ChatTimelineEvent {
     required this.speaker,
     required this.name,
     required this.text,
+    this.status,
     this.inProgress = false,
   }) : super(id);
   final ChatSpeaker speaker;
   final String name;
   final String text;
+  /// Optional short emotion, tone or visible attitude shown with the name.
+  final String? status;
   final bool inProgress;
 }
 
@@ -43,10 +46,12 @@ class ChatSceneChangeOutput extends ChatOutputEvent {
 }
 
 class ChatLine extends ChatOutputEvent {
-  const ChatLine({required this.speaker, required this.name, required this.text});
+  const ChatLine({required this.speaker, required this.name, required this.text,
+      this.status});
   final ChatSpeaker speaker;
   final String name;
   final String text;
+  final String? status;
 }
 
 /// NDJSON: a message or exactly {"type":"scene_change"}.
