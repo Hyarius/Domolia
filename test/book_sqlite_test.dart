@@ -378,7 +378,9 @@ class _PipelineProvider implements AiChatProvider {
   }) async {
     if (messages.first.content.contains('JSONificateur')) {
       formatCalls++;
-      if (failFormatter) return '{"events":[]}';
+      if (failFormatter) {
+        return '{"events":[]}';
+      }
       return jsonEncode({'events': [
         {'type': 'message', 'start': 0, 'end': raw.length,
          'speaker': 'narrator', 'name': 'Narrateur'},
