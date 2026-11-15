@@ -156,6 +156,9 @@ Widget _page(
 );
 
 void main() {
+  // Material-ui keeps an active frame scheduler in some widget test bindings.
+  // Use bounded, explicit animation pumps rather than pumpAndSettle, which
+  // advances virtual time until a frame-free state that may never occur.
   testWidgets('save button writes full portable bytes after pending changes',
       (tester) async {
     final f = await _fixture(tester);
@@ -176,7 +179,8 @@ void main() {
       },
     ));
     await tester.tap(find.byKey(const ValueKey('backupSave')));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
     expect(waited, true);
     expect(fileName, endsWith('.domolia'));
     expect(fileBytes, isNotNull);
@@ -204,11 +208,13 @@ void main() {
       afterRestore: () { after++; },
     ));
     await tester.tap(find.byKey(const ValueKey('backupLoad')));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
     expect(find.textContaining('1 Livres'), findsOneWidget);
     expect(find.textContaining('1 conflit(s) de Livres'), findsOneWidget);
     await tester.tap(find.text('Fusionner'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
     expect(before, 1);
     expect(after, 1);
     expect(service.imports, 1);
@@ -231,7 +237,8 @@ void main() {
       ),
     ));
     await tester.tap(find.byKey(const ValueKey('backupLoad')));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
     expect(find.textContaining('Fichier de sauvegarde invalide'),
       findsOneWidget);
     expect(service.imports, 0);
@@ -248,21 +255,27 @@ void main() {
       ),
     ));
     await tester.tap(find.byKey(const ValueKey('backupLoad')));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
     await tester.tap(find.text('Remplacer'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
     expect(find.text('Oui, remplacer'), findsOneWidget);
     expect(service.imports, 0);
     await tester.tap(find.text('Annuler').last);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
     expect(service.imports, 0);
 
     await tester.tap(find.byKey(const ValueKey('backupLoad')));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
     await tester.tap(find.text('Remplacer'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
     await tester.tap(find.text('Oui, remplacer'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
     expect(service.imports, 1);
     expect(service.lastMode, BackupRestoreMode.replace);
   });
