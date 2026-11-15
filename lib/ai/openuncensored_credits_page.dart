@@ -75,7 +75,9 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
 
   void _startPoller() {
     if (widget.controller.pending == null || _poller != null ||
-        kIsWeb || widget.sandbox != null) return;
+        kIsWeb || widget.sandbox != null) {
+      return;
+    }
     _pollCount = 0;
     _poller = Timer.periodic(const Duration(seconds: 5), (_) {
       if (!mounted || widget.controller.pending == null || ++_pollCount > 24) {

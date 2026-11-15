@@ -7,6 +7,7 @@ import 'package:domolia/ai/openuncensored_api.dart';
 import 'package:domolia/ai/openuncensored_controller.dart';
 import 'package:domolia/ai/openuncensored_credits_page.dart';
 import 'package:domolia/ai/openuncensored_vault.dart';
+import 'package:domolia/ai/openuncensored_simulation.dart';
 import 'package:domolia/theme/domolia_theme.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -123,5 +124,37 @@ void main() {
     expect(find.textContaining('3.25 USD'), findsWidgets);
     expect(find.textContaining('ou-cus_ALPHA_TEST_123456'), findsNothing);
     expect(tester.takeException(), null);
+  });
+
+  testWidgets('Sandbox UI completes a fake payment without network traffic',
+      (tester) async {
+    final sandbox = OpenUncensoredSandbox(vault: _Vault());
+    addTearDown(sandbox.dispose);
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: Scaffold(body: OpenUncensoredCreditsPage(
+        controller: sandbox.controller,
+        sandbox: sandbox,
+        onBack: () {},
+      )),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('SIMULATION'), findsOneWidget);
+    expect(requests, 0);
+    await tester.ensureVisible(find.byKey(const ValueKey('ouCheckout')));
+    await tester.tap(find.byKey(const ValueKey('ouCheckout')));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('ouSimulatePaid')), 180,
+      scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('ouSimulatePaid')));
+    await tester.pumpAndSettle();
+    expect(sandbox.controller.pending, isNull);
+    expect(sandbox.controller.keys, hasLength(1));
+    expect(sandbox.controller.active!.secret, startsWith('ou-demo-'));
+    expect(sandbox.controller.active!.lastBalance!.remainingUsd, 10);
+    expect(requests, 0);
+    expect(tester.takeException(), isNull);
   });
 }

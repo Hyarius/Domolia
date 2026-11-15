@@ -327,7 +327,7 @@ class _BookLoreTabState extends State<BookLoreTab> {
           if (open) { _expanded.add(key); } else { _expanded.remove(key); }
         },
         children: [
-          Padding(padding: const EdgeInsets.symmetric(horizontal:12),
+          Padding(padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
             child: TextField(
               key: ValueKey('loreSearch-$key'),
               decoration: const InputDecoration(prefixIcon: Icon(Icons.search),
@@ -335,7 +335,7 @@ class _BookLoreTabState extends State<BookLoreTab> {
               onChanged: (value) => setState(() => _queries[key] = value),
             )),
           if (tags.isNotEmpty) Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
             child: KeyedSubtree(
               key: ValueKey('loreTagOptions-$key-${tags.join("|")}'),
               child: DropdownButtonFormField<String>(
@@ -351,7 +351,7 @@ class _BookLoreTabState extends State<BookLoreTab> {
               onChanged:(v) => setState(() => _tagFilters[key] = v ?? ''),
             ))),
           if (types.isNotEmpty) Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
             child: KeyedSubtree(
               key: ValueKey('loreTypeOptions-$key-${types.join("|")}'),
               child: DropdownButtonFormField<String>(

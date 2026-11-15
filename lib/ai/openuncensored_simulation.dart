@@ -63,8 +63,8 @@ class SimulatedOpenUncensoredApi extends OpenUncensoredApi {
       throw const OpenUncensoredFailure('Montant ou clé fictive invalide.');
     }
     _sequence++;
-    _session = 'cs_test_domolia_' +
-        DateTime.now().microsecondsSinceEpoch.toString() + '_$_sequence';
+    final tick = DateTime.now().microsecondsSinceEpoch;
+    _session = 'cs_test_domolia_${tick}_$_sequence';
     _claim = 'domolia-sandbox-claim-$_sequence';
     _topUpKey = topUpKey;
     _cents = cents;
@@ -115,7 +115,8 @@ class SimulatedOpenUncensoredApi extends OpenUncensoredApi {
     );
   }
 
-  String _issuedKey() => 'ou-demo-' + _session!.replaceFirst('cs_test_', '');
+  String _issuedKey() =>
+      'ou-demo-${_session!.replaceFirst('cs_test_', '')}';
 }
 
 class _SandboxProfiles implements AiProfileStore {
