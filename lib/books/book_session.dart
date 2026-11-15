@@ -56,16 +56,15 @@ class BookSession {
       throw const FormatException('Historique de partie invalide.');
     }
     final result = <ChatTimelineEvent>[];
-    var previousId = -1;
+    final seenIds = <int>{};
     for (final item in parsed) {
       if (item is! Map<String, dynamic> || item['id'] is! int) {
         throw const FormatException('Événement de partie invalide.');
       }
       final id = item['id'] as int;
-      if (id <= previousId) {
-        throw const FormatException('Ordre des événements invalide.');
+      if (id < 0 || !seenIds.add(id)) {
+        throw const FormatException('Identifiant d’événement invalide ou dupliqué.');
       }
-      previousId = id;
       if (item['type'] == 'scene_change' && item.length == 2) {
         result.add(ChatSceneChange(id: id));
       } else if (item['type'] == 'message' &&
