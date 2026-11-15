@@ -11,6 +11,10 @@ class BookSession {
     required this.title,
     this.timeline = const [],
     this.aiProfileId,
+    this.formatterProfileId,
+    this.optimizerProfileId,
+    this.optimizedLore,
+    this.optimizedLoreHash,
     this.updatedAtUtc,
   });
 
@@ -20,19 +24,43 @@ class BookSession {
   final List<ChatTimelineEvent> timeline;
   /// Overrides the parent Book's default AI profile for this conversation.
   final String? aiProfileId;
+  /// Explicit per-Party overrides; null inherits the application task profile.
+  final String? formatterProfileId;
+  final String? optimizerProfileId;
+  /// Generated summary only. The canonical Lore remains in BookDefinition.
+  /// Empty string means an optimization was attempted and rejected.
+  final String? optimizedLore;
+  final String? optimizedLoreHash;
   final DateTime? updatedAtUtc;
 
   static String freshId() =>
       'session-${DateTime.now().microsecondsSinceEpoch}-'
       '${Random.secure().nextInt(0x7fffffff)}';
 
-  BookSession copyWith({String? title, List<ChatTimelineEvent>? timeline,
-      String? aiProfileId, bool clearAiProfile = false, DateTime? updatedAtUtc}) => BookSession(
+  BookSession copyWith({
+    String? title,
+    List<ChatTimelineEvent>? timeline,
+    String? aiProfileId,
+    bool clearAiProfile = false,
+    String? formatterProfileId,
+    bool clearFormatterProfile = false,
+    String? optimizerProfileId,
+    bool clearOptimizerProfile = false,
+    String? optimizedLore,
+    String? optimizedLoreHash,
+    DateTime? updatedAtUtc,
+  }) => BookSession(
         id: id,
         bookId: bookId,
         title: title ?? this.title,
         timeline: timeline ?? this.timeline,
         aiProfileId: clearAiProfile ? null : aiProfileId ?? this.aiProfileId,
+        formatterProfileId: clearFormatterProfile
+            ? null : formatterProfileId ?? this.formatterProfileId,
+        optimizerProfileId: clearOptimizerProfile
+            ? null : optimizerProfileId ?? this.optimizerProfileId,
+        optimizedLore: optimizedLore ?? this.optimizedLore,
+        optimizedLoreHash: optimizedLoreHash ?? this.optimizedLoreHash,
         updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
       );
 
