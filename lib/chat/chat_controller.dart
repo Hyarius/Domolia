@@ -372,7 +372,7 @@ class NarrativeChatController extends ChangeNotifier {
               role: 'assistant',
               content: active.compactText == null
                   ? active.rawText
-                  : 'Résumé narratif factuel du tour :\\n'
+                  : 'Résumé narratif factuel du tour :\n'
                     '${active.compactText}',
             ));
             rawEmitted = true;
