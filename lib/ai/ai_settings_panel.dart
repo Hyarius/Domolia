@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../theme/domolia_theme.dart';
 import 'ai_controller.dart';
+import 'ai_task_routing.dart';
 import 'ai_provider.dart';
 
 class AiSettingsPanel extends StatefulWidget {
@@ -9,10 +10,12 @@ class AiSettingsPanel extends StatefulWidget {
     super.key,
     required this.controller,
     required this.onBack,
+    this.taskRouting,
   });
 
   final AiConnectionController controller;
   final VoidCallback onBack;
+  final AiTaskRouting? taskRouting;
 
   @override
   State<AiSettingsPanel> createState() => _AiSettingsPanelState();
@@ -26,11 +29,17 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
   @override
   void initState() {
     super.initState();
+    widget.taskRouting?.addListener(_routingChanged);
     _load();
   }
 
   Future<void> _load() async {
     await widget.controller.initialize();
+    try {
+      await widget.taskRouting?.initialize();
+    } catch (_) {
+      // Existing profile editing must remain available.
+    }
     if (mounted) _reloadFields();
   }
 
@@ -44,8 +53,11 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
     });
   }
 
+  void _routingChanged() { if (mounted) setState(() {}); }
+
   @override
   void dispose() {
+    widget.taskRouting?.removeListener(_routingChanged);
     _base.dispose();
     _key.dispose();
     super.dispose();
@@ -432,6 +444,73 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
     );
   }
 
+  Widget _taskProfiles(AiConnectionController controller) {
+    final routing = widget.taskRouting;
+    if (routing == null || !routing.initialized) {
+      return const SizedBox.shrink();
+    }
+    const titles = <AiNarrativeTask, String>{
+      AiNarrativeTask.narrator: 'Narrateur RAW',
+      AiNarrativeTask.jsonifier: 'JSONificateur',
+      AiNarrativeTask.optimizer: 'Optimiseur de Lore (une fois par Partie)',
+    };
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const Divider(),
+      const SizedBox(height: 10),
+      const Text('IA par tâche', style: TextStyle(
+        color: DomoliaColors.goldLight, fontSize: 19,
+        fontWeight: FontWeight.w700)),
+      const SizedBox(height: 8),
+      const Text('Choisissez parmi les profils déjà configurés. '
+        'Ces paramètres s’appliquent par défaut à toutes les Parties ; '
+        'chaque conversation peut les surcharger. '
+        'L’optimiseur est désactivé tant qu’aucun profil ne lui est assigné.',
+        style: TextStyle(color: DomoliaColors.muted)),
+      const SizedBox(height: 14),
+      for (final task in AiNarrativeTask.values) ...[
+        Builder(builder: (context) {
+          final chosen = routing.profileFor(task);
+          final known = chosen != null &&
+              controller.profiles.any((p) => p.id == chosen);
+          final current = known ? chosen : '';
+          return DropdownButtonFormField<String>(
+            key: ValueKey('aiTaskDefault-${task.name}-$current'),
+            isExpanded: true,
+            initialValue: current,
+            decoration: InputDecoration(labelText: titles[task],
+              helperText: chosen != null && !known
+                  ? 'Ancien profil supprimé : choisissez-en un autre.'
+                  : null),
+            items: [
+              DropdownMenuItem(value: '', child: Text(
+                task == AiNarrativeTask.optimizer
+                    ? 'Désactivé'
+                    : task == AiNarrativeTask.jsonifier
+                        ? 'Même IA que le narrateur' : 'Profil du Livre')),
+              for (final profile in controller.profiles)
+                DropdownMenuItem(value: profile.id, child: Text(
+                  profile.name, overflow: TextOverflow.ellipsis)),
+            ],
+            onChanged: controller.busy ? null : (id) async {
+              try {
+                await routing.setProfile(task, id == '' ? null : id);
+              } catch (_) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text(
+                      'Impossible d’enregistrer ce profil de tâche.')));
+                }
+              }
+            },
+          );
+        }),
+        const SizedBox(height: 14),
+      ],
+      const Divider(),
+      const SizedBox(height: 14),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -477,6 +556,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               const SizedBox(height: 20),
               _profileAndStatus(c),
               const SizedBox(height: 20),
+              _taskProfiles(c),
               if (c.selectedKind == AiProviderKind.customAi) ...[
               TextField(
                 controller: _base,
