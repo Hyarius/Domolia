@@ -312,10 +312,7 @@ void main() {
     await tester.tap(find.widgetWithText(ListTile, 'Crédits IA'));
     await tester.pumpAndSettle();
     expect(find.byType(OpenUncensoredCreditsPage), findsOneWidget);
-    await tester.tap(find.descendant(
-      of: find.byType(OpenUncensoredCreditsPage),
-      matching: find.byIcon(Icons.arrow_back),
-    ));
+    await tester.tap(find.byKey(const ValueKey('appBack')));
     await tester.pumpAndSettle();
     expect(find.widgetWithText(ListTile, 'Mises à jour'), findsOneWidget);
   });
