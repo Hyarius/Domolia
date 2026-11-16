@@ -9,6 +9,27 @@ import 'local_context_budget.dart';
 
 /// Packs only relevant content while keeping the latest player action and
 /// all indispensable canonical Lore. Never truncates JSONifier RAW parts.
+/// Compact variant for 2048-token on-device windows.
+/// The Dart Jsonifier still validates every index, speaker, separator and
+/// unchanged RAW text. This only asks the model for classification labels.
+const localJsonifierSystemPrompt = '''
+Tu classes les parties numérotées du RAW, tu ne racontes rien.
+Réponds UNIQUEMENT avec du JSON : {"events":[...],"compact":"..."}.
+Crée exactement un événement "part" par numéro, dans l'ordre et sans omission.
+Formats : {"type":"part","part":0,"kind":"narration"} ;
+{"type":"part","part":1,"kind":"dialogue","name":"Oren","status":"inquiet"} ;
+{"type":"part","part":2,"kind":"aside"}.
+kind = narration, dialogue ou aside.
+Dialogue : paroles prononcées uniquement, nom du vrai locuteur ; "status"
+facultatif, seulement si un ton ou une émotion est explicite.
+Aside : courte incise rédactionnelle ou indication de locuteur, jamais une
+action ou information narrative autonome.
+Rupture MAJEURE de scène seulement : {"type":"scene_change","before":3}.
+"compact" facultatif : bref résumé factuel sans invention ni action
+attribuée au joueur ; omets-le si le RAW est déjà bref.
+N'ajoute ni text, ni start/end, ni Markdown. Ne modifie jamais le RAW.
+''';
+
 class LocalContextPacker {
   const LocalContextPacker(this.budget);
   final LocalContextBudget budget;
@@ -110,7 +131,7 @@ class LocalContextPacker {
       final earlier = prior.isEmpty ? '' :
           'Contexte précédent (ne pas convertir) :\n${prior.join("\n")}\n\n';
       return [
-        const AiMessage(role: 'system', content: jsonifierSystemPrompt),
+        const AiMessage(role: 'system', content: localJsonifierSystemPrompt),
         AiMessage(role: 'user', content:
             '$earlier'
             'Parties RAW à classifier (texte JSON échappé, '
