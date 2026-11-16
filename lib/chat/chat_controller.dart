@@ -648,7 +648,8 @@ class NarrativeChatController extends ChangeNotifier {
       } finally {
         _capture('narrator_tool_round_$round', before,
             failure: failed, stagePromptTokens: turn?.promptTokens,
-            stageCompletionTokens: turn?.completionTokens);
+            stageCompletionTokens: turn?.completionTokens,
+            stageToolCalls: turn?.calls.length);
       }
       final complete = turn;
       totalPrompt += complete.promptTokens ?? 0;
@@ -682,7 +683,8 @@ class NarrativeChatController extends ChangeNotifier {
 
   void _capture(String stage, AiExchange? before,
       {Object? failure, List<ChatTimelineEvent> events = const [],
-      int? stagePromptTokens, int? stageCompletionTokens}) {
+      int? stagePromptTokens, int? stageCompletionTokens,
+      int? stageToolCalls}) {
     final current = diagnostics?.last;
     if (current == null || identical(before, current) ||
         current.completedAtUtc != null) {
@@ -693,6 +695,7 @@ class NarrativeChatController extends ChangeNotifier {
     current.complete(
       promptTokens: stagePromptTokens ?? promptTokens,
       completionTokens: stageCompletionTokens ?? completionTokens,
+      toolCalls: stageToolCalls ?? 0,
       error: failure?.toString(),
       cancelled: failure is _Cancelled,
       interpretedEvents: [
