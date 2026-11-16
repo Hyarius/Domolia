@@ -130,6 +130,10 @@ class AiUsageTotals {
       0, (sum, r) => sum + (r.inputTokens ?? 0));
   int get measuredOutput => records.fold(
       0, (sum, r) => sum + (r.outputTokens ?? 0));
+  int get cachedTokensKnown => records.fold(
+      0, (sum, r) => sum + (r.cachedTokens ?? 0));
+  int get reasoningTokensKnown => records.fold(
+      0, (sum, r) => sum + (r.reasoningTokens ?? 0));
   double get knownCostUsd => records.fold(
       0.0, (sum, r) => sum + (r.providerCostUsd ?? 0.0));
   int get unknownCost => records.where(
