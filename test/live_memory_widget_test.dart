@@ -104,9 +104,13 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.textContaining('Source : tour 1'), findsOneWidget);
+    await tester.ensureVisible(find.text('Protéger'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Protéger'));
     await tester.pumpAndSettle();
     expect(memory.facts.single.pinned, isTrue);
+    await tester.ensureVisible(find.byKey(const ValueKey('memorySearch')));
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('memorySearch')),
       'introuvable',
