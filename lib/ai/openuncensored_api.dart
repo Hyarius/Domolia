@@ -359,13 +359,19 @@ class OpenUncensoredApi {
       return OuToolProbeOutcome.inconclusive;
     }
     final calls = (choice['message'] as Map)['tool_calls'];
-    if (calls is! List) return OuToolProbeOutcome.inconclusive;
+    if (calls is! List) {
+      return OuToolProbeOutcome.inconclusive;
+    }
     for (final call in calls) {
       if (call is! Map || call['type'] != 'function' ||
-          call['function'] is! Map) continue;
+          call['function'] is! Map) {
+        continue;
+      }
       final function = call['function'] as Map;
       if (function['name'] != 'domolia_tool_probe' ||
-          function['arguments'] is! String) continue;
+          function['arguments'] is! String) {
+        continue;
+      }
       try {
         final args = jsonDecode(function['arguments'] as String);
         if (args is Map && args['value'] == 'ok') {
