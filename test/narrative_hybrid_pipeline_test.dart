@@ -93,7 +93,7 @@ void main() {
     ]);
     await chat.send('Liv, te souviens-tu de cela ?');
     expect(provider.requests, hasLength(2));
-    expect(provider.offered.first, hasLength(4));
+    expect(provider.offered.first, hasLength(7));
     final resumed = provider.requests.last;
     final technical = resumed.where((m) => m.role == 'tool').single;
     expect(technical.toolCallId, 'search_1');
@@ -152,8 +152,8 @@ void main() {
     provider.repeatedlyCall = true;
     await chat.send('Rappelle ce moment');
     expect(provider.requests.length, 3);
-    expect(provider.offered[0], hasLength(4));
-    expect(provider.offered[1], hasLength(4));
+    expect(provider.offered[0], hasLength(7));
+    expect(provider.offered[1], hasLength(7));
     expect(provider.offered[2], isEmpty);
     expect(chat.rawGenerations.single.rawText, provider.raw);
   });

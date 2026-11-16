@@ -79,9 +79,26 @@ de carte bancaire n'est intégré à Domolia.
   existants sans effacer ni renommer ces profils ; les Livres, Parties et
   leurs identifiants antérieurs restent en place. Une ancienne référence
   vers un fournisseur non pris en charge nécessite une sélection manuelle.
-- **Tool calling** : un modèle sélectionné manuellement comme narrateur
-  doit être déclaré capable ; une simple correspondance du nom ne suffit
-  pas. La source définitive des capacités viendra du chantier tool calling.
+- **Tool calling** : les modèles de texte disponibles restent sélectionnables
+  comme narrateurs même si le catalogue ne renseigne pas la capacité d'outils.
+  Le statut « inconnu » ne signifie pas « incompatible ».
+  Le mode hybride est activé uniquement lorsque le catalogue annonce un
+  support explicite ou lorsqu'un test volontaire a reçu un appel de fonction
+  valide. Les modèles inconnus fonctionnent en narration classique.
+- **Test de compatibilité** : dans « Crédits IA → Modèles avancés », choisir
+  le narrateur puis « Tester le Tool Calling ». Une confirmation explicite
+  prévient qu'un petit appel à /v1/chat/completions peut être facturé.
+  L'outil de test est fictif : aucune fonction locale n'est exécutée.
+  Une vraie réponse structurée « tool_calls » valide prouve le support.
+  Une réponse ordinaire ou des arguments malformés restent « non concluants » ;
+  seul un refus explicite des paramètres d'outils prouve une incompatibilité.
+- **Cache** : le résultat est associé à l'empreinte de la clé active et à
+  l'identifiant de modèle, dans le coffre déjà chiffré. Le résultat est
+  réutilisé après redémarrage et peut être retesté. Un changement de clé ne
+  réutilise pas une déclaration vérifiée sous une autre clé.
+  Une erreur réseau ou de crédits ne modifie pas le statut conservé.
+  Ce test vérifie la prise en charge HTTP non streamée du protocole ;
+  le transport narratif streamé conserve son repli classique si nécessaire.
 - **Statut des modèles** : tarifs, disponibilités et métriques peuvent
   varier. L'optimiseur de Lore est optionnel dans le preset Économique.
 

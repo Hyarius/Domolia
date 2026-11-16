@@ -49,10 +49,12 @@ void main() {
   late OuCreditsController credits;
   late _Vault vault;
   late int requests;
+  late int probes;
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     requests = 0;
+    probes = 0;
     ai = AiConnectionController(store: _Profiles(), provider: _Ai());
     routing = AiTaskRouting();
     vault = _Vault();
@@ -71,6 +73,17 @@ void main() {
             {'id': defaultAiModel, 'modality':'text',
               'available':true, 'supports_tools':true,
               'pricing':{'prompt':'0.000001','completion':'0.000002'}},
+            {'id': 'unverified-rp', 'modality':'text', 'available':true},
+          ]}), 200);
+        }
+        if (request.url.path == '/v1/chat/completions') {
+          probes++;
+          return http.Response(jsonEncode({'choices': [
+            {'finish_reason': 'tool_calls', 'message': {'tool_calls': [
+              {'type': 'function', 'function': {
+                'name': 'domolia_tool_probe', 'arguments': '{"value":"ok"}',
+              }},
+            ]}},
           ]}), 200);
         }
         throw StateError('Unexpected HTTP endpoint in widget test');
@@ -175,4 +188,39 @@ void main() {
     expect(secondGap, greaterThanOrEqualTo(DomoliaSpacing.field - 1));
     expect(tester.takeException(), isNull);
   });
+  testWidgets('Unknown narrator is shown and paid test needs confirmation',
+      (tester) async {
+    await credits.importKey('ou-cus_ALPHA_TEST_123456');
+    await credits.loadModels();
+    await showCredits(tester, screen: const Size(480, 2400));
+    await tester.ensureVisible(find.text('Modèles avancés'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Modèles avancés'));
+    await tester.pumpAndSettle();
+
+    // No paid generation happens during catalogue loading or selection.
+    expect(probes, 0);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('ouToolProbe')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('ouAdvanced-narrator-$defaultAiModel')), findsOneWidget);
+    expect(find.byKey(const ValueKey('ouToolProbe')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('ouToolProbe')));
+    await tester.pumpAndSettle();
+    expect(find.text('Tester le Tool Calling ?'), findsOneWidget);
+    expect(find.textContaining('pourra consommer des crédits'), findsOneWidget);
+    expect(probes, 0);
+    await tester.tap(find.text('Annuler'));
+    await tester.pumpAndSettle();
+    expect(probes, 0);
+
+    await tester.tap(find.byKey(const ValueKey('ouToolProbe')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirmer'));
+    await tester.pumpAndSettle();
+    expect(probes, 1);
+    expect(find.textContaining('test réel'), findsOneWidget);
+    expect(tester.takeException(), null);
+  });
+
 }

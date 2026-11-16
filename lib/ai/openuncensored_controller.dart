@@ -43,6 +43,65 @@ class OuCreditsController extends ChangeNotifier {
   Map<String, String> get taskModels => Map.unmodifiable(_state.models);
   bool get hasEmergencyKey => _emergencyKey != null;
 
+  /// Catalogue evidence may be absent. A test is scoped to this key + model.
+  OuToolProbeOutcome? probeFor(String modelId) {
+    final key = active;
+    if (key == null) return null;
+    final value = _state.toolChecks['${key.id}:$modelId'];
+    return OuToolProbeOutcome.values
+        .where((outcome) => outcome.name == value)
+        .firstOrNull;
+  }
+
+  OuToolSupport toolSupportFor(String modelId) {
+    return switch (probeFor(modelId)) {
+      OuToolProbeOutcome.supported => OuToolSupport.supported,
+      OuToolProbeOutcome.unsupported => OuToolSupport.unsupported,
+      _ => _catalogue.where((model) => model.id == modelId)
+          .map((model) => model.toolSupport)
+          .firstOrNull ?? OuToolSupport.unknown,
+    };
+  }
+
+  /// Uses one short, billable Chat Completions request after UI confirmation.
+  /// An ordinary text response remains inconclusive, not a negative result.
+  Future<OuToolProbeOutcome?> testToolCalling(String modelId) async =>
+      _run(() async {
+    final key = active;
+    if (key == null || !_catalogue.any((model) =>
+        model.id == modelId && model.available)) {
+      throw const OpenUncensoredFailure('Modèle de test indisponible.');
+    }
+    final result = await api.probeToolCalling(key.secret, modelId);
+    if (active?.id != key.id) {
+      throw const OpenUncensoredFailure(
+          'La clé active a changé pendant le test.');
+    }
+    final next = Map<String, String>.of(_state.toolChecks);
+    next.remove('${key.id}:$modelId');
+    next['${key.id}:$modelId'] = result.name;
+    // Bound local evidence, avoiding a growing encrypted payload.
+    while (next.length > 100) {
+      next.remove(next.keys.first);
+    }
+    await _write(_state.copyWith(toolChecks: next));
+    if (_state.models['narrator'] == modelId) {
+      if (!await _configure(_state)) {
+        throw const OpenUncensoredFailure(
+            'Test enregistré, mais profil du narrateur non mis à jour.');
+      }
+    }
+    notice = switch (result) {
+      OuToolProbeOutcome.supported =>
+          'Tool calling vérifié : un appel d’outil valide a été reçu.',
+      OuToolProbeOutcome.unsupported =>
+          'Le fournisseur refuse explicitement les outils pour ce modèle.',
+      OuToolProbeOutcome.inconclusive =>
+          'Test non concluant : aucun appel d’outil valide reçu.',
+    };
+    return result;
+  });
+
   String? emergencyKeyForManualRecovery() => _emergencyKey;
 
   void _notify() {
@@ -199,14 +258,22 @@ class OuCreditsController extends ChangeNotifier {
     final narratorModel = models['narrator'] ?? defaultAiModel;
     final knownNarrator = _catalogue.where(
         (model) => model.id == narratorModel).toList();
-    final narratorToolsSupported = knownNarrator.isEmpty
-        ? null
-        : knownNarrator.any((model) =>
-            model.available && model.toolCompatible);
+    final probe = snapshot.toolChecks['${key.id}:$narratorModel'];
+    final support = switch (probe) {
+      'supported' => AiToolCallingCompatibility.supported,
+      'unsupported' => AiToolCallingCompatibility.unsupported,
+      _ => knownNarrator.isEmpty
+          ? null
+          : switch (knownNarrator.first.toolSupport) {
+              OuToolSupport.supported => AiToolCallingCompatibility.supported,
+              OuToolSupport.unsupported => AiToolCallingCompatibility.unsupported,
+              OuToolSupport.unknown => AiToolCallingCompatibility.unknown,
+            },
+    };
     final applied = await ai.configureOpenUncensored(
       key.secret,
       narratorModel: narratorModel,
-      narratorToolsSupported: narratorToolsSupported,
+      narratorToolCompatibility: support,
       jsonifierModel: models['jsonifier'] ?? defaultAiModel,
       optimizerModel: models['optimizer'] ?? defaultAiModel,
     );
@@ -445,8 +512,8 @@ class OuCreditsController extends ChangeNotifier {
         throw const OpenUncensoredFailure('Modèle de tâche indisponible.');
       }
     }
-    // Tool compatibility is verified independently from model selection.
-    // A missing catalogue flag cannot make the entire model list unusable.
+    // An unverified model is selectable. Native tools stay disabled until
+    // catalogue evidence or a successful explicit probe confirms support.
     final next = _state.copyWith(mode: OuQuality.advanced.name, models: models);
     await _write(next);
     if (!await _configure(next)) return false;
