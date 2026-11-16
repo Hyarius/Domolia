@@ -130,7 +130,10 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   _Page _page = _Page.home;
-  _Page _aiReturnPage = _Page.settings;
+  final List<_Page> _history = [];
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  GlobalKey<BookEditorPageState> _bookEditorKey = GlobalKey<BookEditorPageState>();
+  bool _leavingBook = false;
   late final UpdateController _updates;
   late final bool _ownsUpdates;
   final AiExchangeRecorder _aiDiagnostics = AiExchangeRecorder();
@@ -246,20 +249,77 @@ class _HomePageState extends State<HomePage> {
 
   void _openConversationSettings() {
     if (_activeSessionId == null || _selectedBookId == null) return;
-    setState(() => _page = _Page.conversationSettings);
+    unawaited(_navigateTo(_Page.conversationSettings));
   }
 
   void _openBooks() {
     unawaited(_books.initialize());
-    setState(() => _page = _Page.books);
+    unawaited(_navigateTo(_Page.books));
   }
 
   void _openBook(BookDefinition book) {
     unawaited(_ai.initialize());
     setState(() {
+      _history.add(_page);
       _selectedBookId = book.id;
+      _bookEditorKey = GlobalKey<BookEditorPageState>();
       _page = _Page.book;
     });
+  }
+
+  Future<void> _createBookFromHome() async {
+    try {
+      await _books.initialize();
+      final book = await _books.create();
+      if (mounted) _openBook(book);
+    } catch (error, stackTrace) {
+      AppLogger.error('Création du Livre échouée', component: 'books',
+          error: error, stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Impossible de créer ce Livre. Réessayez.'),
+        ));
+      }
+    }
+  }
+
+  // The shell owns screen history. Dialogs and drawers still use Navigator.
+  Future<bool> _canLeaveCurrentPage() async {
+    if (_page != _Page.book) return true;
+    if (_leavingBook) return false;
+    _leavingBook = true;
+    try {
+      return await (_bookEditorKey.currentState?.prepareToLeave() ??
+          Future<bool>.value(true));
+    } finally {
+      _leavingBook = false;
+    }
+  }
+
+  Future<void> _navigateTo(_Page next) async {
+    if (_page == next || !await _canLeaveCurrentPage() || !mounted) return;
+    if (next == _Page.books) unawaited(_books.initialize());
+    if (next == _Page.home) unawaited(_refreshRecent());
+    setState(() {
+      if (next == _Page.home) {
+        _history.clear();
+      } else {
+        _history.add(_page);
+      }
+      _page = next;
+    });
+  }
+
+  Future<void> _goBack() async {
+    if (_history.isEmpty) return;
+    // Android usually hides the IME before forwarding Back to Flutter.
+    if (MediaQuery.viewInsetsOf(context).bottom > 0) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      return;
+    }
+    if (!await _canLeaveCurrentPage() || !mounted || _history.isEmpty) return;
+    setState(() => _page = _history.removeLast());
+    if (_page == _Page.home) unawaited(_refreshRecent());
   }
 
   Future<void> _openBookSession(
@@ -406,6 +466,7 @@ class _HomePageState extends State<HomePage> {
         _activeBookTitle = book.title;
         _activeSessionTitle = session.title;
         _activeSessionId = session.id;
+        _history.add(_page);
         _page = _Page.chat;
       });
     } catch (failure, stackTrace) {
@@ -420,17 +481,12 @@ class _HomePageState extends State<HomePage> {
 
   void _openAiSettings() {
     unawaited(_credits.initialize());
-    setState(() {
-      _aiReturnPage = _page == _Page.chat ? _Page.chat : _Page.settings;
-      _page = _Page.ai;
-    });
+    unawaited(_navigateTo(_Page.ai));
   }
 
   void _showPage(_Page page) {
-    Navigator.pop(context); // Ferme le menu latéral.
-    if (page == _Page.books) unawaited(_books.initialize());
-    if (page == _Page.home) unawaited(_refreshRecent());
-    setState(() => _page = page);
+    Navigator.pop(context); // Dismiss the drawer route.
+    unawaited(_navigateTo(page));
   }
 
   @override
