@@ -816,16 +816,14 @@ class NarrativeChatController extends ChangeNotifier {
     busy = true;
     promptTokens = null;
     completionTokens = null;
+    _clearPreview();
     _notify();
     final playerId = _playerEventId!;
-    RawGeneration? rawRecord = reuseRaw ? pendingRaw : null;
-    var stage = 'raw';
+    var stage = 'narrator_stream';
     try {
-      // Persist rewinds/pruning before issuing another request.
+      // Persist the player's action before requesting billable tokens.
       await _save(_timeline, _generations);
       _check(token);
-      // Finish queued extraction, then select facts from the durable branch.
-      // Rewinds invalidate old operations within saveNarrativeSnapshot().
       if (memory != null) {
         await memory!.analyzePending();
         await memory!.refresh();
@@ -839,140 +837,124 @@ class NarrativeChatController extends ChangeNotifier {
       _check(token);
       if (endpoint == null || endpoint.configuration.apiKey.isEmpty) {
         throw const AiProviderException(
-          'Configurez une connexion IA valide dans les paramètres.');
+            'Configurez une connexion IA valide dans les paramètres.');
       }
       modelUsed = endpoint.configuration.model;
-      if (rawRecord == null) {
+      final stream = NarrativeStreamBuffer();
+      List<ChatOutputEvent> events;
+      String story;
+      final oldRaw = reuseRaw ? pendingRaw : null;
+      if (oldRaw != null) {
+        // Pre-upgrade unfinished RAW replies remain recoverable without
+        // paying again. The original text is shown as a narrator bubble.
+        final recovered = oldRaw.rawText.trim();
+        if (recovered.isEmpty || recovered.length > 6000) {
+          throw const FormatException('Ancien récit trop long ou vide.');
+        }
+        events = [ChatLine(speaker: ChatSpeaker.narrator,
+            name: 'Narrateur', text: recovered)];
+        story = oldRaw.rawText;
+      } else {
         stage = 'optimizer';
-        promptTokens = null;
-        completionTokens = null;
         await _ensureOptimizedContext(token);
         _check(token);
-        stage = 'raw';
-        promptTokens = null;
-        completionTokens = null;
-        AppLogger.info('Début narration RAW', component: 'chat');
+        stage = 'narrator_stream';
+        AppLogger.info('Début narration structurée en streaming',
+            component: 'chat');
         final before = diagnostics?.last;
         Object? failed;
+        void onText(String fragment) {
+          _check(token);
+          stream.add(fragment);
+          _refreshPreview(stream);
+        }
+        void reset() {
+          stream.reset();
+          _clearPreview();
+        }
         try {
           final response = endpoint.toolCallingEnabled &&
                   endpoint.provider is AiToolCallingChatProvider
               ? await _requestHybrid(endpoint, token,
-                  endpoint.maxOutputTokens ?? 2400)
+                  endpoint.maxOutputTokens ?? 2400,
+                  onText: onText, onReset: reset)
               : await _requestText(endpoint, buildNarratorContext(), token,
-                  endpoint.maxOutputTokens ?? 2400);
+                  endpoint.maxOutputTokens ?? 2400, onFragment: onText);
           _check(token);
           if (response.trim().isEmpty) {
             throw const FormatException('Le narrateur a répondu sans texte.');
           }
-          rawRecord = RawGeneration(
-            playerEventId: playerId, rawText: response);
-          final changed = [
-            ..._generations.where((r) => r.playerEventId != playerId),
-            rawRecord,
-          ];
-          await _save(_timeline, changed);
-          // A successful durable write must also survive cancellation in this
-          // controller: retry must never silently regenerate a saved RAW.
-          _generations
-            ..clear()
-            ..addAll(changed);
-          _check(token);
-          AppLogger.info('Narration RAW conservée', component: 'chat');
+          events = stream.finish();
+          story = stream.storyText();
+          if (story.trim().isEmpty) {
+            throw const FormatException('Narration sans message valide.');
+          }
         } catch (e) {
           failed = e;
           rethrow;
         } finally {
-          _capture('narrator_raw', before, failure: failed);
+          _capture('narrator_stream', before,
+              failure: failed, events: stream.previewEvents(_nextId));
         }
       }
       _check(token);
-      stage = 'jsonifier';
-      promptTokens = null;
-      completionTokens = null;
-      final formatterEndpoint = resolveFormatterConnection == null
-          ? endpoint : await resolveFormatterConnection!();
-      _check(token);
-      AppLogger.info('Début JSONification', component: 'chat');
-      final before = diagnostics?.last;
-      Object? failed;
-      List<ChatTimelineEvent> additions = const [];
-      try {
-        final formatted = await _requestText(
-            formatterEndpoint, _jsonifierContext(rawRecord.rawText), token,
-            formatterEndpoint.maxOutputTokens ?? 2400);
-        _check(token);
-        final known = _verifiedJsonifierSpeakers();
-        final jsonified = const Jsonifier().decodeWithMemory(
-          rawRecord.rawText, formatted, knownCharacters: known,
-          hasPreviousScene: _timeline.isNotEmpty,
-        );
-        final prepared = <ChatTimelineEvent>[];
-        var id = _nextId;
-        for (final entry in jsonified.events) {
-          if (entry is ChatSceneChangeOutput) {
-            if (prepared.isNotEmpty && prepared.last is ChatSceneChange ||
-                prepared.isEmpty && _timeline.isNotEmpty &&
-                    _timeline.last is ChatSceneChange) {
-              throw const FormatException('Séparateurs consécutifs.');
-            }
-            prepared.add(ChatSceneChange(id: id++));
-          } else if (entry is ChatLine) {
-            prepared.add(ChatEntry(id: id++, speaker: entry.speaker,
-                name: entry.name, text: entry.text, status: entry.status));
+      final prepared = <ChatTimelineEvent>[];
+      var id = _nextId;
+      for (final entry in events) {
+        if (entry is ChatSceneChangeOutput) {
+          if (prepared.isNotEmpty && prepared.last is ChatSceneChange) {
+            throw const FormatException('Changements de scène consécutifs.');
           }
+          prepared.add(ChatSceneChange(id: id++));
+        } else if (entry is ChatLine) {
+          prepared.add(ChatEntry(id: id++, speaker: entry.speaker,
+              name: entry.name, text: entry.text, status: entry.status));
         }
-        if (prepared.whereType<ChatEntry>().isEmpty) {
-          throw const FormatException('JSONification sans message.');
-        }
-        final updated = [
-          ..._generations.where((g) => g.playerEventId != playerId),
-          rawRecord.structured(_nextId, id - 1,
-              compactText: jsonified.compact),
-        ];
-        // Once the final transaction starts, stopping cannot safely undo it.
-        // Keep the UI busy until its success/failure is reconciled in memory.
-        _committingSnapshot = true;
-        try {
-          await _save([..._timeline, ...prepared], updated);
-        } finally {
-          _committingSnapshot = false;
-        }
-        _check(token);
-        _nextId = id;
-        _generations
-          ..clear()
-          ..addAll(updated);
-        _timeline.addAll(prepared);
-        additions = prepared;
-        _timelineChanged();
-        _notify();
-        AppLogger.info('JSONification validée et publiée', component: 'chat',
-            details: {'eventCount': prepared.length});
-        // Story publication never depends on extractor reliability.
-        if (memory != null) unawaited(memory!.analyzePending());
-      } catch (e, stack) {
-        failed = e;
-        AppLogger.error('JSONification rejetée', component: 'chat',
-            error: e, stackTrace: stack);
-        rethrow;
-      } finally {
-        _capture('jsonifier', before, failure: failed, events: additions);
       }
+      if (prepared.whereType<ChatEntry>().isEmpty) {
+        throw const FormatException('Narration sans bulle de texte.');
+      }
+      final source = RawGeneration(playerEventId: playerId, rawText: story)
+          .structured(_nextId, id - 1);
+      final updated = [
+        ..._generations.where((g) => g.playerEventId != playerId),
+        source,
+      ];
+      stage = 'commit';
+      // Atomically publish validated messages plus their Live Memory source.
+      // Once the transaction begins the Stop button cannot undo it.
+      _committingSnapshot = true;
+      try {
+        await _save([..._timeline, ...prepared], updated);
+      } finally {
+        _committingSnapshot = false;
+      }
+      _check(token);
+      _nextId = id;
+      _generations..clear()..addAll(updated);
+      _timeline.addAll(prepared);
+      _clearPreview();
+      _timelineChanged();
+      _notify();
+      AppLogger.info('Narration structurée publiée', component: 'chat',
+          details: {'messages': prepared.whereType<ChatEntry>().length,
+                    'events': prepared.length});
+      if (memory != null) unawaited(memory!.analyzePending());
     } on _Cancelled {
-      // A late response is never committed to this or a different session.
+      // A stopped or stale stream never reaches committed storage.
     } on AiProviderException catch (failure) {
       error = failure.userMessage;
     } on FormatException catch (failure) {
       error = failure.message;
     } catch (failure, stack) {
-      AppLogger.error('Pipeline narratif échoué', component: 'chat',
+      AppLogger.error('Narration structurée échouée', component: 'chat',
           error: failure, stackTrace: stack);
-      error = stage == 'jsonifier'
-          ? 'JSONification impossible. Réessayez sans régénérer le récit.'
-          : 'Génération impossible. Réessayez.';
+      error = stage == 'commit'
+          ? 'Sauvegarde de la narration impossible. Réessayez.'
+          : 'Narration interrompue ou format invalide. Réessayez.';
     } finally {
       if (!_closed && token == _generationToken) {
+        _clearPreview();
         busy = false;
         _notify();
       }
