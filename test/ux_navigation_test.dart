@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:domolia/ai/ai_controller.dart';
 import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/ai/ai_task_routing.dart';
@@ -20,6 +22,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _Books implements BookStore {
+  Completer<void>? blockNextBookWrite;
   final Map<String, BookDefinition> books = {};
   final Map<String, BookSession> sessionsById = {};
   final Map<String, String?> bindings = {};
@@ -32,6 +35,11 @@ class _Books implements BookStore {
   @override
   Future<void> putBook(BookDefinition book) async {
     book.validate();
+    final gate = blockNextBookWrite;
+    if (gate != null) {
+      blockNextBookWrite = null;
+      await gate.future;
+    }
     books[book.id] = book;
   }
   @override
@@ -128,9 +136,12 @@ class _Prefs implements UpdatePreferences {
   Future<void> setAutomatic(bool value) async { automaticUpdates = value; }
 }
 
-Future<void> _showApp(WidgetTester tester, {bool withSession = false}) async {
+Future<void> _showApp(WidgetTester tester, {
+  bool withSession = false,
+  _Books? store,
+}) async {
   SharedPreferences.setMockInitialValues({});
-  final storage = _Books();
+  final storage = store ?? _Books();
   storage.books['novel'] = const BookDefinition(id: 'novel', title: 'La forêt');
   if (withSession) {
     storage.sessionsById['journey'] = const BookSession(
@@ -206,6 +217,33 @@ void main() {
     expect(delegate.crossAxisCount, 1);
     expect(tester.takeException(), isNull);
     expect(find.byTooltip('Supprimer La forêt'), findsOneWidget);
+  });
+
+  testWidgets('Une sauvegarde lente ne perd pas un réglage plus récent',
+      (tester) async {
+    final storage = _Books();
+    await _showApp(tester, store: storage);
+    await tester.tap(find.byKey(const ValueKey('homeBooks')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('book-novel')));
+    await tester.pumpAndSettle();
+
+    final firstWrite = Completer<void>();
+    storage.blockNextBookWrite = firstWrite;
+    await tester.enterText(
+      find.byKey(const ValueKey('bookTitle')), 'La forêt revisitée');
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(storage.blockNextBookWrite, isNull,
+        reason: 'The debounced text save must be in progress.');
+
+    await tester.tap(find.byKey(const ValueKey('bookNsfw')));
+    await tester.pump();
+    firstWrite.complete();
+    await tester.pumpAndSettle();
+
+    expect(storage.books['novel']!.title, 'La forêt revisitée');
+    expect(storage.books['novel']!.nsfw, isTrue);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Accueil, bibliothèque, Livre et retour Android',
