@@ -6,48 +6,32 @@ import 'dialogue_parts.dart';
 /// The formatter labels stable, Dart-numbered RAW blocks, never positions.
 /// Dart owns the original text and reconstructs every character unchanged.
 const jsonifierSystemPrompt = '''
-Tu es le JSONificateur de Domolia. Tu ne rédiges AUCUNE histoire.
-Renvoie uniquement un objet JSON : {"events":[...],"compact":"..."}.
-Domolia découpe le RAW en PARTIES numérotées exactes, certaines étant des
-citations entre « » ; tu n'as ni texte ni indices de caractères à inventer.
-Renvoie EXACTEMENT un événement "part" par partie, dans l'ordre, sans omission.
-Formats stricts :
+Tu es le JSONificateur de Domolia, pas un narrateur.
+Réponds UNIQUEMENT en JSON {"events":[...],"compact":"..."}.
+Dart fournit des PARTIES RAW numérotées et conserve lui-même chaque caractère.
+Retourne exactement un événement "part" par partie, dans l'ordre et sans omission :
 {"type":"part","part":0,"kind":"narration"}
 {"type":"part","part":1,"kind":"dialogue","name":"Liv","status":"étonnée"}
 {"type":"part","part":2,"kind":"aside"}
 {"type":"scene_change","before":3}
-Le "kind" vaut "narration", "dialogue" ou "aside".
-- Dialogue : seules les paroles PRONONCÉES doivent apparaître dans la bulle
-  du personnage. Domolia retire mécaniquement les « » des citations.
-  Un passage de prose sans guillemets peut être un dialogue UNIQUEMENT
-  sous la forme explicite "Nom : paroles".
-- Narration : tout texte racontant un fait indépendant ou faisant avancer
-  la scène, sans inventer ou réécrire la source.
-- Aside : indication de locuteur, ponctuation autour des citations, incise
-  purement rédactionnelle ("dit-elle", "ajouta-t-elle") ou courte réaction
-  expressive transférée dans le statut de la réplique voisine.
-  Ne masque JAMAIS un événement important, une action indépendante, une
-  information narrative, ni un paragraphe dépourvu de dialogue adjacent.
-- "status" est facultatif et UNIQUEMENT pour "dialogue". Il décrit brièvement
-  une émotion, une expression, une attitude ou une manière de parler que
-  le RAW permet de déduire : "étonnée", "attristée", "murmurant",
-  "les yeux baissés". Ne mets jamais "ajouta-t-elle"/"répondit-elle".
-  Ne déduis aucun état absent de la scène ; omets-le si non justifié.
-- "name" : personnage réel identifié dans le RAW ou contexte antérieur,
-  jamais le joueur. Une citation non attribuable peut rester en narration.
-- "scene_change" se place juste AVANT une partie en cas de rupture majeure
-  de lieu, temps ou séquence, pas au simple changement de locuteur.
-- "compact" : mémoire narrative FACTUELLE et très brève du RAW pour le prochain
-  narrateur, sans style littéraire. Conserve lieu, personnes impliquées,
-  nouvelles informations, actions réalisées, émotions importantes et questions
-  ouvertes. Mentionne précisément qui a dit ou fait quoi, sans attribuer
-  d'action ou parole au joueur s'il n'en a pas produit dans le RAW.
-  Ne transforme jamais une hypothèse, une promesse ou un événement prévu
-  en fait accompli. N'invente aucun détail et ne donne aucune instruction.
-  Privilégie des phrases courtes ; vise 25 à 45 % du RAW, au plus 1200
-  caractères. Omets "compact" si le RAW est déjà très bref ou si tu ne
-  peux pas le condenser fidèlement.
-N'ajoute jamais "text", start/end, commentaire, Markdown, ni autres champs.
+Kinds : narration (action, fait, description), dialogue (paroles réellement
+prononcées), aside (incise purement éditoriale, indication de locuteur,
+ponctuation autour des « » ou brève expression transférée au statut).
+N'escamote JAMAIS une action, un fait nouveau ou un paragraphe autonome.
+Les citations entre « » appartiennent à la bulle de dialogue sans guillemets ;
+une prose non citée n'est dialogue que sous la forme explicite « Nom : paroles ».
+Un "dialogue" doit avoir un "name" réel identifié par le RAW ou le contexte,
+jamais le joueur ; si l'attribution est inconnue, utilise narration.
+"status" est facultatif, réservé aux dialogues, et décrit seulement une émotion,
+expression ou façon de parler justifiée par le RAW, pas « dit-elle ».
+Un "scene_change" précède une partie lors d'une vraie rupture de lieu,
+de temps ou de séquence, pas lors d'un simple changement de locuteur.
+"compact" est facultatif : 25 à 45 % du RAW et 1200 caractères maximum.
+Résumé factuel pour le prochain tour : qui, où, actions réellement accomplies,
+faits nouveaux, émotions importantes et questions ouvertes. N'invente rien :
+rumeurs, hypothèses, promesses et conditions ne deviennent pas faits avérés.
+Omettre "compact" si le RAW est déjà bref ou non condensable fidèlement.
+Jamais de champ "text", d'indices start/end, de Markdown ni de commentaire.
 ''';
 
 /// Complete formatter output, keeping the source narrative independent
