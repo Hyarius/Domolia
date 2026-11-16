@@ -92,6 +92,30 @@ void main() {
     expect(chat.preview, isNull);
   });
 
+  testWidgets('Long AI reply does not force transcript to its end',
+      (tester) async {
+    final provider = _Provider()
+      ..raw = List.generate(45, (index) =>
+          'Paragraphe $index : une longue description du monde.').join(' ')
+      ..rawGate = Completer<String>();
+    final chat = NarrativeChatController(
+      provider: provider, configuration: () => config,
+    );
+    addTearDown(chat.dispose);
+    await showChat(tester, chat);
+    await enter(tester, 'Je découvre ce lieu.');
+    await tester.pumpAndSettle();
+    final transcript = tester.widget<ListView>(
+        find.byKey(const ValueKey('groupChatTranscript')));
+    final scroll = transcript.controller!;
+    final before = scroll.offset;
+    provider.rawGate!.complete(provider.raw);
+    await tester.pumpAndSettle();
+    expect(chat.messages.last.text, provider.raw);
+    expect(scroll.position.maxScrollExtent, greaterThan(before));
+    expect(scroll.offset, lessThan(scroll.position.maxScrollExtent));
+  });
+
   testWidgets('Scene break and three segments appear in one committed frame',
       (tester) async {
     final provider = _Provider();
