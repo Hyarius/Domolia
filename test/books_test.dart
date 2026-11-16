@@ -162,6 +162,53 @@ void main() {
     expect(await store.findBook(b.id), isNotNull);
   });
 
+  test('Book tuning survives export, import and independent copies', () {
+    final original = BookDefinition(
+      id: 'book-tuning', title: 'Rythme du livre',
+      detailLevel: 5,
+      tuning: const NarrativeTuning(
+        responseLength: 1, scenePacing: 4,
+        styleKeywords: ['Dialogué', 'Mystérieux'],
+      ),
+    );
+    final imported = BookDefinition.importJson(original.exportJson());
+    expect(imported.detailLevel, 5);
+    expect(imported.tuning.responseLength, 1);
+    expect(imported.tuning.scenePacing, 4);
+    expect(imported.tuning.styleKeywords, ['Dialogué', 'Mystérieux']);
+    expect(imported.narrator.systemPrompt, contains('45 à 90 mots'));
+    expect(imported.narrator.systemPrompt,
+        contains('Niveau de détail 5'));
+    expect(imported.narrator.systemPrompt,
+        contains('Dialogué, Mystérieux'));
+
+    final other = imported.copyWith(tuning: imported.tuning.copyWith(
+      scenePacing: 1,
+    ));
+    expect(other.tuning.scenePacing, 1);
+    expect(imported.tuning.scenePacing, 4);
+  });
+
+  test('Old Book JSON defaults to interactive pacing; bad tuning rejected', () {
+    const book = BookDefinition(id: 'legacy-book', title: 'Ancien');
+    final json = jsonDecode(book.exportJson()) as Map<String, dynamic>;
+    final narrative = json['narrative'] as Map<String, dynamic>;
+    narrative.remove('responseLength');
+    narrative.remove('scenePacing');
+    narrative.remove('styleKeywords');
+    final restored = BookDefinition.importJson(jsonEncode(json));
+    expect(restored.tuning.responseLength, 2);
+    expect(restored.tuning.scenePacing, 2);
+    expect(restored.tuning.styleKeywords, isEmpty);
+    narrative['responseLength'] = 0;
+    expect(() => BookDefinition.importJson(jsonEncode(json)),
+        throwsFormatException);
+    narrative['responseLength'] = 2;
+    narrative['styleKeywords'] = List.filled(9, 'différent');
+    expect(() => BookDefinition.importJson(jsonEncode(json)),
+        throwsFormatException);
+  });
+
   test('Five distinct detail prompts preserve literary rules without JSON', () {
     for (var level = 1; level <= 5; level++) {
       final book = BookDefinition(

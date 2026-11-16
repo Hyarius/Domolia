@@ -58,6 +58,54 @@ const _configuration = AiConfiguration(
 );
 
 void main() {
+  test('Tuning saves without changing Book rules or the formatter', () async {
+    final store = _MemorySettings();
+    final settings = NarratorSettingsController(store: store);
+    addTearDown(settings.dispose);
+    await settings.initialize();
+    expect(await settings.save(
+      style: 'Dialogues naturels',
+      openingMessagesText: 'Début',
+      responseLength: 1,
+      scenePacing: 4,
+      styleKeywordsText: 'Sobre, Dialogué, sobre',
+    ), isTrue);
+    expect(store.saved!.tuning.responseLength, 1);
+    expect(store.saved!.tuning.scenePacing, 4);
+    expect(store.saved!.tuning.styleKeywords, ['Sobre', 'Dialogué']);
+    expect(settings.narrator.systemPrompt, contains('45 à 90 mots'));
+
+    expect(await settings.save(
+      style: 'Autre style',
+      openingMessagesText: 'Début',
+      responseLength: 6,
+    ), isFalse);
+    expect(store.saved!.narrativePrompt, 'Dialogues naturels');
+    expect(store.saved!.tuning.responseLength, 1);
+    expect(await settings.save(
+      style: 'Autre style',
+      openingMessagesText: 'Début',
+      styleKeywordsText: List.filled(9, 'mot').join(', '),
+    ), isTrue); // repeated keywords normalize into one
+    expect(store.saved!.tuning.styleKeywords, ['mot']);
+  });
+
+  test('Legacy saved narrator v1 loads with interactive tuning defaults',
+      () async {
+    SharedPreferences.setMockInitialValues({
+      'domolia.narrator.settings.v1': jsonEncode({
+        'version': 1,
+        'style': 'Ancien style',
+        'openingMessages': ['Début ancien'],
+      }),
+    });
+    final narrator = (await LocalNarratorSettingsStore().read())!;
+    expect(narrator.narrativePrompt, 'Ancien style');
+    expect(narrator.tuning.responseLength, 2);
+    expect(narrator.tuning.scenePacing, 2);
+    expect(narrator.tuning.styleKeywords, isEmpty);
+  });
+
   test('Default Narrator supplies at least one opening without API calls', () {
     final provider = _RecordedProvider();
     final chat = NarrativeChatController(
@@ -155,7 +203,9 @@ void main() {
         hasLength(2));
     expect(provider.calls, 4);
     expect(provider.narratorMessages!.first.content,
-        endsWith('Narre comme un conte mystérieux.'));
+        contains('Narre comme un conte mystérieux.'));
+    expect(provider.narratorMessages!.first.content,
+        contains('90 à 170 mots'));
   });
 
   test('Settings validation never overwrites the last good configuration',
@@ -198,11 +248,17 @@ void main() {
     expect(restored.narrativePrompt, 'Ambiance fantastique');
     expect(restored.openingMessages, ['Entrée A', 'Entrée B']);
     expect(restored.protocolPrompt, defaultNarratorProtocolPrompt);
+    expect(restored.tuning.responseLength, 2);
+    expect(restored.tuning.scenePacing, 2);
 
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('domolia.narrator.settings.v1')!;
     final decoded = jsonDecode(raw) as Map<String, dynamic>;
-    expect(decoded.keys, containsAll(['version', 'style', 'openingMessages']));
+    expect(decoded.keys, containsAll([
+      'version', 'style', 'openingMessages', 'responseLength',
+      'scenePacing', 'styleKeywords',
+    ]));
+    expect(decoded['version'], 2);
     expect(decoded.containsKey('protocolPrompt'), false);
     expect(raw.contains('"scene_change"'), false);
   });
