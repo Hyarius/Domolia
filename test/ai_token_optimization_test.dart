@@ -76,8 +76,8 @@ void main() {
     chat.restoreTimeline([
       for (var i = 0; i < 12; i++)
         ChatEntry(id: i, speaker: ChatSpeaker.character,
-          name: 'Personnage', text: 'Très long discours précédent $i ' +
-              List.filled(40, 'mystère').join(' ')),
+          name: 'Personnage', text: ['Très long discours précédent $i',
+              ...List.filled(40, 'mystère')].join(' ')),
     ]);
     await chat.send('Je regarde la pluie');
     final prompt = fake.formattedContext!.last.content;
@@ -96,7 +96,7 @@ void main() {
       for (var i = 0; i < 8; i++)
         ChatEntry(id: i, speaker: ChatSpeaker.character,
           name: 'Acteur $i',
-          text: 'Mot $i. ' + List.filled(500, 'énorme').join(' ')),
+          text: ['Mot $i.', ...List.filled(500, 'énorme')].join(' ')),
     ]);
     await chat.send('Je l’écoute');
     final prompt = fake.formattedContext!.last.content;
@@ -118,8 +118,8 @@ void main() {
         history.add(ChatEntry(id: id + 1, speaker: ChatSpeaker.narrator,
             name: 'Narrateur', text: 'Résultat $turn.'));
         raws.add(RawGeneration(playerEventId: id,
-            rawText: 'Long RAW original pour le tour $turn. ' +
-                List.filled(40, 'texte').join(' '),
+            rawText: ['Long RAW original pour le tour $turn.',
+              ...List.filled(40, 'texte')].join(' '),
             compactText: 'Tour $turn, action attestée.',
             firstEventId: id + 1, lastEventId: id + 1));
       }
