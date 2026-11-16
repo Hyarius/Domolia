@@ -41,17 +41,21 @@ class _LiveMemoryPageState extends State<LiveMemoryPage> {
     }
   }
 
-  void _changed() { if (mounted) setState(() {}); }
+  void _changed() {
+    if (mounted) { setState(() {}); }
+  }
 
   Future<void> _load() async {
     try {
       await widget.memory.refresh();
-      if (mounted) setState(() { _loading = false; _error = null; });
+      if (mounted) { setState(() { _loading = false; _error = null; }); }
     } catch (_) {
-      if (mounted) setState(() {
-        _loading = false;
-        _error = 'Impossible de charger la mémoire.';
-      });
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Impossible de charger la mémoire.';
+        });
+      }
     }
   }
 
