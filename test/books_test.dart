@@ -829,7 +829,7 @@ void main() {
 
 
 
-  testWidgets('Each Party overrides formatter and optimizer independently',
+  testWidgets('Legacy formatter settings remain stored but UI exposes only active tasks',
       (tester) async {
     tester.view.physicalSize = const Size(340, 820);
     tester.view.devicePixelRatio = 1;
@@ -842,6 +842,7 @@ void main() {
     await library.initialize();
     final book = await library.create('Deux tâches');
     final session = await library.newSession(book);
+    await library.setSessionTaskProfile(session.id, 'jsonifier', 'fmt');
     const formatter = AiProfile(
       id: 'fmt', name: 'JSONificateur léger',
       baseUrl: 'https://example.invalid', model: 'fast-model',
@@ -865,13 +866,10 @@ void main() {
       )),
     ));
     await tester.pumpAndSettle();
-    final formatterSelector = find.byKey(
-      const ValueKey('conversationTask-jsonifier-'));
-    await tester.scrollUntilVisible(formatterSelector, 210);
-    await tester.tap(formatterSelector);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('JSONificateur léger').last);
-    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('conversationTask-jsonifier-')),
+        findsNothing);
+    expect(find.byKey(const ValueKey('conversationTokens-jsonifier-0')),
+        findsNothing);
     var stored = (await library.session(session.id))!;
     expect(stored.aiProfileId, isNull);
     expect(stored.formatterProfileId, 'fmt');
@@ -920,7 +918,7 @@ void main() {
     expect(exported, isNot(contains(session.id)));
   });
 
-  testWidgets('A Party overrides JSONifier token and reasoning independently',
+  testWidgets('A Party overrides narrator token and reasoning independently',
       (tester) async {
     tester.view.physicalSize = const Size(360, 950);
     tester.view.devicePixelRatio = 1;
@@ -953,7 +951,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final token = find.byKey(
-        const ValueKey('conversationTokens-jsonifier-0'));
+        const ValueKey('conversationTokens-narrator-0'));
     await tester.scrollUntilVisible(token, 230);
     await tester.ensureVisible(token);
     await tester.pumpAndSettle();
@@ -962,12 +960,12 @@ void main() {
     await tester.tap(find.text('8192 tokens').last);
     await tester.pumpAndSettle();
     var stored = (await library.session(session.id))!;
-    expect(stored.generationOverrides[AiNarrativeTask.jsonifier]!
+    expect(stored.generationOverrides[AiNarrativeTask.narrator]!
         .maxOutputTokens, 8192);
-    expect(stored.generationOverrides[AiNarrativeTask.narrator], isNull);
+    expect(stored.generationOverrides[AiNarrativeTask.jsonifier], isNull);
 
     final reasoning = find.byKey(
-      const ValueKey('conversationReasoning-jsonifier-'));
+      const ValueKey('conversationReasoning-narrator-'));
     await tester.scrollUntilVisible(reasoning, 200);
     await tester.ensureVisible(reasoning);
     await tester.pumpAndSettle();
@@ -976,7 +974,7 @@ void main() {
     await tester.tap(find.text('NONE').last);
     await tester.pumpAndSettle();
     stored = (await library.session(session.id))!;
-    expect(stored.generationOverrides[AiNarrativeTask.jsonifier]!
+    expect(stored.generationOverrides[AiNarrativeTask.narrator]!
         .reasoningEffort, 'none');
     expect(stored.generationOverrides[AiNarrativeTask.narrator], isNull);
     expect(tester.takeException(), isNull);

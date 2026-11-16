@@ -271,9 +271,9 @@ void main() {
   });
 
 
-  test('Controller and real SQLite resume a failed JSONification after restart',
+  test('Legacy pending literary source resumes from SQLite without an AI call',
       () async {
-    final dir = await Directory.systemTemp.createTemp('domolia-pipeline-integration-');
+    final dir = await Directory.systemTemp.createTemp('domolia-stream-integration-');
     final file = '${dir.path}/integration.sqlite';
     final first = SqliteBookStore(factory: databaseFactoryFfi, databasePath: file);
     addTearDown(() async {
@@ -283,27 +283,23 @@ void main() {
     await first.putBook(const BookDefinition(id: 'b', title: 'Livre'));
     const session = BookSession(id: 's', bookId: 'b', title: 'Partie');
     await first.putSession(session);
-    final provider = _PipelineProvider();
-    final firstController = NarrativeChatController(
-      provider: provider,
-      configuration: () => _integrationConfig,
-      onPersistState: (events, raws) =>
-          first.saveNarrativeSnapshot(session.copyWith(timeline: events), raws),
-    );
-    await firstController.send('Je rentre dans le château.');
-    expect(firstController.messages, hasLength(1));
-    expect(firstController.pendingRaw?.rawText, provider.raw);
-    expect(provider.rawCalls, 1);
-    firstController.dispose();
+    const player = ChatEntry(id: 8, speaker: ChatSpeaker.player,
+        name: 'Vous', text: 'Je rentre dans le château.');
+    const legacyRaw = RawGeneration(playerEventId: 8,
+        rawText: 'Le château apparaît, entouré de brume.');
+    await first.saveNarrativeSnapshot(
+        session.copyWith(timeline: [player]), [legacyRaw]);
     await first.close();
 
-    final second = SqliteBookStore(factory: databaseFactoryFfi, databasePath: file);
+    final second = SqliteBookStore(
+        factory: databaseFactoryFfi, databasePath: file);
     addTearDown(second.close);
     final saved = (await second.findSession('s'))!;
-    final savedRaw = await second.listRawGenerations('s');
+    final pending = await second.listRawGenerations('s');
     expect(saved.timeline, hasLength(1));
-    expect(savedRaw.single.isStructured, isFalse);
-    provider.failFormatter = false;
+    expect(pending.single.isStructured, isFalse);
+
+    final provider = _PipelineProvider();
     final resumed = NarrativeChatController(
       provider: provider,
       configuration: () => _integrationConfig,
@@ -311,16 +307,14 @@ void main() {
           second.saveNarrativeSnapshot(session.copyWith(timeline: events), raws),
     );
     addTearDown(resumed.dispose);
-    resumed.restoreTimeline(saved.timeline, rawGenerations: savedRaw);
+    resumed.restoreTimeline(saved.timeline, rawGenerations: pending);
     await resumed.retry();
-    expect(provider.rawCalls, 1, reason: 'The narrator must not be called twice.');
-    expect(provider.formatCalls, 2);
-    expect(resumed.messages.last.text, provider.raw);
+    expect(provider.calls, 0, reason: 'Reuse historical text without another charge.');
+    expect(resumed.messages.last.text, legacyRaw.rawText);
     expect((await second.findSession('s'))!.timeline, hasLength(2));
-    final finalRaw = (await second.listRawGenerations('s')).single;
-    expect(finalRaw.isStructured, isTrue);
-    expect(finalRaw.rawText, provider.raw);
-
+    final persisted = (await second.listRawGenerations('s')).single;
+    expect(persisted.isStructured, isTrue);
+    expect(persisted.rawText, legacyRaw.rawText);
     await second.deleteBook('b');
     expect(await second.listRawGenerations('s'), isEmpty);
   });
@@ -508,30 +502,19 @@ const _integrationConfig = AiConfiguration(
 );
 
 class _PipelineProvider implements AiChatProvider {
-  final String raw = 'Le château apparaît, entouré de brume.';
-  bool failFormatter = true;
-  int rawCalls = 0;
-  int formatCalls = 0;
+  int calls = 0;
 
   @override
   Future<List<AiModel>> listModels(AiConfiguration config) async => [];
 
   @override
   Future<String> complete(AiConfiguration config, {
-    required List<AiMessage> messages,
-    int maxTokens = 1200,
+    required List<AiMessage> messages, int maxTokens = 1200,
   }) async {
-    if (messages.first.content.contains('JSONificateur')) {
-      formatCalls++;
-      if (failFormatter) {
-        return '{"events":[]}';
-      }
-      return jsonEncode({'events': [
-        {'type': 'message', 'start': 0, 'end': raw.length,
-         'speaker': 'narrator', 'name': 'Narrateur'},
-      ]});
-    }
-    rawCalls++;
-    return raw;
+    calls++;
+    return '${jsonEncode({
+      'type': 'message', 'speaker': 'narrator',
+      'name': 'Narrateur', 'text': 'Le château apparaît.',
+    })}\n';
   }
 }

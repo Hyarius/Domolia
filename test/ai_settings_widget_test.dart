@@ -278,7 +278,7 @@ void main() {
     await showPage(tester, size: const Size(430, 1100),
       taskRouting: routing);
 
-    final token = find.byKey(const ValueKey('aiTaskTokens-jsonifier-4096'));
+    final token = find.byKey(const ValueKey('aiTaskTokens-optimizer-4096'));
     await tester.scrollUntilVisible(token, 250,
       scrollable: find.byType(Scrollable).first);
     await tester.ensureVisible(token);
@@ -287,11 +287,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('8192 tokens').last);
     await tester.pumpAndSettle();
-    expect(routing.generationFor(AiNarrativeTask.jsonifier).maxOutputTokens,
+    expect(routing.generationFor(AiNarrativeTask.optimizer).maxOutputTokens,
       8192);
 
     final reasoning = find.byKey(
-      const ValueKey('aiTaskReasoning-jsonifier-auto'));
+      const ValueKey('aiTaskReasoning-optimizer-auto'));
     await tester.scrollUntilVisible(reasoning, 150,
       scrollable: find.byType(Scrollable).first);
     await tester.ensureVisible(reasoning);
@@ -300,14 +300,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('NONE').last);
     await tester.pumpAndSettle();
-    expect(routing.generationFor(AiNarrativeTask.jsonifier).reasoningEffort,
+    expect(routing.generationFor(AiNarrativeTask.optimizer).reasoningEffort,
       'none');
     final reopened = AiTaskRouting();
     addTearDown(reopened.dispose);
     await reopened.initialize();
-    expect(reopened.generationFor(AiNarrativeTask.jsonifier).maxOutputTokens,
+    expect(reopened.generationFor(AiNarrativeTask.optimizer).maxOutputTokens,
       8192);
-    expect(reopened.generationFor(AiNarrativeTask.jsonifier).reasoningEffort,
+    expect(reopened.generationFor(AiNarrativeTask.optimizer).reasoningEffort,
       'none');
     expect(tester.takeException(), isNull);
   });

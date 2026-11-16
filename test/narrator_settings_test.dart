@@ -40,14 +40,11 @@ class _RecordedProvider implements AiChatProvider {
   }) async {
     calls++;
     lastMessages = messages;
-    if (messages.first.content.contains('JSONificateur')) {
-      return jsonEncode({'events': [
-        {'type': 'message', 'start': 0, 'end': 'Le monde vous répond.'.length,
-          'speaker': 'narrator', 'name': 'Narrateur'},
-      ]});
-    }
     narratorMessages = messages;
-    return 'Le monde vous répond.';
+    return '${jsonEncode({
+      'type': 'message', 'speaker': 'narrator',
+      'name': 'Narrateur', 'text': 'Le monde vous répond.',
+    })}\n';
   }
 }
 
@@ -58,7 +55,7 @@ const _configuration = AiConfiguration(
 );
 
 void main() {
-  test('Tuning saves without changing Book rules or the formatter', () async {
+  test('Tuning saves without changing Book world rules', () async {
     final store = _MemorySettings();
     final settings = NarratorSettingsController(store: store);
     addTearDown(settings.dispose);
@@ -147,7 +144,7 @@ void main() {
     expect(selections, 1);
 
     await chat.send('Je réponds.');
-    expect(provider.calls, 2);
+    expect(provider.calls, 1);
     expect(chat.messages.map((e) => e.text),
         ['Ouverture B', 'Je réponds.', 'Le monde vous répond.']);
 
@@ -162,7 +159,7 @@ void main() {
     expect(chat.messages.where((message) => message.text == 'Ouverture B'),
         hasLength(1));
     expect(selections, 1);
-    expect(provider.calls, 4);
+    expect(provider.calls, 2);
   });
 
   test('A new chat uses the saved settings; later edits affect future turns',
@@ -201,7 +198,7 @@ void main() {
     expect(chat.messages.first.text, 'Au port !');
     expect(chat.messages.where((m) => m.speaker == ChatSpeaker.player),
         hasLength(2));
-    expect(provider.calls, 4);
+    expect(provider.calls, 2);
     expect(provider.narratorMessages!.first.content,
         contains('Narre comme un conte mystérieux.'));
     expect(provider.narratorMessages!.first.content,
