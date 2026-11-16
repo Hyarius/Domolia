@@ -38,6 +38,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   int? _lastTimelineEventId;
+  int _lastPreviewCount = 0;
 
   @override
   void initState() {
@@ -59,6 +60,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
   void _observeInitialTimeline() {
     final timeline = widget.controller.timeline;
     _lastTimelineEventId = timeline.isEmpty ? null : timeline.last.id;
+    _lastPreviewCount = widget.controller.previewEvents.length;
     if (timeline.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToLatest());
     }
@@ -70,6 +72,20 @@ class _GroupChatPageState extends State<GroupChatPage> {
   }
 
   void _onChatChanged() {
+    final count = widget.controller.previewEvents.length;
+    if (count > 0 && _lastPreviewCount == 0) {
+      // Reveal the first bubble once, without chasing subsequent fragments.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scroll.hasClients) return;
+        final position = _scroll.position;
+        if (position.pixels >= position.maxScrollExtent - 180) {
+          _scroll.animateTo(position.maxScrollExtent,
+              duration: const Duration(milliseconds: 170),
+              curve: Curves.easeOut);
+        }
+      });
+    }
+    _lastPreviewCount = count;
     final timeline = widget.controller.timeline;
     final last = timeline.isEmpty ? null : timeline.last;
     if (last?.id == _lastTimelineEventId) return;
@@ -359,7 +375,10 @@ class _GroupChatPageState extends State<GroupChatPage> {
     return AnimatedBuilder(
       animation: chat,
       builder: (context, _) {
-        final transcript = chat.timeline;
+        final transcript = <ChatTimelineEvent>[
+          ...chat.timeline,
+          ...chat.previewEvents,
+        ];
         return SafeArea(
           child: Column(
             children: [
