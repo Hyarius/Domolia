@@ -189,6 +189,25 @@ Future<void> _systemBack(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('La bibliothèque reste lisible sur téléphone étroit',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await _showApp(tester);
+    await tester.tap(find.byKey(const ValueKey('homeBooks')));
+    await tester.pumpAndSettle();
+    final grid = tester.widget<GridView>(
+      find.byKey(const ValueKey('booksGrid')));
+    final delegate = grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+    expect(delegate.crossAxisCount, 1);
+    expect(tester.takeException(), isNull);
+    expect(find.byTooltip('Supprimer La forêt'), findsOneWidget);
+  });
+
   testWidgets('Accueil, bibliothèque, Livre et retour Android',
       (tester) async {
     await _showApp(tester);
