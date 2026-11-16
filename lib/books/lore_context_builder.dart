@@ -11,6 +11,8 @@ class LoreContextBuilder {
     final g = lore.global;
     final recent = _fold(recentText.join('\n'));
     final output = <String>[];
+    // Track optional sections to make space for a visible omission warning.
+    final essentialBlocks = <bool>[];
     var used = 0;
     var omitted = 0;
     void include(String section, String value, {bool essential = false}) {
@@ -27,6 +29,7 @@ class LoreContextBuilder {
         return;
       }
       output.add(block);
+      essentialBlocks.add(essential);
       used += block.length + 2;
     }
 
@@ -136,18 +139,31 @@ class LoreContextBuilder {
       ].join('\n'), essential: mentioned(e));
     }
     if (omitted > 0) {
-      // Visible notice avoids silently treating an incomplete selection as total.
-      final warning = '$omitted fiche(s) de priorité secondaire non transmises '
+      // Do not fail a narration simply because the explanatory notice does
+      // not fit. First try a shorter notice; then sacrifice optional entries
+      // (never global canon or explicitly mentioned character/place sheets).
+      String warning = '$omitted fiche(s) de priorité secondaire non transmises '
           'faute de budget. Ne les invente pas.';
-      if (used + warning.length + 2 <= maxCharacters) {
-        output.add(warning);
-      } else if (output.isNotEmpty) {
-        // The omission remains observable to callers through a bounded error.
-        throw const FormatException(
-          'Budget de Lore saturé : des fiches pertinentes ont été écartées. '
-          'Réduisez le Lore global ou augmentez le budget.',
-        );
+      if (used + warning.length + 2 > maxCharacters) {
+        warning = 'LORE PARTIEL : $omitted fiche(s) omise(s). Ne les invente pas.';
       }
+      while (used + warning.length + 2 > maxCharacters) {
+        final optional = essentialBlocks.lastIndexOf(false);
+        if (optional < 0) {
+          // This is an actual essential-content shortage, not merely an
+          // insufficient allowance for secondary metadata.
+          throw const FormatException(
+            'Budget de Lore insuffisant pour le canon essentiel et '
+            'l’avertissement de sélection. Réduisez le Lore global.',
+          );
+        }
+        used -= output[optional].length + 2;
+        output.removeAt(optional);
+        essentialBlocks.removeAt(optional);
+        omitted++;
+        warning = 'LORE PARTIEL : $omitted fiche(s) omise(s). Ne les invente pas.';
+      }
+      output.add(warning);
     }
     return output.join('\n\n');
   }

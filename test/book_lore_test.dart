@@ -180,6 +180,45 @@ void main() {
     expect(context,contains('SECRETS DU NARRATEUR'));
   });
 
+  test('Local Lore budget cannot fail only because its omission notice is long', () {
+    final lore = BookLore(
+      global: const LoreGlobal(
+        universe: 'Les Marches de Verre',
+        rules: 'Les secrets restent secrets et les choix sont au joueur.',
+      ),
+      characters: const [
+        LoreCharacter(id: 'oren', name: 'Oren',
+          description: 'Aubergiste qui connaît le pont.',
+          secrets: 'Il détient une clé de cuivre.'),
+      ],
+      scenarios: const [
+        LoreScenario(id: 'missing', name: 'Voyageur disparu',
+          summary: 'Un voyageur a disparu hier soir.',
+          importance: LoreScenarioImportance.main),
+      ],
+      events: const [
+        LoreEvent(id: 'registry', name: 'Registre des voyageurs',
+          trigger: LoreEventTrigger.conditional,
+          condition: 'Uniquement si le joueur demande le registre.',
+          description: 'Oren révèle une page du registre.',
+          scenarioIds: ['missing']),
+      ],
+    );
+    final full = const LoreContextBuilder(maxCharacters: 10000)
+        .build(lore, ['Je demande à Oren ce qui est arrivé.']);
+    final eventStart = full.indexOf('ÉVÉNEMENT POTENTIEL — Registre des voyageurs');
+    expect(eventStart, greaterThan(0));
+    // The main plot fits, the event does not, and no complete explanation
+    // can fit unless the selector shortens the warning or drops optional data.
+    final partial = LoreContextBuilder(maxCharacters: eventStart + 5)
+        .build(lore, ['Je demande à Oren ce qui est arrivé.']);
+    expect(partial, contains('CANON DU MONDE'));
+    expect(partial, contains('PERSONNAGE CANONIQUE — Oren'));
+    expect(partial, contains('LORE PARTIEL'));
+    expect(partial, isNot(contains('ÉVÉNEMENT POTENTIEL — Registre')));
+    expect(partial.length, lessThanOrEqualTo(eventStart + 5));
+  });
+
   test('Conditional story events are always possibilities, never marked done', () {
     final context = const LoreContextBuilder(maxCharacters:7000)
         .build(testLore,['Je trouve un passage secret. Ancien prisonnier.']);
