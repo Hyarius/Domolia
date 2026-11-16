@@ -204,8 +204,7 @@ void main() {
       find.byKey(const ValueKey('ouToolProbe')), 180,
       scrollable: find.byType(Scrollable).first);
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('ouAdvanced-narrator-' +
-        defaultAiModel)), findsOneWidget);
+    expect(find.byKey(const ValueKey('ouAdvanced-narrator-$defaultAiModel')), findsOneWidget);
     expect(find.byKey(const ValueKey('ouToolProbe')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('ouToolProbe')));
     await tester.pumpAndSettle();
