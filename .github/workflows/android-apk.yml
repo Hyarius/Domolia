@@ -54,7 +54,9 @@ jobs:
         run: flutter analyze
 
       - name: Tests
-        run: flutter test
+        # Display each test while diagnosing streaming deadlocks; one blocked
+        # async fixture must never stall all branch builds indefinitely.
+        run: flutter test --reporter expanded --timeout 90s
 
       # Les secrets ne sont jamais fournis aux builds de PR.
       # Sur main, l'APK de développement est signé avec la clé release

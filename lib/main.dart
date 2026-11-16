@@ -409,7 +409,10 @@ class _HomePageState extends State<HomePage> {
           // The usage ledger is separate from bounded, purgeable diagnostics.
           // A tool round is one billed LLM request, not another fee per tool.
           final usage = AiUsageRecord.fromExchange(session.id, exchange);
-          if (exchange.stage == 'jsonifier') {
+          // With the JSONifier gone, every streamed narrator/tool round can
+          // be the final billable step. Refresh the provider balance after it.
+          if (exchange.stage == 'jsonifier' ||
+              (exchange.stage?.startsWith('narrator_') ?? false)) {
             final key = _credits.active;
             if (key != null) unawaited(_credits.refresh(key.id));
           }
