@@ -283,7 +283,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
     return _db ??= await (_factoryOverride ?? databaseFactory).openDatabase(
       location,
       options: OpenDatabaseOptions(
-      version: 9,
+      version: 10,
       onConfigure: (db) async =>
           db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, version) async {
@@ -303,6 +303,8 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
           'optimized_lore TEXT, optimized_lore_hash TEXT, '
           'generation_options_json TEXT, '
           'tool_calling_enabled INTEGER NOT NULL DEFAULT 1, '
+          'memory_profile_id TEXT, '
+          'memory_enabled INTEGER NOT NULL DEFAULT 1, '
           'FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE)',
         );
         await db.execute(
@@ -314,6 +316,15 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 9) await _createMemoryTables(db);
+        if (oldVersion < 10) {
+          final sessions = await db.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'");
+          if (sessions.isNotEmpty) {
+            await db.execute('ALTER TABLE sessions ADD COLUMN memory_profile_id TEXT');
+            await db.execute('ALTER TABLE sessions ADD COLUMN '
+                'memory_enabled INTEGER NOT NULL DEFAULT 1');
+          }
+        }
         if (oldVersion < 2) await _createDiagnostics(db);
         if (oldVersion < 3) {
           await db.execute('ALTER TABLE sessions ADD COLUMN profile_id TEXT');
@@ -414,6 +425,8 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
     aiProfileId: row['profile_id'] as String?,
     formatterProfileId: row['formatter_profile_id'] as String?,
     optimizerProfileId: row['optimizer_profile_id'] as String?,
+    memoryProfileId: row['memory_profile_id'] as String?,
+    memoryEnabled: row['memory_enabled'] != 0,
     toolCallingEnabled: row['tool_calling_enabled'] != 0,
     generationOverrides: AiTaskGenerationOverride.decode(
         row['generation_options_json'] as String?),
@@ -442,6 +455,8 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
       'profile_id': session.aiProfileId,
       'formatter_profile_id': session.formatterProfileId,
       'optimizer_profile_id': session.optimizerProfileId,
+      'memory_profile_id': session.memoryProfileId,
+      'memory_enabled': session.memoryEnabled ? 1 : 0,
       'tool_calling_enabled': session.toolCallingEnabled ? 1 : 0,
       'generation_options_json': AiTaskGenerationOverride.encode(
           session.generationOverrides),
