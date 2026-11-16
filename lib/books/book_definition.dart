@@ -66,11 +66,11 @@ class BookDefinition {
   ];
 
   static const detailInstructions = [
-    'Niveau de détail 1 : réponds en descriptions très courtes et directes.',
-    'Niveau de détail 2 : utilise des descriptions légères et concises.',
-    'Niveau de détail 3 : privilégie une narration naturelle et modérée.',
-    'Niveau de détail 4 : développe les descriptions et le contexte sensible.',
-    'Niveau de détail 5 : enrichis les descriptions, ambiance et sensations.',
+    'Niveau de détail 1 : garde seulement les détails indispensables.',
+    'Niveau de détail 2 : ajoute quelques détails précis, sans surcharge.',
+    'Niveau de détail 3 : décris les sensations et décors utiles à la scène.',
+    'Niveau de détail 4 : enrichis les réactions et l’atmosphère.',
+    'Niveau de détail 5 : soigne les descriptions, ambiance et sensations.',
   ];
 
   /// Suggested targets from a 26-message conversation export (median 146 words).
