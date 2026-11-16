@@ -147,6 +147,36 @@ void main() {
     expect(find.byKey(const ValueKey('chatWritingIndicator')), findsNothing);
   });
 
+  testWidgets('Long AI answer does not scroll to its end', (tester) async {
+    final provider = _Provider()
+      ..raw = List.filled(90, 'Une phrase du narrateur.').join(' ')
+      ..rawGate = Completer<String>()
+      ..formatGate = Completer<String>();
+    final chat = NarrativeChatController(
+      provider: provider, configuration: () => config,
+    );
+    addTearDown(chat.dispose);
+    await showChat(tester, chat);
+    await enter(tester, 'Je regarde autour de moi.');
+    final scroll = tester.state<ScrollableState>(
+      find.descendant(
+        of: find.byKey(const ValueKey('groupChatTranscript')),
+        matching: find.byType(Scrollable),
+      ),
+    ).position;
+    final before = scroll.pixels;
+    provider.rawGate!.complete(provider.raw);
+    await tester.pump(const Duration(milliseconds: 50));
+    provider.formatGate!.complete(jsonEncode({'events': [
+      {'type': 'message', 'start': 0, 'end': provider.raw.length,
+        'speaker': 'narrator', 'name': 'Narrateur'},
+    ]}));
+    await tester.pumpAndSettle();
+    expect(scroll.maxScrollExtent, greaterThan(before));
+    expect(scroll.pixels, closeTo(before, 1));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Scene break and three segments appear in one committed frame',
       (tester) async {
     final provider = _Provider();
