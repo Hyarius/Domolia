@@ -677,7 +677,9 @@ class NarrativeChatController extends ChangeNotifier {
         _capture('narrator_tool_round_$round', before,
             failure: failed, stagePromptTokens: turn?.promptTokens,
             stageCompletionTokens: turn?.completionTokens,
-            stageToolCalls: turn?.calls.length);
+            stageToolCalls: turn?.calls.length,
+            events: turn != null && turn.calls.isEmpty
+                ? List.of(_previewEvents) : const []);
       }
       final complete = turn;
       totalPrompt += complete.promptTokens ?? 0;

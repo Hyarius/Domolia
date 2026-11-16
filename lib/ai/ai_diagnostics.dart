@@ -183,7 +183,10 @@ class StoredAiDiagnostic {
   }
 
   bool isNarratorForTurn(int playerId) =>
-      data['stage'] == 'narrator_raw' &&
+      (data['stage'] == 'narrator_raw' ||
+          data['stage'] == 'narrator_stream' ||
+          (data['stage'] is String &&
+              (data['stage'] as String).startsWith('narrator_tool_round_'))) &&
       data['playerEventId'] == playerId;
 
   /// An AI request can produce multiple chat bubbles; each keeps its own

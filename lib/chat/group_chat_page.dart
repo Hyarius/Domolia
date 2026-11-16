@@ -179,8 +179,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
     }
   }
 
-  /// Expose the original literary HTTP exchange for the same player turn,
-  /// independently from the formatter exchange used by bubble export.
+  /// Expose the original narratorial HTTP exchange for this player turn.
   Future<void> _exportNarratorRaw(ChatEntry entry) async {
     final playerId = widget.controller.playerIdForAiMessage(entry.id);
     if (playerId == null) return;
@@ -355,7 +354,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
                 ListTile(
                   key: const ValueKey('chatActionExportNarratorRaw'),
                   leading: const Icon(Icons.article_outlined),
-                  title: const Text('Exporter le narrateur RAW'),
+                  title: const Text('Exporter la réponse du narrateur'),
                   onTap: () async {
                     Navigator.pop(sheetContext);
                     await _exportNarratorRaw(entry);
