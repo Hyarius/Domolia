@@ -957,4 +957,121 @@ void main() {
     expect((legacy.single as ChatEntry).status, isNull);
   });
 
+  test('Reply pacing is independent of descriptive density and character control', () {
+    for (var length = 1; length <= 5; length++) {
+      final book = BookDefinition(
+        id: 'pacing-$length', title: 'Rythme $length',
+        responseLength: length, detailLevel: 5,
+        styleKeywords: const ['Dialogué', 'Mystérieux'],
+      );
+      final prompt = book.narrator.systemPrompt;
+      expect(prompt, contains(BookDefinition.responseLengthInstructions[length - 1]));
+      expect(prompt, contains('Mots-clés du style d’écriture'));
+      expect(prompt, contains('Dialogué, Mystérieux'));
+      expect(prompt, contains(BookDefinition.detailInstructions[4]));
+      expect(prompt, contains('personnage joueur'));
+      expect(prompt, isNot(contains('JSON')));
+    }
+    expect(const BookDefinition(id: 'default', title: 'Livre').responseLength, 3);
+    expect(BookDefinition.responseLengthInstruction(3), contains('120 à 185 mots'));
+  });
+
+  test('Book v3 persists pacing and keywords; old v1/v2 books use defaults', () {
+    const original = BookDefinition(
+      id: 'pacing-book', title: 'Pacing',
+      narrativeStyle: 'Un style personnalisé',
+      responseLength: 2,
+      detailLevel: 4,
+      styleKeywords: ['Direct', 'Intimiste'],
+    );
+    final encoded = original.exportJson();
+    final restored = BookDefinition.importJson(encoded);
+    expect(restored.responseLength, 2);
+    expect(restored.styleKeywords, ['Direct', 'Intimiste']);
+    expect(restored.detailLevel, 4);
+    expect(restored.narrativeStyle, original.narrativeStyle);
+    expect((jsonDecode(encoded) as Map)['version'], 3);
+
+    final legacyV2 = jsonDecode(encoded) as Map<String, dynamic>;
+    legacyV2['version'] = 2;
+    (legacyV2['narrative'] as Map<String, dynamic>)
+      ..remove('responseLength')
+      ..remove('styleKeywords');
+    final migratedV2 = BookDefinition.importJson(jsonEncode(legacyV2));
+    expect(migratedV2.responseLength, 3);
+    expect(migratedV2.styleKeywords, isEmpty);
+    expect(migratedV2.narrativeStyle, original.narrativeStyle);
+
+    legacyV2['version'] = 1;
+    legacyV2.remove('lore');
+    final migratedV1 = BookDefinition.importJson(jsonEncode(legacyV2));
+    expect(migratedV1.responseLength, 3);
+    expect(migratedV1.styleKeywords, isEmpty);
+  });
+
+  test('Invalid pacing, duplicated keywords and unknown schema are rejected', () {
+    final book = const BookDefinition(id: 'validation', title: 'Test');
+    expect(() => book.copyWith(responseLength: 0).validate(),
+      throwsFormatException);
+    expect(() => book.copyWith(responseLength: 6).validate(),
+      throwsFormatException);
+    expect(() => book.copyWith(styleKeywords: ['direct', 'Direct']).validate(),
+      throwsFormatException);
+    expect(() => book.copyWith(
+        styleKeywords: List.filled(11, 'mot-clé')).validate(),
+      throwsFormatException);
+    expect(() => book.copyWith(
+        styleKeywords: ['mot-clé trop long ' * 3]).validate(),
+      throwsFormatException);
+    final bad = jsonDecode(book.exportJson()) as Map<String, dynamic>;
+    (bad['narrative'] as Map<String, dynamic>)['responseLength'] = '3';
+    expect(() => BookDefinition.importJson(jsonEncode(bad)),
+      throwsFormatException);
+  });
+
+  testWidgets('Book narrator editor updates length and selected style tags',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 930);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final library = BookLibraryController(store: _MemoryBooks());
+    addTearDown(library.dispose);
+    await library.initialize();
+    final book = await library.create('Narration test');
+    final ai = AiConnectionController(
+      store: _Profiles(const AiProfilesState(
+        profiles: [_profile], selectedId: 'profile-1',
+      )), provider: _NoNetwork(),
+    );
+    addTearDown(ai.dispose);
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: BookEditorPage(book: book, library: library, ai: ai,
+        onPlay: (_, _) async {}),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Narrateur'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('bookResponseLengthSlider')),
+      findsOneWidget);
+    expect(find.byKey(const ValueKey('bookDetailSlider')), findsOneWidget);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('bookStyleKeyword-Dialogué')));
+    await tester.tap(find.byKey(const ValueKey('bookStyleKeyword-Dialogué')));
+    await tester.pumpAndSettle();
+    final slider = find.byKey(const ValueKey('bookResponseLengthSlider'));
+    await tester.ensureVisible(slider);
+    await tester.drag(slider, const Offset(-110, 0));
+    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pumpAndSettle();
+    final stored = library.byId(book.id)!;
+    expect(stored.styleKeywords, contains('Dialogué'));
+    expect(stored.responseLength, lessThan(3));
+    expect(stored.detailLevel, 3);
+    expect(tester.takeException(), isNull);
+  });
+
 }
