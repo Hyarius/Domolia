@@ -58,6 +58,7 @@ Future<void> showChat(WidgetTester tester, NarrativeChatController chat) async {
 
 Future<void> enter(WidgetTester tester, String text) async {
   await tester.enterText(find.byKey(const ValueKey('groupChatInput')), text);
+  await tester.pump(); // Rebuild the input-dependent Send action.
   await tester.tap(find.byKey(const ValueKey('groupChatSend')));
   await tester.pump();
 }
