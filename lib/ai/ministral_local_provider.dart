@@ -110,6 +110,7 @@ class MinistralLocalProvider implements AiChatProvider, AiStreamingChatProvider 
     _queue = done.future;
     await previous;
     var completed = false;
+    var fragments = 0;
     try {
       if (_closed || kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
         throw const AiProviderException('Ministral local nécessite Android.');
@@ -119,7 +120,6 @@ class MinistralLocalProvider implements AiChatProvider, AiStreamingChatProvider 
       // A hard ceiling prevents accidental multi-minute generations.
       final limit = maxTokens.clamp(8, 1200).toInt();
       final watch = Stopwatch()..start();
-      var fragments = 0;
       await models.markNativeStage('génération du texte');
       AppLogger.info('Ministral : génération native commencée',
           component: 'local_ai',
