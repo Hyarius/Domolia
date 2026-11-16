@@ -536,12 +536,12 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       item('Total', all, bold: true),
       const SizedBox(height: 8),
       Text('${all.calls} appels IA · ${all.toolCalls} consultations d’outils · '
-          '${all.errors} erreurs · '
+          '${all.errors} erreurs · ${all.estimatedUsage} usages estimés · '
           '${turns == 0 ? '—' : (all.measuredTokens / turns).round().toString()} '
           'tokens connus/tour',
         style: const TextStyle(color: DomoliaColors.muted)),
       const SizedBox(height: 6),
-      const Text('Tokens : mesures déclarées par le fournisseur. '
+      const Text('Tokens : mesures fournies par le fournisseur, parfois estimées par lui. '
           'Un « + » signale des appels sans usage disponible. '
           'Le coût est affiché seulement si le fournisseur le fournit ; '
           '« ≥ » signifie que le total est incomplet. '
