@@ -246,7 +246,9 @@ class _HomePageState extends State<HomePage> {
     });
     try {
       final sessions = await _books.recentSessions();
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _recentError = _books.error;
         _recentSessions = _books.error == null ? sessions : const [];
@@ -264,7 +266,9 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _retryRecent() async {
     await _books.retry();
-    if (mounted) await _refreshRecent();
+    if (mounted) {
+      await _refreshRecent();
+    }
   }
 
   void _openConversationSettings() {
