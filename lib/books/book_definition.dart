@@ -191,7 +191,7 @@ class BookDefinition {
         styleKeywords.length > 10 ||
         styleKeywords.any((word) => word.trim().isEmpty ||
             word.length > 40 || word.contains(',') ||
-            word.contains('\\n') || word.contains('\\r')) ||
+            word.contains('\n') || word.contains('\r')) ||
         styleKeywords.map((word) => word.trim().toLowerCase()).toSet().length
             != styleKeywords.length ||
         openingMessages.isEmpty || openingMessages.length > 30 ||
