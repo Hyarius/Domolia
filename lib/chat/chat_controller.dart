@@ -458,7 +458,7 @@ class NarrativeChatController extends ChangeNotifier {
     // Quoted/anonymous dialogue may require the preceding speakers to resolve
     // pronouns. Otherwise the RAW is self-contained and history is wasted.
     final ambiguousSpeech = raw.contains('«') || raw.contains('»') ||
-        RegExp(r'(^|\\n)\\s*[—–-]\\s+', multiLine: true).hasMatch(raw);
+        RegExp(r'(^|\n)\s*[—–-]\s+', multiLine: true).hasMatch(raw);
     final previous = ambiguousSpeech
         ? _timeline.reversed.whereType<ChatEntry>().take(2).toList().reversed
         : const <ChatEntry>[];
@@ -466,14 +466,14 @@ class NarrativeChatController extends ChangeNotifier {
       for (final entry in previous)
         '${entry.name}${entry.status == null ? '' : ' (${entry.status})'} : '
         '${entry.text.length <= 160 ? entry.text : entry.text.substring(0, 160)}',
-    ].join('\\n');
+    ].join('\n');
     return [
       const AiMessage(role: 'system', content: jsonifierSystemPrompt),
       AiMessage(
         role: 'user',
-        content: '${context.isEmpty ? '' : 'Contexte précédent (ne pas convertir) :\\n$context\\n\\n'}'
+        content: '${context.isEmpty ? '' : 'Contexte précédent (ne pas convertir) :\n$context\n\n'}'
             'Parties RAW à classifier (texte JSON échappé, '
-            'numéros fournis par Dart) :\\n'
+            'numéros fournis par Dart) :\n'
             '${const Jsonifier().partsForPrompt(raw)}',
       ),
     ];
