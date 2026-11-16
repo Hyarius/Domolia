@@ -460,17 +460,32 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
               ),
             ],
           ],
-          if (!controller.ready) const LinearProgressIndicator(),
-          if (controller.busy) const LinearProgressIndicator(),
-          if (controller.error != null) Text(controller.error!,
-            style: const TextStyle(color: Colors.orangeAccent)),
-          if (controller.notice != null) Text(controller.notice!,
-            style: const TextStyle(color: DomoliaColors.goldLight)),
+          if (!controller.ready || controller.busy)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: DomoliaSpacing.compact),
+              child: LinearProgressIndicator(),
+            ),
+          if (controller.error != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: DomoliaSpacing.compact),
+              child: Row(children: [
+                const Icon(Icons.error_outline, color: Colors.orangeAccent),
+                const SizedBox(width: DomoliaSpacing.compact),
+                Expanded(child: Text(controller.error!,
+                  style: const TextStyle(color: Colors.orangeAccent))),
+              ]),
+            ),
+          if (controller.notice != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: DomoliaSpacing.compact),
+              child: Text(controller.notice!,
+                style: const TextStyle(color: DomoliaColors.goldLight)),
+            ),
           if (kIsWeb) const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
-            child: Text('Web : le paiement intégré est désactivé tant que les '
-              'règles CORS et les garanties du navigateur ne sont pas validées. '
-              'Les clés restent propres à ce navigateur et à cette origine.')),
+            child: Text('Les achats intégrés ne sont pas disponibles dans le '
+              'navigateur. Utilisez l’application Android pour recharger '
+              'des crédits. Les clés du navigateur restent locales.')),
           if (active == null)
             const Padding(padding: EdgeInsets.symmetric(vertical: 12),
               child: Text('Aucune clé active. Achetez des crédits ou importez votre clé.')),
@@ -596,6 +611,12 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
             'ceux de la dernière vérification et peuvent avoir changé.',
             style: TextStyle(color: DomoliaColors.muted)),
           const SizedBox(height: DomoliaSpacing.compact),
+          if (controller.keys.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: DomoliaSpacing.field),
+              child: Text('Aucune clé enregistrée. Les clés achetées ou '
+                'importées apparaîtront ici.'),
+            ),
           for (final item in controller.keys) ...[
             _keyCard(item, item.id == active?.id),
             const SizedBox(height: DomoliaSpacing.compact),
