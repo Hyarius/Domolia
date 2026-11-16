@@ -169,7 +169,7 @@ class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
       }
     } catch (failure) {
       _notice(failure is AiProviderException
-          ? failure.message
+          ? failure.userMessage
           : 'Ministral ne peut pas générer sur ce téléphone. '
             'Vérifiez la mémoire disponible.');
     } finally {
