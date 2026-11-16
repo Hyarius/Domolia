@@ -154,6 +154,8 @@ class _HomePageState extends State<HomePage> {
   String? _activeSessionId;
   Future<void> Function()? _awaitSessionWrites;
   List<BookSession> _recentSessions = const [];
+  bool _recentLoading = true;
+  String? _recentError;
 
   @override
   void initState() {
@@ -238,13 +240,31 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _refreshRecent() async {
+    if (mounted) setState(() {
+      _recentLoading = true;
+      _recentError = null;
+    });
     try {
       final sessions = await _books.recentSessions();
-      if (mounted) setState(() => _recentSessions = sessions);
+      if (!mounted) return;
+      setState(() {
+        _recentError = _books.error;
+        _recentSessions = _books.error == null ? sessions : const [];
+        _recentLoading = false;
+      });
     } catch (failure, stackTrace) {
       AppLogger.error('Chargement des Parties récentes échoué',
           component: 'books', error: failure, stackTrace: stackTrace);
+      if (mounted) setState(() {
+        _recentError = 'Impossible de charger les Parties récentes.';
+        _recentLoading = false;
+      });
     }
+  }
+
+  Future<void> _retryRecent() async {
+    await _books.retry();
+    if (mounted) await _refreshRecent();
   }
 
   void _openConversationSettings() {
@@ -793,7 +813,8 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(height: DomoliaSpacing.compact),
                   OutlinedButton.icon(
                     key: const ValueKey('homeCreateBook'),
-                    onPressed: _createBookFromHome,
+                    onPressed: _recentLoading || _recentError != null
+                        ? null : _createBookFromHome,
                     icon: const Icon(Icons.add_rounded),
                     label: const Text('Créer un Livre'),
                   ),
@@ -804,7 +825,32 @@ class _HomePageState extends State<HomePage> {
                     color: DomoliaColors.goldLight, fontSize: 21,
                     fontWeight: FontWeight.bold)),
                   const SizedBox(height: DomoliaSpacing.compact),
-                  if (_recentSessions.isEmpty)
+                  if (_recentLoading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: DomoliaSpacing.section),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_recentError != null)
+                    _DomoliaPanel(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Bibliothèque indisponible',
+                            style: TextStyle(color: DomoliaColors.goldLight,
+                                fontWeight: FontWeight.bold)),
+                          const SizedBox(height: DomoliaSpacing.compact),
+                          Text(_recentError!),
+                          const SizedBox(height: DomoliaSpacing.field),
+                          OutlinedButton.icon(
+                            key: const ValueKey('homeRetryLibrary'),
+                            onPressed: () => unawaited(_retryRecent()),
+                            icon: const Icon(Icons.refresh_rounded),
+                            label: const Text('Réessayer'),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (_recentSessions.isEmpty)
                     const _DomoliaPanel(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -822,8 +868,9 @@ class _HomePageState extends State<HomePage> {
                         ],
                       ),
                     ),
-                  for (final session in _recentSessions)
-                    Card(
+                  if (!_recentLoading && _recentError == null)
+                    for (final session in _recentSessions)
+                      Card(
                       color: DomoliaColors.surface,
                       child: ListTile(
                         key: ValueKey('recentSession-${session.id}'),
