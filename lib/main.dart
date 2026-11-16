@@ -646,6 +646,15 @@ class _HomePageState extends State<HomePage> {
                   sessionId: _activeSessionId!,
                   bookTitle: _activeBookTitle,
                   sessionTitle: _activeSessionTitle,
+                  onLoadAiUsage: () async {
+                    final id = _activeSessionId;
+                    final store = _books.store;
+                    if (id == null || store is! AiUsageStore) {
+                      return <AiUsageRecord>[];
+                    }
+                    await _awaitSessionWrites?.call();
+                    return store.loadUsage(id);
+                  },
                   onLoadAiDiagnostics: () async {
                     final id = _activeSessionId;
                     if (id == null) return <StoredAiDiagnostic>[];
