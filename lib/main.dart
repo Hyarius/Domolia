@@ -588,26 +588,26 @@ class _HomePageState extends State<HomePage> {
                     await _books.clearDiagnostics(id);
                   },
                   onBack: () => unawaited(_goBack()),
+                  showBackButton: false,
                 )
           : _page == _Page.about ? _buildAbout()
           : _page == _Page.settings ? _buildSettings()
           : _page == _Page.updates ? UpdateSettingsPanel(
               controller: _updates,
-              onBack: () => unawaited(_goBack()),
               onViewAllVersions: () => _openUrl(_allReleasesUrl),
               onCheckManually: _checkForUpdates,
             )
           : _page == _Page.ai ? OpenUncensoredCreditsPage(
               controller: _credits,
               onBack: () => unawaited(_goBack()),
+              showBackButton: false,
             )
           : _page == _Page.diagnostics ? AiDiagnosticsSettingsPage(
               onBack: () => unawaited(_goBack()),
+              showBackButton: false,
               onPrune: _books.pruneDiagnostics,
             )
-          : _page == _Page.logs ? AppLogsPage(
-              onBack: () => unawaited(_goBack()),
-            )
+          : _page == _Page.logs ? AppLogsPage()
           : _buildSettings()),
       ]),
     ),
