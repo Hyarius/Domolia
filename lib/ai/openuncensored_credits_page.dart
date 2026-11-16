@@ -19,11 +19,13 @@ class OpenUncensoredCreditsPage extends StatefulWidget {
     required this.controller,
     required this.onBack,
     this.showBackButton = true,
+    this.onOpenLocalAi,
     this.sandbox,
   });
   final OuCreditsController controller;
   final VoidCallback onBack;
   final bool showBackButton;
+  final VoidCallback? onOpenLocalAi;
   final OpenUncensoredSandbox? sandbox;
 
   @override
@@ -487,6 +489,15 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
               fontWeight: FontWeight.bold))),
           ]),
           const SizedBox(height: 16),
+          if (widget.onOpenLocalAi != null) ...[
+            OutlinedButton.icon(
+              key: const ValueKey('creditsOpenLocalAi'),
+              onPressed: widget.onOpenLocalAi,
+              icon: const Icon(Icons.smartphone_outlined),
+              label: const Text('IA locale Mistral — 0 token payant'),
+            ),
+            const SizedBox(height: 16),
+          ],
           if (widget.sandbox != null) ...[
             const Text('SIMULATION — aucun paiement ni appel IA réel.',
               style: TextStyle(color: Colors.orangeAccent,

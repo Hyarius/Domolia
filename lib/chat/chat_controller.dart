@@ -59,6 +59,7 @@ class NarrativeChatController extends ChangeNotifier {
     this.loreContextBudget = 8000,
     this.narratorRecentBudget = 16000,
     this.hybridRecentBudget = 7000,
+    this.memoryContextBudget = 3600,
     this.onTimelineChanged,
     this.memory,
     this.onPersistState,
@@ -86,6 +87,7 @@ class NarrativeChatController extends ChangeNotifier {
   final int loreContextBudget;
   final int narratorRecentBudget;
   final int hybridRecentBudget;
+  final int memoryContextBudget;
   final AiExchangeRecorder? diagnostics;
   final LiveMemoryCoordinator? memory;
   final void Function(AiExchange exchange)? onExchangeCaptured;
@@ -437,7 +439,7 @@ class NarrativeChatController extends ChangeNotifier {
             maxCharacters: loreContextBudget,
           ).build(lore, selected.reversed.map((entry) => entry.content));
     final memories = memory?.context(
-      selected.map((m) => m.content), budget: 3600) ?? '';
+      selected.map((m) => m.content), budget: memoryContextBudget) ?? '';
     return [
       AiMessage(role: 'system', content: [
         (narratorProvider?.call() ?? narrator).systemPrompt,

@@ -24,6 +24,9 @@ import 'memory/live_memory_coordinator.dart';
 import 'memory/live_memory_page.dart';
 import 'ai/ai_controller.dart';
 import 'ai/ai_task_routing.dart';
+import 'ai/ministral_model_manager.dart';
+import 'ai/ministral_local_provider.dart';
+import 'ai/ministral_settings_page.dart';
 import 'ai/ai_diagnostics.dart';
 import 'ai/ai_diagnostic_settings.dart';
 import 'ai/ai_provider.dart';
@@ -107,7 +110,7 @@ class DomoliaApp extends StatelessWidget {
   }
 }
 
-enum _Page { home, books, book, chat, about, settings, updates, ai, diagnostics, logs, conversationSettings, memory }
+enum _Page { home, books, book, chat, about, settings, updates, ai, localAi, diagnostics, logs, conversationSettings, memory }
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -140,6 +143,9 @@ class _HomePageState extends State<HomePage> {
   late final bool _ownsUpdates;
   final AiExchangeRecorder _aiDiagnostics = AiExchangeRecorder();
   final AiTaskRouting _taskRouting = AiTaskRouting();
+  final MinistralModelManager _ministralModels = MinistralModelManager();
+  late final MinistralLocalProvider _ministralProvider =
+      MinistralLocalProvider(_ministralModels);
   late final AiConnectionController _ai;
   late final OuCreditsController _credits;
   late final bool _ownsCredits;
@@ -172,6 +178,7 @@ class _HomePageState extends State<HomePage> {
       chatGpt: ChatGptAuthService(store: SecureChatGptSessionStore()),
       chatGptProvider: ChatGptResponsesProvider(diagnostics: _aiDiagnostics),
     );
+    unawaited(_ministralModels.initialize());
     _ownsCredits = widget.credits == null;
     _credits = widget.credits ?? OuCreditsController(
       api: OpenUncensoredApi(), vault: SecureOuVaultStore(),
@@ -215,6 +222,8 @@ class _HomePageState extends State<HomePage> {
     }
     if (_ownsCredits) _credits.dispose();
     if (_ownsAi) _ai.dispose();
+    unawaited(_ministralProvider.dispose());
+    _ministralModels.dispose();
     _taskRouting.dispose();
     super.dispose();
   }
@@ -384,6 +393,24 @@ class _HomePageState extends State<HomePage> {
           );
         }
 
+        Future<NarrativeAiEndpoint> localEndpoint(AiNarrativeTask task) async {
+          await _ministralModels.initialize();
+          if (!_ministralModels.enabled || !_ministralModels.ready) {
+            throw const AiProviderException(
+                'Ministral local indisponible. Vérifiez son installation.');
+          }
+          return NarrativeAiEndpoint(
+            provider: _ministralProvider,
+            configuration: MinistralLocalProvider.configuration,
+            maxOutputTokens: switch (task) {
+              AiNarrativeTask.narrator => 600,
+              AiNarrativeTask.jsonifier => 1200,
+              AiNarrativeTask.memory => 700,
+              AiNarrativeTask.optimizer => 600,
+            },
+          );
+        }
+
         Future<String> narratorProfileId() async {
           final current = await _books.session(session.id);
           final chosen = current?.aiProfileId ??
@@ -413,6 +440,12 @@ class _HomePageState extends State<HomePage> {
                   final chosen = current.memoryProfileId ??
                       _taskRouting.profileFor(AiNarrativeTask.memory);
                   if (chosen == '#disabled') return null;
+                  if (_ministralModels.enabled) {
+                    final endpoint = await localEndpoint(AiNarrativeTask.memory);
+                    return LiveMemoryAiEndpoint(endpoint.provider,
+                        endpoint.configuration,
+                        maxTokens: endpoint.maxOutputTokens ?? 700);
+                  }
                   final id = chosen == null || chosen == '#narrator'
                       ? await narratorProfileId() : chosen;
                   final endpoint = await endpointForId(
@@ -435,10 +468,17 @@ class _HomePageState extends State<HomePage> {
           memory: _liveMemory,
           initialOptimizedLore: session.optimizedLore,
           initialOptimizedLoreHash: session.optimizedLoreHash,
-          resolveConnection: () async =>
-              endpointForId(
+          loreContextBudget: _ministralModels.enabled ? 3000 : 8000,
+          narratorRecentBudget: _ministralModels.enabled ? 4200 : 16000,
+          memoryContextBudget: _ministralModels.enabled ? 1100 : 3600,
+          resolveConnection: () async => _ministralModels.enabled
+              ? localEndpoint(AiNarrativeTask.narrator)
+              : endpointForId(
                   await narratorProfileId(), AiNarrativeTask.narrator),
           resolveFormatterConnection: () async {
+            if (_ministralModels.enabled) {
+              return localEndpoint(AiNarrativeTask.jsonifier);
+            }
             final current = await _books.session(session.id);
             final chosen = current?.formatterProfileId ??
                 _taskRouting.profileFor(AiNarrativeTask.jsonifier);
@@ -449,6 +489,7 @@ class _HomePageState extends State<HomePage> {
             return endpointForId(chosen, AiNarrativeTask.jsonifier);
           },
           resolveOptimizerConnection: () async {
+            if (_ministralModels.enabled) return null;
             final current = await _books.session(session.id);
             final chosen = current?.optimizerProfileId ??
                 _taskRouting.profileFor(AiNarrativeTask.optimizer);
@@ -635,6 +676,7 @@ class _HomePageState extends State<HomePage> {
                   ai: _ai,
                   chat: _chat,
                   taskRouting: _taskRouting,
+                  localNarratorEnabled: _ministralModels.enabled,
                   onOpenMemory: _liveMemory == null ? null :
                       () => unawaited(_navigateTo(_Page.memory)),
                   bookId: _selectedBookId!,
@@ -666,7 +708,16 @@ class _HomePageState extends State<HomePage> {
           : _page == _Page.ai ? OpenUncensoredCreditsPage(
               controller: _credits,
               onBack: () => unawaited(_goBack()),
+              onOpenLocalAi: () => unawaited(_navigateTo(_Page.localAi)),
               showBackButton: false,
+            )
+          : _page == _Page.localAi ? MinistralSettingsPage(
+              models: _ministralModels,
+              provider: _ministralProvider,
+              onBack: () => unawaited(_goBack()),
+              showBackButton: false,
+              canChangeModel: () => !_chat.busy &&
+                  !(_liveMemory?.processing ?? false),
             )
           : _page == _Page.diagnostics ? AiDiagnosticsSettingsPage(
               onBack: () => unawaited(_goBack()),
@@ -755,6 +806,7 @@ class _HomePageState extends State<HomePage> {
               title: const Text('Paramètres'),
               selected: _page == _Page.settings ||
                   _page == _Page.updates || _page == _Page.ai ||
+                   _page == _Page.localAi ||
                   _page == _Page.diagnostics || _page == _Page.logs,
               selectedColor: DomoliaColors.goldLight,
               selectedTileColor: DomoliaColors.raisedSurface,
@@ -785,6 +837,16 @@ class _HomePageState extends State<HomePage> {
           subtitle: const Text('OpenUncensored, clés et modèles'),
           trailing: const Icon(Icons.chevron_right),
           onTap: _openAiSettings,
+        ),
+        const Divider(),
+        ListTile(
+          key: const ValueKey('settingsLocalAi'),
+          leading: const Icon(Icons.smartphone_outlined,
+              color: DomoliaColors.gold),
+          title: const Text('IA locale — Mistral'),
+          subtitle: const Text('Installer et essayer Ministral hors connexion'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => unawaited(_navigateTo(_Page.localAi)),
         ),
         const Divider(),
         ListTile(

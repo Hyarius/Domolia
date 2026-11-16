@@ -21,7 +21,7 @@ class ConversationSettingsPage extends StatefulWidget {
     this.bookTitle, this.sessionTitle, required this.onBack,
     this.onExportBookJson, this.onLoadAiDiagnostics, this.onExportAiTrace,
     this.onPurgeAiDiagnostics, this.taskRouting, this.onOpenMemory,
-    this.showBackButton = true,
+    this.showBackButton = true, this.localNarratorEnabled = false,
   });
   final BookLibraryController library;
   final AiConnectionController ai;
@@ -32,6 +32,7 @@ class ConversationSettingsPage extends StatefulWidget {
   final String? sessionTitle;
   final VoidCallback onBack;
   final bool showBackButton;
+  final bool localNarratorEnabled;
   /// Optional test adapter; production uses the Android file picker.
   final Future<void> Function(String fileName, Uint8List bytes)? onExportBookJson;
   /// Waits for queued SQLite diagnostic writes in production.
@@ -502,6 +503,13 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
         const SizedBox(height: 24),
         const Text('Connexion IA', style: TextStyle(
             color: DomoliaColors.goldLight, fontSize: 18)),
+        if (widget.localNarratorEnabled)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text('Mode local : Ministral est utilisé pour le narrateur, '
+                'la JSONification et la mémoire. Les profils distants '
+                'ci-dessous ne sont pas appelés dans ce mode.'),
+          ),
         if (!_loaded)
           const LinearProgressIndicator()
         else if (_loadFailed)
