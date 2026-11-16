@@ -34,7 +34,10 @@ class LiveMemoryCoordinator extends ChangeNotifier {
   final Future<bool> Function() isEnabled;
 
   List<LiveMemoryFact> _facts = const [];
+  List<LiveMemoryFact> _history = const [];
   List<LiveMemoryFact> get facts => List.unmodifiable(_facts);
+  /// Earlier states remain consultable without exposing manually removed facts.
+  List<LiveMemoryFact> get history => List.unmodifiable(_history);
   Future<void>? _running;
   bool _closed = false;
   bool processing = false;
@@ -46,12 +49,22 @@ class LiveMemoryCoordinator extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
-    final projected = LiveMemoryProjection.replay(
-      await store.loadMemoryTurns(sessionId),
-      await store.loadMemoryOverrides(sessionId),
-    );
+    final turns = await store.loadMemoryTurns(sessionId);
+    final overrides = await store.loadMemoryOverrides(sessionId);
+    final projected = LiveMemoryProjection.replay(turns, overrides);
+    final overriddenIds = {for (final value in overrides) value.id};
+    final history = <LiveMemoryFact>[
+      for (final operations in turns)
+        for (final operation in operations)
+          if (operation.action == 'upsert' &&
+              !overriddenIds.contains(operation.fact.id))
+            operation.fact,
+      for (final value in overrides)
+        if (!value.deleted && value.fact != null) value.fact!,
+    ]..sort((a, b) => a.sourceTurnId.compareTo(b.sourceTurnId));
     if (_closed) return;
     _facts = projected;
+    _history = List.unmodifiable(history);
     final snapshots = store as NarrativeSnapshotStore;
     final pending = (await snapshots.listRawGenerations(sessionId))
         .where((r) => r.isStructured)

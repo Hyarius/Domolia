@@ -14,12 +14,14 @@ class NarrativeReferenceTools {
     required this.timeline,
     required this.rawGenerations,
     this.memory,
+    this.memoryHistory,
   });
 
   final BookLore Function() lore;
   final List<ChatTimelineEvent> Function() timeline;
   final List<RawGeneration> Function() rawGenerations;
   final List<LiveMemoryFact> Function()? memory;
+  final List<LiveMemoryFact> Function()? memoryHistory;
 
   static const definitions = <AiToolDefinition>[
     AiToolDefinition('search_memory',
@@ -358,9 +360,12 @@ class NarrativeReferenceTools {
       throw const FormatException('Invalid memory category.');
     }
     final results = <(int, LiveMemoryFact)>[];
-    for (final fact in memory?.call() ?? const <LiveMemoryFact>[]) {
+    final records = eventsOnly
+        ? (memoryHistory?.call() ?? memory?.call())
+        : memory?.call();
+    for (final fact in records ?? const <LiveMemoryFact>[]) {
       if (eventsOnly && fact.category != 'event' &&
-          fact.category != 'commitment') { continue; }
+          fact.category != 'commitment' && fact.kind != 'state') { continue; }
       if (!eventsOnly && category != 'all' && fact.category != category) { continue; }
       final score = _score(
           '${fact.label} ${fact.text} ${fact.entityId}', query);

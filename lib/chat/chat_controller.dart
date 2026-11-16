@@ -599,6 +599,7 @@ class NarrativeChatController extends ChangeNotifier {
       timeline: () => _timeline,
       rawGenerations: () => _generations,
       memory: () => memory?.facts ?? const [],
+      memoryHistory: () => memory?.history ?? const [],
     );
     final context = <AiToolMessage>[
       for (final message in buildNarratorContext(hybrid: true))

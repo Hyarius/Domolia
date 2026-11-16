@@ -63,6 +63,8 @@ caractères, plus le contexte de Lore et l'historique récent existants.
 Les modes classique et hybride injectent le même contexte sélectionné. Les
 modèles compatibles Tool Calling peuvent en plus lire :
 `search_memory`, `get_memory_entry` et `get_event_history`.
+Ce dernier recherche les événements et anciens états réellement enregistrés,
+en respectant les corrections et suppressions manuelles.
 Aucune écriture de mémoire n'est exposée au narrateur.
 
 ## Utilisation et coûts

@@ -293,4 +293,34 @@ void main() {
     expect((detail['entry'] as Map)['sourceTurnId'], 1);
     expect(tools.execute('write_memory', '{}'), contains('unknown_tool'));
   });
+
+  test('historical memory lookup sees previous states but current lookup does not', () {
+    final past = fact(
+      'state:elise:location', 'Élise est à l’auberge.',
+      category: 'state', kind: 'state', field: 'location', turn: 1,
+    );
+    final current = fact(
+      'state:elise:location', 'Élise est sur la route.',
+      category: 'state', kind: 'state', field: 'location', turn: 12,
+    );
+    final tools = NarrativeReferenceTools(
+      lore: () => const BookLore(),
+      timeline: () => const [],
+      rawGenerations: () => const [],
+      memory: () => [current],
+      memoryHistory: () => [past, current],
+    );
+    final active = jsonDecode(
+      tools.execute('search_memory', '{"query":"Élise"}'),
+    ) as Map<String, dynamic>;
+    expect((active['results'] as List), hasLength(1));
+    final historical = jsonDecode(
+      tools.execute('get_event_history', '{"query":"Élise"}'),
+    ) as Map<String, dynamic>;
+    final records = historical['results'] as List;
+    expect(records, hasLength(2));
+    expect(records.map((e) => e['source_turn_id']), containsAll([1, 12]));
+    expect(records.map((e) => e['text']),
+      containsAll(['Élise est à l’auberge.', 'Élise est sur la route.']));
+  });
 }
