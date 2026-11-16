@@ -192,17 +192,16 @@ void main() {
       (tester) async {
     await credits.importKey('ou-cus_ALPHA_TEST_123456');
     await credits.loadModels();
-    await showCredits(tester, screen: const Size(480, 1100));
-    await tester.scrollUntilVisible(find.text('Modèles avancés'), 180,
-      scrollable: find.byType(Scrollable).first);
+    await showCredits(tester, screen: const Size(480, 2400));
+    await tester.ensureVisible(find.text('Modèles avancés'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Modèles avancés'));
     await tester.pumpAndSettle();
 
     // No paid generation happens during catalogue loading or selection.
     expect(probes, 0);
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('ouToolProbe')), 180,
-      scrollable: find.byType(Scrollable).first);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('ouToolProbe')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('ouAdvanced-narrator-$defaultAiModel')), findsOneWidget);
     expect(find.byKey(const ValueKey('ouToolProbe')), findsOneWidget);
