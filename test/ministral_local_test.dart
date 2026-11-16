@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/ai/ministral_local_provider.dart';
@@ -32,6 +33,22 @@ class FakeMinistralProvider extends MinistralLocalProvider {
 }
 
 void main() {
+  test('An interrupted native inference disables automatic local startup',
+      () async {
+    SharedPreferences.setMockInitialValues({
+      'ministral-local-inference-stage': 'génération du texte',
+      'ministral-local-narrator-enabled': true,
+    });
+    final models = MinistralModelManager();
+    addTearDown(models.dispose);
+    await models.initialize();
+    expect(models.enabled, isFalse);
+    expect(models.error, contains('génération du texte'));
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('ministral-local-inference-stage'), isNull);
+    expect(prefs.getBool('ministral-local-narrator-enabled'), isFalse);
+  });
+
   test('Catalog only contains official Mistral GGUF weights', () {
     expect(ministralVariants, hasLength(2));
     expect(ministralVariants.first.id, 'ministral-3-3b-q4');

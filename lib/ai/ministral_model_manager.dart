@@ -50,6 +50,7 @@ class MinistralModelManager extends ChangeNotifier {
   static const _enabledKey = 'ministral-local-narrator-enabled';
   static const _variantKey = 'ministral-local-model-variant';
   static const _digestKey = 'ministral-local-model-sha256';
+  static const _nativeStageKey = 'ministral-local-inference-stage';
   final http.Client _client;
   bool _disposed = false;
   bool _cancel = false;
@@ -113,6 +114,16 @@ class MinistralModelManager extends ChangeNotifier {
         _installedPath = file.path;
       }
     }
+    // If Android killed the process during a native operation, Dart cannot
+    // catch that event. Avoid an automatic crash loop on the next launch.
+    final interruptedStage = prefs.getString(_nativeStageKey);
+    if (interruptedStage != null) {
+      error = 'Une opération native précédente a été interrompue '
+          '($interruptedStage). Mode local désactivé par précaution. '
+          'Consultez les journaux de Domolia et réessayez manuellement.';
+      await prefs.setBool(_enabledKey, false);
+      await prefs.remove(_nativeStageKey);
+    }
     enabled = ready && (prefs.getBool(_enabledKey) ?? false);
     _initialized = true;
     _notify();
@@ -129,6 +140,20 @@ class MinistralModelManager extends ChangeNotifier {
     }
     enabled = next;
     _notify();
+  }
+
+  /// Persisted *before* calling JNI: survives a SIGSEGV / Android OOM kill.
+  /// No prompt, story or model path is stored in this diagnostic marker.
+  Future<void> markNativeStage(String stage) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!await prefs.setString(_nativeStageKey, stage)) {
+      throw StateError('Impossible de journaliser le début du traitement natif.');
+    }
+  }
+
+  Future<void> clearNativeStage() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_nativeStageKey);
   }
 
   /// User confirms replacement in the UI before this function is called.

@@ -5,6 +5,7 @@ import 'package:llama_flutter_android/llama_flutter_android.dart';
 
 import 'ai_provider.dart';
 import 'ministral_model_manager.dart';
+import '../logging/app_logger.dart';
 
 /// Formats text-only turns according to Ministral 3's published chat template.
 /// Do not use the plugin's ChatML default; Ministral expects [INST] markers.
@@ -69,19 +70,32 @@ class MinistralLocalProvider implements AiChatProvider, AiStreamingChatProvider 
       _loadedId = null;
     }
     final runtime = LlamaController();
+    // A small context is safer on phones with 6 GB RAM. Keep the GPU off
+    // until the CPU baseline is demonstrated on the device.
+    await models.markNativeStage('chargement du modèle');
+    AppLogger.info('Ministral : chargement natif commencé',
+        component: 'local_ai',
+        details: {'contextSize': 2048, 'threads': 2, 'gpuLayers': 0});
+    await AppLogger.current.flush();
     try {
       await runtime.loadModel(
         modelPath: models.installedPath!,
-        threads: 4,
-        contextSize: 4096,
-        gpuLayers: 0, // CPU baseline; benchmark Vulkan separately.
+        threads: 2,
+        contextSize: 2048,
+        gpuLayers: 0,
       );
-    } catch (_) {
+    } catch (failure, trace) {
+      AppLogger.error('Ministral : échec de chargement natif',
+          component: 'local_ai', error: failure, stackTrace: trace);
+      await AppLogger.current.flush();
+      await models.clearNativeStage();
       await runtime.dispose();
       throw const AiProviderException(
           'Ministral ne peut pas être chargé sur cet appareil '
           '(mémoire ou compatibilité du moteur).');
     }
+    await models.clearNativeStage();
+    AppLogger.info('Ministral : modèle natif chargé', component: 'local_ai');
     _runtime = runtime;
     _loadedId = models.installedId;
   }
@@ -104,6 +118,11 @@ class MinistralLocalProvider implements AiChatProvider, AiStreamingChatProvider 
       final prompt = MinistralPrompt.format(messages);
       // A hard ceiling prevents accidental multi-minute generations.
       final limit = maxTokens.clamp(64, 1200).toInt();
+      await models.markNativeStage('génération du texte');
+      AppLogger.info('Ministral : génération native commencée',
+          component: 'local_ai',
+          details: {'promptCharacters': prompt.length, 'maxTokens': limit});
+      await AppLogger.current.flush();
       await for (final token in _runtime!.generate(
         prompt: prompt,
         maxTokens: limit,
@@ -113,11 +132,19 @@ class MinistralLocalProvider implements AiChatProvider, AiStreamingChatProvider 
         yield AiStreamChunk(text: token);
       }
       completed = true;
+      AppLogger.info('Ministral : génération native terminée',
+          component: 'local_ai');
+    } catch (failure, trace) {
+      AppLogger.error('Ministral : échec pendant la génération',
+          component: 'local_ai', error: failure, stackTrace: trace);
+      rethrow;
     } finally {
-      if (!completed && _runtime != null) {
-        await _runtime!.stop();
+      try {
+        if (!completed && _runtime != null) await _runtime!.stop();
+      } finally {
+        await models.clearNativeStage();
+        done.complete();
       }
-      done.complete();
     }
   }
 
