@@ -116,6 +116,35 @@ void main() {
     expect(scroll.offset, lessThan(scroll.position.maxScrollExtent));
   });
 
+  testWidgets('Une réponse longue reste lisible depuis son début', (tester) async {
+    final provider = _Provider()
+      ..raw = List.generate(90, (i) => 'Paragraphe ${i + 1} : '
+          'Le narrateur décrit soigneusement les lieux et les personnages.')
+          .join('\n')
+      ..formatGate = Completer<String>();
+    final chat = NarrativeChatController(
+      provider: provider, configuration: () => config,
+    );
+    addTearDown(chat.dispose);
+    await showChat(tester, chat);
+    await enter(tester, 'Je regarde autour de moi.');
+    final transcript = tester.widget<ListView>(
+      find.byKey(const ValueKey('groupChatTranscript')));
+    final scroll = transcript.controller!;
+    await tester.pumpAndSettle();
+    final beforeReply = scroll.offset;
+
+    provider.formatGate!.complete(jsonEncode({'events': [
+      {'type': 'message', 'start': 0, 'end': provider.raw.length,
+        'speaker': 'narrator', 'name': 'Narrateur'},
+    ]}));
+    await tester.pumpAndSettle();
+    expect(chat.messages, hasLength(2));
+    expect(scroll.position.maxScrollExtent, greaterThan(beforeReply));
+    expect(scroll.offset, closeTo(beforeReply, 2));
+    expect(find.byKey(const ValueKey('chatWritingIndicator')), findsNothing);
+  });
+
   testWidgets('Scene break and three segments appear in one committed frame',
       (tester) async {
     final provider = _Provider();
