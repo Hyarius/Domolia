@@ -6,6 +6,8 @@ import 'package:material_ui/material_ui.dart';
 import '../ai/ai_controller.dart';
 import '../ai/ai_provider.dart';
 import '../theme/domolia_theme.dart';
+import '../chat/narrative_tuning_editor.dart';
+import '../chat/narrator.dart';
 import '../logging/app_logger.dart';
 import 'book_cover_loader.dart';
 import 'book_definition.dart';
@@ -37,6 +39,7 @@ class BookEditorPageState extends State<BookEditorPage> {
   late BookDefinition _book;
   late final TextEditingController _title;
   late final TextEditingController _style;
+  late final TextEditingController _keywords;
   late final TextEditingController _openings;
   Timer? _saveDelay;
   Future<void> _saveTail = Future<void>.value();
@@ -51,6 +54,8 @@ class BookEditorPageState extends State<BookEditorPage> {
     _book = widget.book;
     _title = TextEditingController(text: _book.title);
     _style = TextEditingController(text: _book.narrativeStyle);
+    _keywords = TextEditingController(
+        text: _book.tuning.styleKeywords.join(', '));
     _openings = TextEditingController(text: _book.openingMessages.join('\n'));
     _loadProfile();
   }
@@ -66,6 +71,7 @@ class BookEditorPageState extends State<BookEditorPage> {
     _saveDelay?.cancel();
     _title.dispose();
     _style.dispose();
+    _keywords.dispose();
     _openings.dispose();
     super.dispose();
   }
@@ -137,6 +143,8 @@ class BookEditorPageState extends State<BookEditorPage> {
         title: title,
         narrativeStyle: style,
         openingMessages: openings,
+        tuning: current.tuning.copyWith(
+          styleKeywords: NarrativeTuning.parseKeywords(_keywords.text)),
       ));
       return true;
     } on FormatException catch (error) {
@@ -161,6 +169,8 @@ class BookEditorPageState extends State<BookEditorPage> {
       title: title,
       narrativeStyle: style,
       openingMessages: openings,
+      tuning: current.tuning.copyWith(
+        styleKeywords: NarrativeTuning.parseKeywords(_keywords.text)),
       lore: lore,
     ));
   }
@@ -504,8 +514,20 @@ class BookEditorPageState extends State<BookEditorPage> {
       style: const TextStyle(fontWeight: FontWeight.bold)),
     const SizedBox(height: 5),
     Text(BookDefinition.detailInstruction(_book.detailLevel)),
-    const SizedBox(height: 18),
-
+    const SizedBox(height: DomoliaSpacing.section),
+    NarrativeTuningEditor(
+      keyPrefix: 'bookNarrator',
+      tuning: _book.tuning,
+      keywordsController: _keywords,
+      onTuningChanged: (tuning) {
+        setState(() => _book = _book.copyWith(tuning: tuning));
+        _queueSave();
+      },
+      onKeywordsChanged: () {
+        setState(() {});
+        _queueSave();
+      },
+    ),
   ];
 
   List<Widget> _systemTab() => [

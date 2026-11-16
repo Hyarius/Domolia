@@ -15,6 +15,7 @@ class BookDefinition {
     this.tags = const <String>{},
     this.narrativeStyle = defaultNarratorNarrativePrompt,
     this.detailLevel = 3,
+    this.tuning = const NarrativeTuning(),
     this.openingMessages = defaultNarratorOpeningMessages,
     this.extensions = const <String, Object?>{},
     this.lore = const BookLore(),
@@ -34,6 +35,7 @@ class BookDefinition {
   final Set<String> tags;
   final String narrativeStyle;
   final int detailLevel;
+  final NarrativeTuning tuning;
   final List<String> openingMessages;
   /// Reserved for future versioned, explicitly safe scenario/character data.
   final Map<String, Object?> extensions;
@@ -50,6 +52,7 @@ class BookDefinition {
                 'toujours les règles et limites du fournisseur IA.',
         ].join('\n\n'),
         openingMessages: openingMessages,
+        tuning: tuning,
       );
 
   static const detailNames = [
@@ -80,6 +83,7 @@ class BookDefinition {
     Set<String>? tags,
     String? narrativeStyle,
     int? detailLevel,
+    NarrativeTuning? tuning,
     List<String>? openingMessages,
     Map<String, Object?>? extensions,
     BookLore? lore,
@@ -91,6 +95,7 @@ class BookDefinition {
         tags: tags ?? this.tags,
         narrativeStyle: narrativeStyle ?? this.narrativeStyle,
         detailLevel: detailLevel ?? this.detailLevel,
+        tuning: tuning ?? this.tuning,
         openingMessages: openingMessages ?? this.openingMessages,
         extensions: extensions ?? this.extensions,
         lore: lore ?? this.lore,
@@ -116,6 +121,7 @@ class BookDefinition {
         'narrative': {
           'style': narrativeStyle,
           'detailLevel': detailLevel,
+          ...tuning.toJson(),
         },
         'openingMessages': openingMessages,
         'extensions': extensions,
@@ -171,6 +177,7 @@ class BookDefinition {
         throw const FormatException('Couverture illisible.');
       }
     }
+    tuning.validate();
     lore.validate();
     // Future extensions must declare a new schema before accepting data.
     if (extensions.isNotEmpty) {
@@ -211,7 +218,11 @@ class BookDefinition {
     final narrative = parsed['narrative'] as Map<String, dynamic>;
     if (tags.any((e) => e is! String) ||
         openings.any((e) => e is! String) ||
-        narrative.length != 2 || narrative['style'] is! String ||
+        narrative.keys.any((key) => !const {
+          'style', 'detailLevel', 'responseLength',
+          'scenePacing', 'styleKeywords',
+        }.contains(key)) ||
+        narrative['style'] is! String ||
         narrative['detailLevel'] is! int) {
       throw const FormatException('Champs narratifs invalides.');
     }
@@ -229,6 +240,7 @@ class BookDefinition {
       tags: tags.cast<String>().toSet(),
       narrativeStyle: narrative['style'] as String,
       detailLevel: narrative['detailLevel'] as int,
+      tuning: NarrativeTuning.fromJson(narrative),
       openingMessages: List<String>.unmodifiable(openings.cast<String>()),
       extensions: Map<String, Object?>.unmodifiable(
         parsed['extensions'] as Map<String, dynamic>,

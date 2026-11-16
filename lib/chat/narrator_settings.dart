@@ -22,7 +22,7 @@ class LocalNarratorSettingsStore implements NarratorSettingsStore {
     if (json == null) return null;
     final value = jsonDecode(json);
     if (value is! Map<String, dynamic> ||
-        value['version'] != 1 ||
+        (value['version'] != 1 && value['version'] != 2) ||
         value['style'] is! String ||
         value['openingMessages'] is! List) {
       throw const FormatException('Configuration du narrateur illisible.');
@@ -34,6 +34,7 @@ class LocalNarratorSettingsStore implements NarratorSettingsStore {
     return Narrator(
       narrativePrompt: value['style'] as String,
       openingMessages: List<String>.unmodifiable(openings.cast<String>()),
+      tuning: NarrativeTuning.fromJson(value),
     );
   }
 
@@ -43,9 +44,10 @@ class LocalNarratorSettingsStore implements NarratorSettingsStore {
     final saved = await preferences.setString(
       _key,
       jsonEncode({
-        'version': 1,
+        'version': 2,
         'style': narrator.narrativePrompt,
         'openingMessages': narrator.openingMessages,
+        ...narrator.tuning.toJson(),
       }),
     );
     if (!saved) {
@@ -83,7 +85,7 @@ class NarratorSettingsController extends ChangeNotifier {
       final value = await store.read();
       if (_disposed) return;
       if (value != null) {
-        _validate(value.narrativePrompt, value.openingMessages);
+        _validate(value.narrativePrompt, value.openingMessages, value.tuning);
         _narrator = value;
       }
     } catch (_) {
@@ -94,7 +96,9 @@ class NarratorSettingsController extends ChangeNotifier {
     }
   }
 
-  static void _validate(String style, List<String> openings) {
+  static void _validate(
+      String style, List<String> openings, NarrativeTuning tuning) {
+    tuning.validate();
     if (style.trim().isEmpty || style.length > 8000) {
       throw const FormatException(
         'Le style du narrateur doit contenir entre 1 et 8 000 caractères.',
@@ -112,6 +116,9 @@ class NarratorSettingsController extends ChangeNotifier {
   Future<bool> save({
     required String style,
     required String openingMessagesText,
+    int? responseLength,
+    int? scenePacing,
+    String? styleKeywordsText,
   }) async {
     if (_disposed || busy || !initialized) return false;
     busy = true;
@@ -124,10 +131,17 @@ class NarratorSettingsController extends ChangeNotifier {
           .where((line) => line.isNotEmpty)
           .toList(growable: false);
       final normalizedStyle = style.trim();
-      _validate(normalizedStyle, openings);
+      final tuning = _narrator.tuning.copyWith(
+        responseLength: responseLength,
+        scenePacing: scenePacing,
+        styleKeywords: styleKeywordsText == null
+            ? null : NarrativeTuning.parseKeywords(styleKeywordsText),
+      );
+      _validate(normalizedStyle, openings, tuning);
       final updated = Narrator(
         narrativePrompt: normalizedStyle,
         openingMessages: List<String>.unmodifiable(openings),
+        tuning: tuning,
       );
       await store.write(updated);
       if (_disposed) return false;

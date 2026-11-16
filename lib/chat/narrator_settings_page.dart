@@ -2,6 +2,8 @@ import 'package:material_ui/material_ui.dart';
 
 import '../theme/domolia_theme.dart';
 import 'narrator_settings.dart';
+import 'narrative_tuning_editor.dart';
+import 'narrator.dart';
 
 /// Early narrator editor: one style field and one list of opening messages.
 /// Each non-empty line in the second field is one possible first bubble.
@@ -22,6 +24,8 @@ class NarratorSettingsPage extends StatefulWidget {
 class _NarratorSettingsPageState extends State<NarratorSettingsPage> {
   final _style = TextEditingController();
   final _openings = TextEditingController();
+  final _keywords = TextEditingController();
+  NarrativeTuning _tuning = const NarrativeTuning();
 
   @override
   void initState() {
@@ -34,6 +38,8 @@ class _NarratorSettingsPageState extends State<NarratorSettingsPage> {
     if (!mounted) return;
     _style.text = widget.controller.narrator.narrativePrompt;
     _openings.text = widget.controller.narrator.openingMessages.join('\n');
+    _tuning = widget.controller.narrator.tuning;
+    _keywords.text = _tuning.styleKeywords.join(', ');
     setState(() {});
   }
 
@@ -41,6 +47,9 @@ class _NarratorSettingsPageState extends State<NarratorSettingsPage> {
     await widget.controller.save(
       style: _style.text,
       openingMessagesText: _openings.text,
+      responseLength: _tuning.responseLength,
+      scenePacing: _tuning.scenePacing,
+      styleKeywordsText: _keywords.text,
     );
   }
 
@@ -48,6 +57,7 @@ class _NarratorSettingsPageState extends State<NarratorSettingsPage> {
   void dispose() {
     _style.dispose();
     _openings.dispose();
+    _keywords.dispose();
     super.dispose();
   }
 
@@ -102,6 +112,16 @@ class _NarratorSettingsPageState extends State<NarratorSettingsPage> {
                   helperText: 'Instructions de narration envoyées à l’IA.',
                   helperMaxLines: 2,
                 ),
+              ),
+              const SizedBox(height: DomoliaSpacing.section),
+              NarrativeTuningEditor(
+                keyPrefix: 'narrator',
+                tuning: _tuning,
+                keywordsController: _keywords,
+                enabled: !settings.busy,
+                onTuningChanged: (tuning) =>
+                    setState(() => _tuning = tuning),
+                onKeywordsChanged: () => setState(() {}),
               ),
               const SizedBox(height: DomoliaSpacing.section),
               TextField(

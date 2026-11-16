@@ -131,6 +131,7 @@ class BookLibraryController extends ChangeNotifier {
       title: 'Mon premier Livre',
       narrativeStyle: narrator.narrativePrompt,
       openingMessages: narrator.openingMessages,
+      tuning: narrator.tuning,
     );
     await save(book);
     legacyAvailable = false;
