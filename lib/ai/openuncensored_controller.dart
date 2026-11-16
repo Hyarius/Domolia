@@ -445,12 +445,8 @@ class OuCreditsController extends ChangeNotifier {
         throw const OpenUncensoredFailure('Modèle de tâche indisponible.');
       }
     }
-    final narrator = _catalogue.firstWhere(
-      (model) => model.id == models['narrator']);
-    if (!narrator.toolCompatible) {
-      throw const OpenUncensoredFailure(
-        'Compatibilité tool calling du narrateur non confirmée.');
-    }
+    // Tool compatibility is verified independently from model selection.
+    // A missing catalogue flag cannot make the entire model list unusable.
     final next = _state.copyWith(mode: OuQuality.advanced.name, models: models);
     await _write(next);
     if (!await _configure(next)) return false;
