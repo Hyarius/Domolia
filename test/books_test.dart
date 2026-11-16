@@ -320,7 +320,12 @@ void main() {
     await tester.tap(find.text('Narrateur'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('bookDetailSlider')), 170);
+      find.byKey(const ValueKey('bookDetailSlider')), 170,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('bookTab-2')),
+        matching: find.byType(Scrollable),
+      ).first,
+    );
     expect(find.byKey(const ValueKey('bookDetailSlider')), findsOneWidget);
     expect(find.text('Équilibré'), findsOneWidget);
     await tester.tap(find.text('Système'));
@@ -1057,14 +1062,20 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Narrateur'));
     await tester.pumpAndSettle();
+    final narratorScroll = find.descendant(
+      of: find.byKey(const ValueKey('bookTab-2')),
+      matching: find.byType(Scrollable),
+    ).first;
     await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('bookStyleKeyword-Dialogué')), 170);
+      find.byKey(const ValueKey('bookStyleKeyword-Dialogué')), 170,
+      scrollable: narratorScroll);
     expect(find.byKey(const ValueKey('bookStyleKeyword-Dialogué')),
       findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('bookStyleKeyword-Dialogué')));
     await tester.pumpAndSettle();
     final slider = find.byKey(const ValueKey('bookResponseLengthSlider'));
-    await tester.scrollUntilVisible(slider, 170);
+    await tester.scrollUntilVisible(slider, 170,
+      scrollable: narratorScroll);
     expect(slider, findsOneWidget);
     await tester.ensureVisible(slider);
     await tester.drag(slider, const Offset(-110, 0));
