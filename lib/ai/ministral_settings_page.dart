@@ -43,9 +43,11 @@ class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
   Future<void> _initialize() async {
     try {
       await widget.models.initialize();
-      if (mounted) setState(() {
-        _selected = widget.models.installedId ?? ministralVariants.first.id;
-      });
+      if (mounted) {
+        setState(() {
+          _selected = widget.models.installedId ?? ministralVariants.first.id;
+        });
+      }
     } catch (_) {
       _notice('Impossible de lire les modèles installés.');
     }

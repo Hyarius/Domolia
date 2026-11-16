@@ -368,6 +368,7 @@ class _HomePageState extends State<HomePage> {
     try {
       await _ai.initialize();
       await _taskRouting.initialize();
+      await _ministralModels.initialize();
       if (!mounted) return;
       if (_ownsChat) {
         Future<NarrativeAiEndpoint> endpointForId(
