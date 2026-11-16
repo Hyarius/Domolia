@@ -1,7 +1,7 @@
 /// Narration controls independent from the level of descriptive detail.
 ///
 /// Length is an approximate word target, not a hard output-token cutoff:
-/// the JSONifier must still receive an intact RAW narrative.
+/// the final streamed narration must remain complete and consistent.
 class NarrativeTuning {
   const NarrativeTuning({
     this.responseLength = 2,
@@ -142,7 +142,7 @@ class NarrativeTuning {
   }
 }
 
-/// Literary instructions only. The output protocol belongs to Jsonifier.
+/// Literary instructions plus a stable, minimal streaming event contract.
 class Narrator {
   const Narrator({
     this.protocolPrompt = defaultNarratorProtocolPrompt,
@@ -159,6 +159,7 @@ class Narrator {
   final NarrativeTuning tuning;
 
   String get systemPrompt => [
+    structuredNarratorProtocolPrompt,
     protocolPrompt.trim(),
     narrativePrompt.trim(),
     tuning.prompt,
@@ -166,11 +167,11 @@ class Narrator {
 }
 
 const defaultNarratorProtocolPrompt = '''
-Tu écris directement une histoire de jeu de rôle en français, en texte libre.
+Tu écris une histoire de jeu de rôle en français, sous forme de messages.
 Tu interprètes les personnages et le monde, mais jamais le personnage joueur.
 Le joueur est « Vous ». N'invente ni ses paroles, ni ses pensées, ni ses actions,
 ni ses décisions. Garde les personnages, les lieux et les faits cohérents.
-Exprime naturellement la narration et les dialogues, sans format informatique.
+Raconte avec naturel, sans laisser la structure technique influencer le style.
 ''';
 
 const defaultNarratorNarrativePrompt = '''
@@ -181,10 +182,31 @@ Ne prends jamais le contrôle du personnage joueur.
 Tu peux faire intervenir plusieurs personnages dans un même tour.
 Les changements de lieu et de temps doivent rester naturels et cohérents.
 Adapte la densité de description au Livre et au rythme configurés.
-Ne produis ni JSON, ni balises, ni instructions destinées à une interface.
+La structure de sortie est définie séparément ; conserve une prose littéraire naturelle.
 ''';
 
 const defaultNarratorOpeningMessages = <String>[
   'Une nouvelle histoire commence. Que souhaitez-vous faire ?',
   'Le monde s’ouvre devant vous. Par quoi voulez-vous commencer ?',
 ];
+
+/// Streamed NDJSON: every newline publishes an independent complete bubble.
+/// The receiver validates the speaker, scene markers and the entire turn.
+/// Keep this part independent from author-provided role-play style settings.
+const structuredNarratorProtocolPrompt = '''
+FORMAT DE SORTIE (impératif, pas de Markdown ni de prose hors JSON) :
+Réponds exclusivement en NDJSON : un objet JSON compact par ligne.
+Exemples de lignes :
+{"type":"message","speaker":"narrator","name":"Narrateur","text":"La pluie frappe les vitres."}
+{"type":"message","speaker":"character","name":"Oren","text":"Entrez, je vous en prie."}
+{"type":"scene_change"}
+Chaque bulle peut contenir plusieurs phrases ou paragraphes (\\n dans la chaîne JSON).
+Écris la narration et les dialogues directement dans le champ text, mot pour mot.
+Ne produis jamais de message du joueur ; son personnage reste sous son contrôle.
+Utilise narrator pour les descriptions et character pour un personnage identifié.
+Conserve les noms canoniques exacts et n'invente pas de locuteur si tu ignores son identité.
+Optionnel pour character : "status" (émotion réellement visible, courte).
+Réserve scene_change à une vraie ellipse de lieu, de temps ou de séquence.
+Maximum 20 lignes. N'inclus aucun résumé technique, ni explication du protocole.
+Termine la dernière ligne avant de t'arrêter.
+''';
