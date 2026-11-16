@@ -491,10 +491,24 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
+    return PopScope(
+      canPop: _history.isEmpty,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) unawaited(_goBack());
+      },
+      child: AnimatedBuilder(
       animation: _updates,
       builder: (context, _) => Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
+        leading: _history.isNotEmpty
+            ? IconButton(
+                key: const ValueKey('appBack'),
+                tooltip: 'Retour',
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () => unawaited(_goBack()),
+              )
+            : null,
         title: const Text(
           'DOMOLIA',
           style: TextStyle(
@@ -511,11 +525,13 @@ class _HomePageState extends State<HomePage> {
               onPressed: _openConversationSettings,
               icon: const Icon(Icons.tune_rounded),
             ),
-          IconButton(
-            tooltip: 'Mise à jour',
-            onPressed: _checkForUpdates,
-            icon: const Icon(Icons.system_update_alt_rounded),
-          ),
+          if (_history.isNotEmpty)
+            IconButton(
+              key: const ValueKey('appMenu'),
+              tooltip: 'Menu',
+              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+              icon: const Icon(Icons.menu),
+            ),
         ],
       ),
       drawer: _buildDrawer(),
@@ -529,7 +545,7 @@ class _HomePageState extends State<HomePage> {
           : _page == _Page.book && _selectedBookId != null &&
                   _books.byId(_selectedBookId!) != null
               ? BookEditorPage(
-                  key: ValueKey(_selectedBookId),
+                  key: _bookEditorKey,
                   book: _books.byId(_selectedBookId!)!,
                   library: _books,
                   ai: _ai,
@@ -571,31 +587,31 @@ class _HomePageState extends State<HomePage> {
                     await _awaitSessionWrites?.call();
                     await _books.clearDiagnostics(id);
                   },
-                  onBack: () => setState(() => _page = _Page.chat),
+                  onBack: () => unawaited(_goBack()),
                 )
           : _page == _Page.about ? _buildAbout()
           : _page == _Page.settings ? _buildSettings()
           : _page == _Page.updates ? UpdateSettingsPanel(
               controller: _updates,
-              onBack: () => setState(() => _page = _Page.settings),
+              onBack: () => unawaited(_goBack()),
               onViewAllVersions: () => _openUrl(_allReleasesUrl),
               onCheckManually: _checkForUpdates,
             )
           : _page == _Page.ai ? OpenUncensoredCreditsPage(
               controller: _credits,
-              onBack: () => setState(() => _page = _aiReturnPage),
+              onBack: () => unawaited(_goBack()),
             )
           : _page == _Page.diagnostics ? AiDiagnosticsSettingsPage(
-              onBack: () => setState(() => _page = _Page.settings),
+              onBack: () => unawaited(_goBack()),
               onPrune: _books.pruneDiagnostics,
             )
           : _page == _Page.logs ? AppLogsPage(
-              onBack: () => setState(() => _page = _Page.settings),
+              onBack: () => unawaited(_goBack()),
             )
           : _buildSettings()),
       ]),
     ),
-    );
+    ));
   }
 
   Widget _buildDrawer() {
@@ -677,17 +693,6 @@ class _HomePageState extends State<HomePage> {
               selectedTileColor: DomoliaColors.raisedSurface,
               onTap: () => _showPage(_Page.settings),
             ),
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Text(
-                'VERSION DE DÉVELOPPEMENT',
-                style: TextStyle(
-                  color: DomoliaColors.muted,
-                  letterSpacing: 1.4,
-                  fontSize: 11,
-                ),
-              ),
-            ),
           ],
         ),
       ),
@@ -720,7 +725,7 @@ class _HomePageState extends State<HomePage> {
           title: const Text('Mises à jour'),
           subtitle: const Text('Version installée, canal et préversions'),
           trailing: const Icon(Icons.chevron_right),
-          onTap: () => setState(() => _page = _Page.updates),
+          onTap: () => unawaited(_navigateTo(_Page.updates)),
         ),
         const Divider(),
         ListTile(
@@ -729,7 +734,7 @@ class _HomePageState extends State<HomePage> {
           title: const Text('Diagnostics IA'),
           subtitle: const Text('Conservation locale des requêtes et réponses'),
           trailing: const Icon(Icons.chevron_right),
-          onTap: () => setState(() => _page = _Page.diagnostics),
+          onTap: () => unawaited(_navigateTo(_Page.diagnostics)),
         ),
         const Divider(),
         ListTile(
@@ -738,7 +743,7 @@ class _HomePageState extends State<HomePage> {
           title: const Text('Logs'),
           subtitle: const Text('Consulter, copier, exporter et effacer le journal'),
           trailing: const Icon(Icons.chevron_right),
-          onTap: () => setState(() => _page = _Page.logs),
+          onTap: () => unawaited(_navigateTo(_Page.logs)),
         ),
       ],
     ),
@@ -749,118 +754,99 @@ class _HomePageState extends State<HomePage> {
       child: SingleChildScrollView(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
+            constraints: const BoxConstraints(maxWidth: 600),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 26, 24, 44),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 44),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Center(
-                    child: Image.asset(
-                      'assets/images/domolia_emblem.png',
-                      width: 108,
-                      height: 108,
-                      semanticLabel: 'Bouclier doré Domolia',
-                    ),
+                  Row(children: [
+                    Image.asset('assets/images/domolia_emblem.png',
+                      width: 64, height: 64, semanticLabel: 'Emblème Domolia'),
+                    const SizedBox(width: 16),
+                    const Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Bienvenue dans Domolia', style: TextStyle(
+                          color: DomoliaColors.goldLight,
+                          fontSize: 23, fontWeight: FontWeight.bold)),
+                        SizedBox(height: 4),
+                        Text('Votre prochaine aventure commence ici.',
+                          style: TextStyle(color: DomoliaColors.cream)),
+                      ],
+                    )),
+                  ]),
+                  const SizedBox(height: DomoliaSpacing.section),
+                  const Text('Mes Livres', style: TextStyle(
+                    color: DomoliaColors.goldLight, fontSize: 21,
+                    fontWeight: FontWeight.bold)),
+                  const SizedBox(height: DomoliaSpacing.compact),
+                  const Text('Explorez vos univers ou créez une nouvelle histoire.',
+                    style: TextStyle(color: DomoliaColors.muted)),
+                  const SizedBox(height: DomoliaSpacing.field),
+                  FilledButton.icon(
+                    key: const ValueKey('homeBooks'),
+                    onPressed: _openBooks,
+                    icon: const Icon(Icons.library_books_outlined),
+                    label: const Text('Ouvrir ma bibliothèque'),
                   ),
-                  const SizedBox(height: 15),
-                  const Text(
-                    'DOMOLIA',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: DomoliaColors.goldLight,
-                      fontFamily: 'serif',
-                      fontSize: 37,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 4,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Des histoires à vivre, un monde à explorer.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: DomoliaColors.cream,
-                      fontSize: 16,
-                    ),
+                  const SizedBox(height: DomoliaSpacing.compact),
+                  OutlinedButton.icon(
+                    key: const ValueKey('homeCreateBook'),
+                    onPressed: _createBookFromHome,
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('Créer un Livre'),
                   ),
                   const SizedBox(height: DomoliaSpacing.section),
                   const _GoldSeparator(),
                   const SizedBox(height: DomoliaSpacing.section),
-                  FilledButton.icon(
-                    onPressed: _openBooks,
-                    icon: const Icon(Icons.library_books_outlined),
-                    label: const Text('Ouvrir mes Livres'),
-                  ),
-                  const SizedBox(height: DomoliaSpacing.section),
-                  const Text('Parties récentes', style: TextStyle(
-                    fontSize: 20, color: DomoliaColors.goldLight,
+                  const Text('Mes Parties', style: TextStyle(
+                    color: DomoliaColors.goldLight, fontSize: 21,
                     fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: DomoliaSpacing.compact),
                   if (_recentSessions.isEmpty)
-                    const Text('Aucune Partie récente.',
-                      style: TextStyle(color: DomoliaColors.muted)),
+                    const _DomoliaPanel(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.auto_stories_outlined,
+                            color: DomoliaColors.goldDark, size: 30),
+                          SizedBox(height: DomoliaSpacing.compact),
+                          Text('Aucune aventure commencée',
+                            style: TextStyle(color: DomoliaColors.goldLight,
+                              fontWeight: FontWeight.bold)),
+                          SizedBox(height: 6),
+                          Text('Ouvrez un Livre pour commencer une Partie. '
+                            'Vous pourrez ensuite la retrouver ici.',
+                            style: TextStyle(color: DomoliaColors.cream)),
+                        ],
+                      ),
+                    ),
                   for (final session in _recentSessions)
                     Card(
                       color: DomoliaColors.surface,
                       child: ListTile(
                         key: ValueKey('recentSession-${session.id}'),
-                        leading: const Icon(Icons.history_rounded,
-                            color: DomoliaColors.gold),
-                        title: Text(session.title),
+                        leading: const Icon(Icons.auto_stories_outlined,
+                          color: DomoliaColors.gold),
+                        title: Text(session.title, maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
                         subtitle: Text(
-                          '${_books.byId(session.bookId)?.title ?? 'Livre inconnu'} · '
-                          '${session.updatedAtUtc?.toLocal().toString() ?? ''}'),
+                          _books.byId(session.bookId)?.title ?? 'Livre indisponible',
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () {
                           final book = _books.byId(session.bookId);
                           if (book != null) {
                             unawaited(_openBookSession(book, session));
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content:
+                                Text('Ce Livre n’est plus disponible.')));
                           }
                         },
                       ),
                     ),
-                  const SizedBox(height: 22),
-                  const _DomoliaPanel(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Hello World !',
-                          style: TextStyle(
-                            color: DomoliaColors.goldLight,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        SizedBox(height: 10),
-                        Text(
-                          'Votre aventure commence ici. '
-                          'Cette première version présente l’identité de '
-                          'Domolia et son système de mises à jour.',
-                          style: TextStyle(
-                            color: DomoliaColors.cream,
-                            height: 1.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: _checkForUpdates,
-                    icon: const Icon(Icons.system_update_alt_rounded),
-                    label: const Text('Mise à jour'),
-                  ),
-                  const SizedBox(height: 22),
-                  Text(
-                    'Canal de développement · ${_updates.channel}',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: DomoliaColors.muted,
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -900,10 +886,9 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(height: 24),
                   const _DomoliaPanel(
                     child: Text(
-                      'Domolia est une future application de jeu de rôle '
-                      'narratif, pensée pour des histoires vivantes, '
-                      'des personnages persistants et des mondes à explorer.\n\n'
-                      'Cette version est un premier prototype Android.',
+                      'Domolia est une application de jeu de rôle narratif '
+                      'assisté par IA. Créez des Livres, définissez vos univers '
+                      'et vivez des Parties qui évoluent avec vos choix.',
                       style: TextStyle(
                         color: DomoliaColors.cream,
                         height: 1.6,
