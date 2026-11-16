@@ -58,8 +58,17 @@ class LoreContextBuilder {
       return needle.length >= 3 && recent.contains(needle);
     });
 
+    // A place mentioned in the scene can identify its associated cast even
+    // when the NPC's name has not been spoken yet. This is reference data,
+    // never proof that any of these characters is physically present.
+    // Bound the indirect expansion to avoid injecting the full Book roster.
+    final nearbyCharacterIds = <String>{
+      for (final p in lore.places)
+        if (mentioned(p)) ...p.characterIds.take(3),
+    };
     final characters = [
-      for (final c in lore.characters) if (mentioned(c)) c,
+      for (final c in lore.characters)
+        if (mentioned(c) || nearbyCharacterIds.contains(c.id)) c,
     ]..sort((a,b) => a.id.compareTo(b.id));
     final directCharacterIds = characters.map((e) => e.id).toSet();
     final homePlaceIds = characters.map((e) => e.homePlaceId).toSet();
@@ -91,7 +100,8 @@ class LoreContextBuilder {
         'Rôle : ${c.role}', 'Motivations : ${c.motivations}',
         'Valeurs : ${c.values}',
         if (c.secrets.isNotEmpty) 'SECRET DU NARRATEUR : ${c.secrets}',
-      ].where((s) => s.trim().isNotEmpty).join('\n'), essential: true);
+      ].where((s) => s.trim().isNotEmpty).join('\n'),
+        essential: mentioned(c));
     }
     for (final p in places) {
       include('LIEU CANONIQUE — ${p.name}', [

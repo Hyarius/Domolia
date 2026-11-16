@@ -454,6 +454,37 @@ class NarrativeChatController extends ChangeNotifier {
     ];
   }
 
+  /// Character names may be explicitly established by this player's action
+  /// before the narrator's RAW uses pronouns or anonymous quoted dialogue.
+  /// Only a canonical Book name/alias mentioned in THIS player turn qualifies;
+  /// unrelated names from the entire Book must not become valid speakers.
+  Set<String> _verifiedJsonifierSpeakers() {
+    final known = _timeline.whereType<ChatEntry>()
+        .where((e) => e.speaker == ChatSpeaker.character)
+        .map((e) => e.name).toSet();
+    final lore = loreProvider?.call();
+    final index = _lastPlayerIndex;
+    if (lore == null || index == null ||
+        _timeline[index] is! ChatEntry) {
+      return known;
+    }
+    final playerText = (_timeline[index] as ChatEntry).text;
+    bool mentioned(String label) {
+      if (label.trim().length < 3) return false;
+      final escaped = RegExp.escape(label.trim());
+      return RegExp(
+        r'(^|[^A-Za-zÀ-ÿ0-9])' + escaped +
+            r'($|[^A-Za-zÀ-ÿ0-9])',
+        caseSensitive: false,
+      ).hasMatch(playerText);
+    }
+    for (final character in lore.characters) {
+      final labels = [character.name, ...character.aliases];
+      if (labels.any(mentioned)) known.addAll(labels);
+    }
+    return known;
+  }
+
   List<AiMessage> _jsonifierContext(String raw) {
     // Quoted/anonymous dialogue may require the preceding speakers to resolve
     // pronouns. Otherwise the RAW is self-contained and history is wasted.
@@ -873,9 +904,7 @@ class NarrativeChatController extends ChangeNotifier {
             formatterEndpoint, _jsonifierContext(rawRecord.rawText), token,
             formatterEndpoint.maxOutputTokens ?? 2400);
         _check(token);
-        final known = _timeline.whereType<ChatEntry>()
-            .where((e) => e.speaker == ChatSpeaker.character)
-            .map((e) => e.name);
+        final known = _verifiedJsonifierSpeakers();
         final jsonified = const Jsonifier().decodeWithMemory(
           rawRecord.rawText, formatted, knownCharacters: known,
           hasPreviousScene: _timeline.isNotEmpty,

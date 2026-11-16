@@ -626,6 +626,51 @@ void main() {
     expect(formatter.outputBudgets, [4096, 4096]);
   });
 
+
+  test('Player-mentioned canonical alias verifies anonymous quoted dialogue',
+      () async {
+    const lore = BookLore(characters: [
+      LoreCharacter(id: 'oren', name: 'Oren Martel', aliases: ['Oren']),
+    ]);
+    provider.raw = 'L’homme essuie une chope.\n\n'
+        '« Toujours ? Non. Le pont existait bien avant l’auberge. »';
+    provider.structured = jsonEncode({'events': [
+      {'type': 'part', 'part': 0, 'kind': 'narration'},
+      {'type': 'part', 'part': 1, 'kind': 'dialogue', 'name': 'Oren'},
+    ]});
+    final local = NarrativeChatController(
+      provider: provider, configuration: () => credentials,
+      loreProvider: () => lore,
+    );
+    addTearDown(local.dispose);
+    await local.send('Je demande à Oren si l’auberge était déjà là.');
+    expect(local.error, isNull);
+    expect(local.pendingRaw, isNull);
+    expect(local.messages.last.name, 'Oren');
+    expect(local.messages.last.text,
+        'Toujours ? Non. Le pont existait bien avant l’auberge.');
+  });
+
+  test('Unmentioned canonical name is not sufficient for anonymous dialogue',
+      () async {
+    const lore = BookLore(characters: [
+      LoreCharacter(id: 'oren', name: 'Oren Martel', aliases: ['Oren']),
+    ]);
+    provider.raw = 'Un homme essuie une chope.\n\n« Bonjour. »';
+    provider.structured = jsonEncode({'events': [
+      {'type': 'part', 'part': 0, 'kind': 'narration'},
+      {'type': 'part', 'part': 1, 'kind': 'dialogue', 'name': 'Oren'},
+    ]});
+    final local = NarrativeChatController(
+      provider: provider, configuration: () => credentials,
+      loreProvider: () => lore,
+    );
+    addTearDown(local.dispose);
+    await local.send('Je regarde le comptoir.');
+    expect(local.error, isNotNull);
+    expect(local.pendingRaw, isNotNull);
+  });
+
   test('New numbered-block JSONifier preserves source and character voices',
       () async {
     provider.raw = 'Les pierres sont froides.\n\n'

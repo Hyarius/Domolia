@@ -180,6 +180,35 @@ void main() {
     expect(context,contains('SECRETS DU NARRATEUR'));
   });
 
+
+  test('A named place supplies a bounded canonical local cast', () {
+    const lore = BookLore(
+      global: LoreGlobal(universe: 'Archipel de Verre'),
+      characters: [
+        LoreCharacter(
+          id: 'oren', name: 'Oren Martel',
+          description: 'Aubergiste du Pont de Verre.',
+          appearance: 'Tablier de lin, moustache grise.',
+        ),
+        LoreCharacter(
+          id: 'distant', name: 'Sela Roche',
+          description: 'Gardienne du phare, loin de l’auberge.',
+        ),
+      ],
+      places: [
+        LorePlace(
+          id: 'auberge', name: 'Auberge du Pont de Verre',
+          characterIds: ['oren'],
+        ),
+      ],
+    );
+    final context = const LoreContextBuilder(maxCharacters: 3000)
+        .build(lore, ['La pluie tombe sur l’Auberge du Pont de Verre.']);
+    expect(context, contains('Oren Martel'));
+    expect(context, contains('moustache grise'));
+    expect(context, isNot(contains('Sela Roche')));
+  });
+
   test('Conditional story events are always possibilities, never marked done', () {
     final context = const LoreContextBuilder(maxCharacters:7000)
         .build(testLore,['Je trouve un passage secret. Ancien prisonnier.']);
