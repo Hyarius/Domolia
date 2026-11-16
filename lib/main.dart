@@ -283,6 +283,12 @@ class _HomePageState extends State<HomePage> {
             provider: binding.provider,
             configuration: binding.configuration.withReasoning(reasoning),
             maxOutputTokens: settings.maxOutputTokens,
+            toolCallingEnabled: task == AiNarrativeTask.narrator &&
+                binding.provider is AiToolCallingChatProvider &&
+                (current?.toolCallingEnabled ?? true) &&
+                _ai.profiles.any((p) => p.id == id &&
+                    p.toolCallingCompatibility ==
+                        AiToolCallingCompatibility.supported),
           );
         }
 

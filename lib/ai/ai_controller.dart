@@ -225,6 +225,31 @@ class AiConnectionController extends ChangeNotifier {
     }
   }
 
+  /// Only a user declaration may enable tools; never auto-detect via an HTTP 200.
+  Future<bool> setToolCallingCompatibility(
+      AiToolCallingCompatibility compatibility) async {
+    if (_closed || busy || !initialized) return false;
+    busy = true;
+    _notify();
+    try {
+      final next = [
+        for (final profile in _profiles)
+          profile.id == _selectedId
+              ? profile.copyWith(toolCallingCompatibility: compatibility)
+              : profile,
+      ];
+      await store.write(AiProfilesState(profiles: next, selectedId: _selectedId));
+      _profiles = next;
+      return true;
+    } catch (_) {
+      message = 'Impossible de sauvegarder la capacité Tool Calling.';
+      return false;
+    } finally {
+      busy = false;
+      _notify();
+    }
+  }
+
   Future<bool> setProviderKind(AiProviderKind kind) async {
     if (_closed || busy || selectedKind == kind) return false;
     busy = true;
@@ -232,7 +257,10 @@ class AiConnectionController extends ChangeNotifier {
     try {
       final next = [
         for (final item in _profiles)
-          item.id == _selectedId ? item.copyWith(kind: kind) : item,
+          item.id == _selectedId
+              ? item.copyWith(kind: kind,
+                  toolCallingCompatibility: AiToolCallingCompatibility.unknown)
+              : item,
       ];
       await store.write(AiProfilesState(profiles: next, selectedId: _selectedId));
       _profiles = next;
@@ -273,7 +301,8 @@ class AiConnectionController extends ChangeNotifier {
         final next = [
           for (final profile in _profiles)
             profile.id == id
-                ? profile.copyWith(model: fetched.first.id)
+                ? profile.copyWith(model: fetched.first.id,
+                    toolCallingCompatibility: AiToolCallingCompatibility.unknown)
                 : profile,
         ];
         await store.write(AiProfilesState(profiles: next, selectedId: id));
@@ -322,7 +351,12 @@ class AiConnectionController extends ChangeNotifier {
       final value = validatedAiModel(id);
       final next = [
         for (final profile in _profiles)
-          profile.id == _selectedId ? profile.copyWith(model: value) : profile,
+          profile.id == _selectedId
+              ? profile.copyWith(model: value,
+                  toolCallingCompatibility: value == profile.model
+                      ? profile.toolCallingCompatibility
+                      : AiToolCallingCompatibility.unknown)
+              : profile,
       ];
       await store.write(AiProfilesState(profiles: next, selectedId: _selectedId));
       _profiles = next;
@@ -420,6 +454,10 @@ class AiConnectionController extends ChangeNotifier {
         baseUrl: normalizedUrl,
         model: normalizedModel,
         apiKey: key,
+        toolCallingCompatibility: normalizedModel == current.model &&
+                normalizedUrl == current.baseUrl
+            ? current.toolCallingCompatibility
+            : AiToolCallingCompatibility.unknown,
       );
       final changed = nextProfile.baseUrl != current.baseUrl ||
           nextProfile.model != current.model ||
@@ -458,6 +496,9 @@ class AiConnectionController extends ChangeNotifier {
     required String narratorModel,
     required String jsonifierModel,
     required String optimizerModel,
+    // Explicit OpenUncensored model-catalogue metadata, not an HTTP probe.
+    // Null means that no trustworthy capability information is available.
+    bool? narratorToolsSupported,
   }) async {
     if (_closed || busy || !initialized ||
         !key.startsWith('ou-') || key.length < 11) {
@@ -473,6 +514,16 @@ class AiConnectionController extends ChangeNotifier {
       };
       final next = List<AiProfile>.of(_profiles);
       for (final entry in selectedModels.entries) {
+        final index = next.indexWhere((profile) => profile.id == entry.key);
+        final previous = index < 0 ? null : next[index];
+        final capability = entry.key == ouNarratorProfileId &&
+                narratorToolsSupported != null
+            ? narratorToolsSupported
+                ? AiToolCallingCompatibility.supported
+                : AiToolCallingCompatibility.unknown
+            : previous != null && previous.model == entry.value
+                ? previous.toolCallingCompatibility
+                : AiToolCallingCompatibility.unknown;
         final replacement = AiProfile(
           id: entry.key,
           name: switch (entry.key) {
@@ -484,8 +535,8 @@ class AiConnectionController extends ChangeNotifier {
           model: entry.value,
           apiKey: key,
           nsfwCompatibility: AiNsfwCompatibility.supported,
+          toolCallingCompatibility: capability,
         );
-        final index = next.indexWhere((profile) => profile.id == entry.key);
         if (index < 0) {
           next.add(replacement);
         } else {
