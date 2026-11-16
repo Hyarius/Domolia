@@ -16,10 +16,17 @@ class _WidgetMemoryStore implements LiveMemoryStore, NarrativeSnapshotStore {
         action: 'upsert',
         fact: LiveMemoryFact(
           id: 'character:elise:ring',
-          category: 'character', entityId: 'elise', label: 'Élise',
-          field: 'ring', text: 'Bague en argent', kind: 'stable',
-          certainty: 'confirmed', visibility: 'player', importance: 4,
-          sourceTurnId: 1, sourceSide: 'raw',
+          category: 'character',
+          entityId: 'elise',
+          label: 'Élise',
+          field: 'ring',
+          text: 'Bague en argent',
+          kind: 'stable',
+          certainty: 'confirmed',
+          visibility: 'player',
+          importance: 4,
+          sourceTurnId: 1,
+          sourceSide: 'raw',
           sourceQuote: 'bague en argent',
         ),
       ),
@@ -38,9 +45,12 @@ class _WidgetMemoryStore implements LiveMemoryStore, NarrativeSnapshotStore {
   Future<Set<int>> analyzedMemoryTurns(String id) async => {1};
 
   @override
-  Future<List<RawGeneration>> listRawGenerations(String id) async =>
-      [RawGeneration(playerEventId: 1, rawText: 'bague en argent')
-          .structured(2, 2)];
+  Future<List<RawGeneration>> listRawGenerations(String id) async => [
+    RawGeneration(
+      playerEventId: 1,
+      rawText: 'bague en argent',
+    ).structured(2, 2),
+  ];
 
   @override
   Future<void> saveMemoryOverride(String id, LiveMemoryOverride value) async {
@@ -52,41 +62,55 @@ class _WidgetMemoryStore implements LiveMemoryStore, NarrativeSnapshotStore {
 
   @override
   Future<void> saveNarrativeSnapshot(
-      BookSession session, List<RawGeneration> sources) async {}
+    BookSession session,
+    List<RawGeneration> sources,
+  ) async {}
 
   @override
-  Future<void> commitMemoryTurn(String id, RawGeneration source,
-      List<LiveMemoryOperation> changes) async {}
+  Future<void> commitMemoryTurn(
+    String id,
+    RawGeneration source,
+    List<LiveMemoryOperation> changes,
+  ) async {}
 }
 
 void main() {
-  testWidgets('memory UI search, source citation and fact protection',
-      (tester) async {
+  testWidgets('memory UI search, source citation and fact protection', (
+    tester,
+  ) async {
     final store = _WidgetMemoryStore();
     final memory = LiveMemoryCoordinator(
-      sessionId: 'part', store: store,
+      sessionId: 'part',
+      store: store,
       isEnabled: () async => false,
       resolveConnection: () async => null,
     );
     addTearDown(memory.dispose);
-    await tester.pumpWidget(MaterialApp(home: Scaffold(
-      body: LiveMemoryPage(memory: memory, onBack: () {}),
-    )));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LiveMemoryPage(memory: memory, onBack: () {}),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('liveMemoryPage')), findsOneWidget);
     expect(find.text('Mémoire à jour'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('memoryCategory-character')));
     await tester.pumpAndSettle();
     expect(find.text('Bague en argent'), findsOneWidget);
-    await tester.tap(find.byKey(
-        const ValueKey('memoryFact-character:elise:ring')));
+    await tester.tap(
+      find.byKey(const ValueKey('memoryFact-character:elise:ring')),
+    );
     await tester.pumpAndSettle();
     expect(find.textContaining('Source : tour 1'), findsOneWidget);
     await tester.tap(find.text('Protéger'));
     await tester.pumpAndSettle();
     expect(memory.facts.single.pinned, isTrue);
-    await tester.enterText(find.byKey(const ValueKey('memorySearch')),
-        'introuvable');
+    await tester.enterText(
+      find.byKey(const ValueKey('memorySearch')),
+      'introuvable',
+    );
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('memoryEmpty')), findsOneWidget);
     await tester.enterText(find.byKey(const ValueKey('memorySearch')), '');
