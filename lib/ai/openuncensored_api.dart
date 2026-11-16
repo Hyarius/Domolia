@@ -267,7 +267,7 @@ class OpenUncensoredApi {
       String key, String model) async {
     if (!validOpenUncensoredKey(key) ||
         model.trim().isEmpty || model.length > 200 ||
-        model.contains(RegExp(r'[\\r\\n]'))) {
+        model.contains(RegExp(r'[\r\n]'))) {
       throw const OpenUncensoredFailure('Modèle ou clé de test invalide.');
     }
     final request = http.Request('POST', _api.resolve('chat/completions'))
