@@ -37,36 +37,55 @@ class GroupChatPage extends StatefulWidget {
 class _GroupChatPageState extends State<GroupChatPage> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
+  int? _lastTimelineEventId;
 
   @override
   void initState() {
     super.initState();
-    widget.controller.addListener(_scrollToLatest);
+    _observeInitialTimeline();
+    widget.controller.addListener(_onChatChanged);
   }
 
   @override
   void didUpdateWidget(covariant GroupChatPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_scrollToLatest);
-      widget.controller.addListener(_scrollToLatest);
+      oldWidget.controller.removeListener(_onChatChanged);
+      _observeInitialTimeline();
+      widget.controller.addListener(_onChatChanged);
     }
   }
 
-  void _scrollToLatest() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scroll.hasClients) return;
-      _scroll.animateTo(
-        _scroll.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-      );
-    });
+  void _observeInitialTimeline() {
+    final timeline = widget.controller.timeline;
+    _lastTimelineEventId = timeline.isEmpty ? null : timeline.last.id;
+    if (timeline.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToLatest());
+    }
+  }
+
+  void _jumpToLatest() {
+    if (!mounted || !_scroll.hasClients) return;
+    _scroll.jumpTo(_scroll.position.maxScrollExtent);
+  }
+
+  void _onChatChanged() {
+    final timeline = widget.controller.timeline;
+    final last = timeline.isEmpty ? null : timeline.last;
+    if (last?.id == _lastTimelineEventId) return;
+    _lastTimelineEventId = last?.id;
+
+    // Keep the freshly sent player message in view, but never jump to the
+    // END of a newly committed AI answer. Long answers begin where reading
+    // left off, regardless of the number of bubbles generated.
+    if (last is ChatEntry && last.speaker == ChatSpeaker.player) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToLatest());
+    }
   }
 
   @override
   void dispose() {
-    widget.controller.removeListener(_scrollToLatest);
+    widget.controller.removeListener(_onChatChanged);
     _scroll.dispose();
     _input.dispose();
     super.dispose();
@@ -419,34 +438,6 @@ class _GroupChatPageState extends State<GroupChatPage> {
                     ],
                   ),
                 ),
-              if (chat.modelUsed != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 5, 18, 5),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Modèle : ${chat.modelUsed!}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: DomoliaColors.muted,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                      if (chat.promptTokens != null ||
-                          chat.completionTokens != null)
-                        Text(
-                          'Tokens : ${chat.promptTokens?.toString() ?? '—'} / ${chat.completionTokens?.toString() ?? '—'}',
-                          style: const TextStyle(
-                            color: DomoliaColors.muted,
-                            fontSize: 11,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
               Container(
                 decoration: const BoxDecoration(
                   color: DomoliaColors.surface,
@@ -490,7 +481,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
                           : IconButton.filled(
                               key: const ValueKey('groupChatSend'),
                               tooltip: 'Envoyer le message',
-                              onPressed: _send,
+                              onPressed: _input.text.trim().isEmpty ? null : _send,
                               icon: const Icon(Icons.arrow_upward_rounded),
                             ),
                     ),
