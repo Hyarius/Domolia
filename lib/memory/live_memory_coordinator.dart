@@ -132,8 +132,11 @@ class LiveMemoryCoordinator extends ChangeNotifier {
         if (endpoint == null) return;
         final response = await endpoint.provider.complete(
           endpoint.configuration,
-          messages: _prompt(player.single.text, source,
-              budget: endpoint.contextBudget),
+          messages: _prompt(
+            player.single.text,
+            source,
+            budget: endpoint.contextBudget,
+          ),
           maxTokens: endpoint.maxTokens,
         );
         final operations = LiveMemoryOperation.parse(
