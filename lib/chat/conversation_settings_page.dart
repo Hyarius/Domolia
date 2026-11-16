@@ -53,6 +53,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   int _cachedLoreCharacters = 0;
   Map<AiNarrativeTask, AiTaskGenerationOverride> _generationOverrides = {};
   bool _loaded = false;
+  bool _loadFailed = false;
   bool _saving = false;
 
   @override
@@ -73,11 +74,15 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           _cachedLoreCharacters = session?.optimizedLore?.length ?? 0;
           _generationOverrides = Map.of(session?.generationOverrides ?? {});
           _loaded = true;
+          _loadFailed = false;
         });
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _loaded = true);
+        setState(() {
+          _loaded = true;
+          _loadFailed = true;
+        });
         _notify('Impossible de charger les paramètres de cette Partie.');
       }
     }
@@ -476,7 +481,30 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
         const SizedBox(height: 24),
         const Text('Connexion IA', style: TextStyle(
             color: DomoliaColors.goldLight, fontSize: 18)),
-        if (!_loaded) const LinearProgressIndicator()
+        if (!_loaded)
+          const LinearProgressIndicator()
+        else if (_loadFailed)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: DomoliaSpacing.field),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('Les réglages de cette Partie sont indisponibles. '
+                  'Aucune modification ne sera appliquée.',
+                  style: TextStyle(color: DomoliaColors.cream)),
+                const SizedBox(height: DomoliaSpacing.field),
+                OutlinedButton.icon(
+                  key: const ValueKey('conversationSettingsRetry'),
+                  onPressed: () {
+                    setState(() => _loaded = false);
+                    _load();
+                  },
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Réessayer'),
+                ),
+              ],
+            ),
+          )
         else AnimatedBuilder(
           animation: widget.ai,
           builder: (context, _) {
