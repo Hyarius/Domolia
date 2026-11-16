@@ -541,6 +541,11 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           'tokens connus/tour',
         style: const TextStyle(color: DomoliaColors.muted)),
       const SizedBox(height: 6),
+      Text('Entrée connue : ${all.measuredInput} · Sortie connue : ${all.measuredOutput} · '
+          'Cache déclaré : ${all.cachedTokensKnown} · '
+          'Raisonnement déclaré : ${all.reasoningTokensKnown}',
+        style: const TextStyle(color: DomoliaColors.muted, fontSize: 12)),
+      const SizedBox(height: 6),
       const Text('Tokens : mesures fournies par le fournisseur, parfois estimées par lui. '
           'Un « + » signale des appels sans usage disponible. '
           'Le coût est affiché seulement si le fournisseur le fournit ; '
