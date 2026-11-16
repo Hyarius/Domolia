@@ -23,13 +23,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class _Books implements BookStore {
   Completer<void>? blockNextBookWrite;
+  bool failNextList = false;
   final Map<String, BookDefinition> books = {};
   final Map<String, BookSession> sessionsById = {};
   final Map<String, String?> bindings = {};
   final Map<String, StoredAiDiagnostic> diagnostics = {};
 
   @override
-  Future<List<BookDefinition>> listBooks() async => books.values.toList();
+  Future<List<BookDefinition>> listBooks() async {
+    if (failNextList) {
+      failNextList = false;
+      throw StateError('Simulated SQLite read failure');
+    }
+    return books.values.toList();
+  }
   @override
   Future<BookDefinition?> findBook(String id) async => books[id];
   @override
@@ -217,6 +224,22 @@ void main() {
     expect(delegate.crossAxisCount, 1);
     expect(tester.takeException(), isNull);
     expect(find.byTooltip('Supprimer La forêt'), findsOneWidget);
+  });
+
+  testWidgets('Accueil distingue une erreur de stockage d’une bibliothèque vide',
+      (tester) async {
+    final storage = _Books()..failNextList = true;
+    await _showApp(tester, store: storage);
+    expect(find.text('Bibliothèque indisponible'), findsOneWidget);
+    expect(find.text('Aucune aventure commencée'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('homeRetryLibrary')));
+    await tester.pumpAndSettle();
+    expect(find.text('Bibliothèque indisponible'), findsNothing);
+    expect(find.text('Aucune aventure commencée'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('homeBooks')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('book-novel')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Une sauvegarde lente ne perd pas un réglage plus récent',
