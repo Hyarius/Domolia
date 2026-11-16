@@ -654,7 +654,7 @@ class _HomePageState extends State<HomePage> {
                       return <AiUsageRecord>[];
                     }
                     await _awaitSessionWrites?.call();
-                    return store.loadUsage(id);
+                    return (store as AiUsageStore).loadUsage(id);
                   },
                   onLoadAiDiagnostics: () async {
                     final id = _activeSessionId;
