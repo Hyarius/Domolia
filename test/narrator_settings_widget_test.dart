@@ -34,11 +34,8 @@ class _NoNetworkProvider implements AiChatProvider {
     int maxTokens = 1200,
   }) async {
     calls++;
-    if (messages.first.content.contains('JSONificateur')) {
-      return '{"events":[{"type":"message","start":0,"end":11,'
-          '"speaker":"narrator","name":"Narrateur"}]}';
-    }
-    return 'Bienvenue !';
+    return '{"type":"message","speaker":"narrator",'
+        '"name":"Narrateur","text":"Bienvenue !"}\n';
   }
 }
 

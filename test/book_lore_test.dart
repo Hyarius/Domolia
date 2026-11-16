@@ -75,11 +75,10 @@ class _FakeProvider implements AiChatProvider {
     required List<AiMessage> messages,int maxTokens=1200,
   }) async {
     calls.add(messages);
-    if (calls.length.isOdd) return 'Le palais s’illumine.';
-    return jsonEncode({'events':[
-      {'type':'message','start':0,'end':'Le palais s’illumine.'.length,
-        'speaker':'narrator','name':'Narrateur'},
-    ]});
+    return '${jsonEncode({
+      'type': 'message', 'speaker': 'narrator', 'name': 'Narrateur',
+      'text': 'Le palais s’illumine.',
+    })}\n';
   }
 }
 
@@ -272,7 +271,7 @@ void main() {
         .build(lore,['Monde']),throwsFormatException);
   });
 
-  test('Only RAW narrator sees lore; JSONifier and RAW persistence unchanged',
+  test('Only narrator receives Lore and source is saved after validation',
       () async {
     final provider = _FakeProvider();
     final chat = NarrativeChatController(
@@ -282,11 +281,10 @@ void main() {
     addTearDown(chat.dispose);
     await chat.send('Je vois le palais et Éloïse.');
     expect(chat.error,isNull);
-    expect(provider.calls,hasLength(2));
+    expect(provider.calls,hasLength(1));
     expect(provider.calls.first.first.content,contains('Érévia'));
     expect(provider.calls.first.first.content,contains('Éloïse'));
-    expect(provider.calls.last.first.content,isNot(contains('Érévia')));
-    expect(provider.calls.last.first.content,contains('JSONificateur'));
+    expect(provider.calls.first.first.content,contains('NDJSON'));
     expect(chat.rawGenerations.single.rawText,'Le palais s’illumine.');
     expect(chat.rawGenerations.single.isStructured,true);
   });

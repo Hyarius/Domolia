@@ -19,12 +19,10 @@ class _Provider implements AiChatProvider {
     required List<AiMessage> messages, int maxTokens = 1200,
   }) async {
     calls.add(messages);
-    return messages.first.content.contains('JSONificateur')
-        ? jsonEncode({'events': [
-            {'type': 'message', 'start': 0, 'end': raw.length,
-              'speaker': 'narrator', 'name': 'Narrateur'},
-          ]})
-        : raw;
+    return '${jsonEncode({
+      'type': 'message', 'speaker': 'narrator',
+      'name': 'Narrateur', 'text': raw,
+    })}\n';
   }
 }
 
@@ -49,7 +47,7 @@ void main() {
         final prompt = narrator.systemPrompt;
         expect(prompt, contains('Rythme de ce tour'));
         expect(prompt, contains('Ne joue jamais à la place'));
-        expect(prompt, isNot(contains('NDJSON')));
+        expect(prompt, contains('NDJSON'));
       }
     }
     const short = NarrativeTuning(responseLength: 2, scenePacing: 1);
@@ -77,24 +75,24 @@ void main() {
       styleKeywords: ['Line\nBreak']).validate(), throwsFormatException);
   });
 
-  test('Default Narrator has only literary and role-playing constraints', () {
+  test('Default Narrator combines literary direction with NDJSON format', () {
     const n = Narrator();
     expect(n.systemPrompt, contains('jeu de rôle en français'));
     expect(n.systemPrompt, contains('personnage joueur'));
-    expect(n.systemPrompt, isNot(contains('NDJSON')));
-    expect(n.systemPrompt, isNot(contains('scene_change')));
-    expect(n.systemPrompt, isNot(contains('"type"')));
+    expect(n.systemPrompt, contains('NDJSON'));
+    expect(n.systemPrompt, contains('scene_change'));
+    expect(n.systemPrompt, contains('"type"'));
   });
 
   test('Narrator composes role-play and Book style without formatter rules', () {
     const n = Narrator(
       protocolPrompt: '  RÈGLES  ', narrativePrompt: '  STYLE  ',
     );
-    expect(n.systemPrompt, startsWith('RÈGLES\n\nSTYLE\n\n'));
+    expect(n.systemPrompt, contains('RÈGLES\n\nSTYLE\n\n'));
     expect(n.systemPrompt, contains('90 à 170 mots'));
   });
 
-  test('Non-streaming sends literary prompt and then formatter prompt', () async {
+  test('Non-streaming sends a single literary and structural prompt', () async {
     final provider = _Provider();
     final chat = NarrativeChatController(
       provider: provider, configuration: () => config,
@@ -102,22 +100,21 @@ void main() {
     );
     addTearDown(chat.dispose);
     await chat.send('Je regarde la mer.');
-    expect(provider.calls, hasLength(2));
+    expect(provider.calls, hasLength(1));
     expect(provider.calls[0].first.content, contains('Univers marin simulé'));
     expect(provider.calls[0].first.content, contains('rends la main au joueur'));
     expect(provider.calls[0].last.content, 'Je regarde la mer.');
-    expect(provider.calls[1].first.content, contains('JSONificateur'));
     expect(chat.messages.last.text, raw);
   });
 
-  test('Streaming transports both passes without streaming bubbles', () async {
+  test('Streaming transport completes a single structured reply', () async {
     final provider = _StreamingProvider();
     final chat = NarrativeChatController(
       provider: provider, configuration: () => config,
     );
     addTearDown(chat.dispose);
     await chat.send('Je pousse la porte.');
-    expect(provider.calls, hasLength(2));
+    expect(provider.calls, hasLength(1));
     expect(chat.rawGenerations.single.rawText, raw);
     expect(chat.preview, isNull);
     expect(chat.error, isNull);

@@ -14,8 +14,8 @@ const _config = AiConfiguration(
 
 class _FakeProvider implements AiChatProvider {
   String raw = 'Une pluie fine tombe.';
-  List<AiMessage>? formattedContext;
-  int narrationCalls = 0, formatterCalls = 0;
+  List<AiMessage>? narrativeContext;
+  int narrationCalls = 0;
 
   @override
   Future<List<AiModel>> listModels(AiConfiguration c) async => const [];
@@ -24,16 +24,12 @@ class _FakeProvider implements AiChatProvider {
   Future<String> complete(AiConfiguration c, {
     required List<AiMessage> messages, int maxTokens = 1200,
   }) async {
-    if (messages.first.content.contains('JSONificateur')) {
-      formatterCalls++;
-      formattedContext = messages;
-      return jsonEncode({'events': [
-        {'type': 'message', 'start': 0, 'end': raw.length,
-         'speaker': 'narrator', 'name': 'Narrateur'},
-      ]});
-    }
     narrationCalls++;
-    return raw;
+    narrativeContext = messages;
+    return '${jsonEncode({
+      'type': 'message', 'speaker': 'narrator',
+      'name': 'Narrateur', 'text': raw,
+    })}\n';
   }
 }
 
@@ -67,43 +63,34 @@ void main() {
     expect((b['results'] as List).first['excerpt'], contains('NACRE-204'));
   });
 
-  test('JSONifier receives no chat history for self-contained narration',
+  test('One structured request replaces the formatter pass', () async {
+    final fake = _FakeProvider();
+    final chat = NarrativeChatController(
+        provider: fake, configuration: () => _config);
+    addTearDown(chat.dispose);
+    await chat.send('Je regarde la pluie');
+    expect(fake.narrationCalls, 1);
+    expect(fake.narrativeContext!.first.content, contains('NDJSON'));
+    expect(chat.messages.last.text, fake.raw);
+    expect(chat.rawGenerations.single.rawText, fake.raw);
+  });
+
+  test('Recent history is bounded without sacrificing the newest action',
       () async {
     final fake = _FakeProvider();
     final chat = NarrativeChatController(
         provider: fake, configuration: () => _config);
     addTearDown(chat.dispose);
     chat.restoreTimeline([
-      for (var i = 0; i < 12; i++)
+      for (var i = 0; i < 20; i++)
         ChatEntry(id: i, speaker: ChatSpeaker.character,
-          name: 'Personnage', text: ['Très long discours précédent $i',
-              ...List.filled(40, 'mystère')].join(' ')),
-    ]);
-    await chat.send('Je regarde la pluie');
-    final prompt = fake.formattedContext!.last.content;
-    expect(prompt, isNot(contains('Contexte précédent')));
-    expect(prompt, contains(fake.raw));
-    expect(fake.narrationCalls, 1);
-    expect(fake.formatterCalls, 1);
-  });
-
-  test('Ambiguous quoted speech retains a bounded cast context', () async {
-    final fake = _FakeProvider()..raw = 'Liora murmure : « Reviens. »';
-    final chat = NarrativeChatController(
-        provider: fake, configuration: () => _config);
-    addTearDown(chat.dispose);
-    chat.restoreTimeline([
-      for (var i = 0; i < 8; i++)
-        ChatEntry(id: i, speaker: ChatSpeaker.character,
-          name: 'Acteur $i',
-          text: ['Mot $i.', ...List.filled(500, 'énorme')].join(' ')),
+          name: 'Acteur $i', text: List.filled(500, 'énorme').join(' ')),
     ]);
     await chat.send('Je l’écoute');
-    final prompt = fake.formattedContext!.last.content;
-    expect(prompt, contains('Contexte précédent'));
-    expect(prompt, contains('Acteur 7'));
-    expect(prompt, isNot(contains('Acteur 0')));
-    expect(prompt, isNot(contains(List.filled(300, 'énorme').join(' '))));
+    final context = fake.narrativeContext!.map((m) => m.content).join(' ');
+    expect(context, contains('Je l’écoute'));
+    expect(context, contains('Acteur 19'));
+    expect(context, isNot(contains('Acteur 0')));
   });
 
   test('10/100/1000 turns: context stays bounded and older facts consultable',
