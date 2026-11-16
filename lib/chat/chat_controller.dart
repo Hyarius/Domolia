@@ -483,9 +483,10 @@ class NarrativeChatController extends ChangeNotifier {
     if (_closed || token != _generationToken) throw _Cancelled();
   }
 
-  /// Same HTTP provider and diagnostic recorder for both phases.
+  /// Stream directly from the current narrator (and optimizer, when used).
   Future<String> _requestText(NarrativeAiEndpoint endpoint,
-      List<AiMessage> context, int token, int maxTokens) async {
+      List<AiMessage> context, int token, int maxTokens,
+      {void Function(String)? onFragment}) async {
     final buffer = StringBuffer();
     if (endpoint.provider is AiStreamingChatProvider) {
       final finished = Completer<void>();
@@ -501,6 +502,15 @@ class NarrativeChatController extends ChangeNotifier {
               completionTokens = chunk.completionTokens;
             }
             buffer.write(chunk.text);
+            if (onFragment != null && chunk.text.isNotEmpty) {
+              try {
+                onFragment(chunk.text);
+              } on FormatException catch (error) {
+                failure = error;
+                unawaited(_subscription?.cancel() ?? Future<void>.value());
+                if (!finished.isCompleted) finished.complete();
+              }
+            }
             if (buffer.length > 131072) {
               failure = const FormatException('Réponse IA trop volumineuse.');
               unawaited(_subscription?.cancel() ?? Future<void>.value());
@@ -523,6 +533,7 @@ class NarrativeChatController extends ChangeNotifier {
     final result = await endpoint.provider.complete(endpoint.configuration,
         messages: context, maxTokens: maxTokens);
     _check(token);
+    if (onFragment != null && result.isNotEmpty) onFragment(result);
     return result;
   }
 
@@ -530,7 +541,8 @@ class NarrativeChatController extends ChangeNotifier {
   /// Assemble all SSE deltas before any local tool is executed.
   Future<_ToolTurn> _requestToolTurn(
       NarrativeAiEndpoint endpoint, List<AiToolMessage> messages,
-      List<AiToolDefinition> tools, int token, int maxTokens) async {
+      List<AiToolDefinition> tools, int token, int maxTokens,
+      {void Function(String)? onText, void Function()? onReset}) async {
     final provider = endpoint.provider as AiToolCallingChatProvider;
     final done = Completer<void>();
     final narrative = StringBuffer();
@@ -538,6 +550,7 @@ class NarrativeChatController extends ChangeNotifier {
     String? finishReason;
     Object? failure;
     int? usedPrompt, usedCompletion;
+    var startedToolCall = false;
     _done = done;
     _toolSubscription = provider.streamToolChat(endpoint.configuration,
       messages: messages, tools: tools, maxTokens: maxTokens).listen((chunk) {
@@ -546,6 +559,17 @@ class NarrativeChatController extends ChangeNotifier {
       if (chunk.completionTokens != null) usedCompletion = chunk.completionTokens;
       if (chunk.finishReason != null) finishReason = chunk.finishReason;
       narrative.write(chunk.text);
+      if (chunk.callIndex != null && !startedToolCall) {
+        startedToolCall = true;
+        onReset?.call();
+      }
+      if (!startedToolCall && chunk.text.isNotEmpty && onText != null) {
+        try {
+          onText(chunk.text);
+        } on FormatException catch (error) {
+          failure = error;
+        }
+      }
       if (narrative.length > 131072) {
         failure = const FormatException('RAW trop volumineux.');
       }
@@ -598,7 +622,8 @@ class NarrativeChatController extends ChangeNotifier {
   }
 
   Future<String> _requestHybrid(
-      NarrativeAiEndpoint endpoint, int token, int maxTokens) async {
+      NarrativeAiEndpoint endpoint, int token, int maxTokens,
+      {void Function(String)? onText, void Function()? onReset}) async {
     final references = NarrativeReferenceTools(
       lore: () => loreProvider?.call() ?? const BookLore(),
       timeline: () => _timeline,
@@ -634,12 +659,15 @@ class NarrativeChatController extends ChangeNotifier {
       Object? failed;
       try {
         turn = await _requestToolTurn(
-            endpoint, context, allowed, token, maxTokens);
+            endpoint, context, allowed, token, maxTokens,
+            onText: onText, onReset: onReset);
       } on AiToolsUnsupportedException {
         if (round == 0) {
           _capture('narrator_tool_unsupported', before,
               failure: const AiToolsUnsupportedException());
-          return _requestText(endpoint, buildNarratorContext(), token, maxTokens);
+          onReset?.call();
+          return _requestText(endpoint, buildNarratorContext(), token,
+              maxTokens, onFragment: onText);
         }
         rethrow;
       } catch (error) {
@@ -660,6 +688,7 @@ class NarrativeChatController extends ChangeNotifier {
         completionTokens = totalCompletion == 0 ? null : totalCompletion;
         return complete.text;
       }
+      onReset?.call();
       context.add(AiToolMessage(
           role: 'assistant', content: complete.text, calls: complete.calls));
       for (var i = 0; i < complete.calls.length; i++) {
@@ -956,7 +985,8 @@ class NarrativeChatController extends ChangeNotifier {
     if (!busy || _closed || _committingSnapshot) return;
     ++_generationToken;
     AppLogger.info('Génération interrompue', component: 'chat');
-    error = 'Génération interrompue.';
+    error = 'Génération interrompue. Aucun brouillon enregistré.';
+    _clearPreview();
     busy = false;
     unawaited(_subscription?.cancel() ?? Future<void>.value());
     unawaited(_toolSubscription?.cancel() ?? Future<void>.value());
@@ -967,6 +997,7 @@ class NarrativeChatController extends ChangeNotifier {
   @override
   void dispose() {
     _closed = true;
+    _previewEvents.clear();
     ++_generationToken;
     unawaited(_subscription?.cancel() ?? Future<void>.value());
     unawaited(_toolSubscription?.cancel() ?? Future<void>.value());
