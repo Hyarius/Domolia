@@ -455,20 +455,25 @@ class NarrativeChatController extends ChangeNotifier {
   }
 
   List<AiMessage> _jsonifierContext(String raw) {
-    final previous = _timeline.reversed.whereType<ChatEntry>()
-        .take(6).toList().reversed;
+    // Quoted/anonymous dialogue may require the preceding speakers to resolve
+    // pronouns. Otherwise the RAW is self-contained and history is wasted.
+    final ambiguousSpeech = raw.contains('«') || raw.contains('»') ||
+        RegExp(r'(^|\\n)\\s*[—–-]\\s+', multiLine: true).hasMatch(raw);
+    final previous = ambiguousSpeech
+        ? _timeline.reversed.whereType<ChatEntry>().take(2).toList().reversed
+        : const <ChatEntry>[];
     final context = [
       for (final entry in previous)
-        '${entry.name}${entry.status == null ? '' : ' (${entry.status})'} : ${entry.text}',
-    ].join('\n');
+        '${entry.name}${entry.status == null ? '' : ' (${entry.status})'} : '
+        '${entry.text.length <= 160 ? entry.text : entry.text.substring(0, 160)}',
+    ].join('\\n');
     return [
       const AiMessage(role: 'system', content: jsonifierSystemPrompt),
       AiMessage(
         role: 'user',
-        content: 'Contexte précédent (ne pas convertir) :\n'
-            '$context\n\n'
+        content: '${context.isEmpty ? '' : 'Contexte précédent (ne pas convertir) :\\n$context\\n\\n'}'
             'Parties RAW à classifier (texte JSON échappé, '
-            'numéros fournis par Dart) :\n'
+            'numéros fournis par Dart) :\\n'
             '${const Jsonifier().partsForPrompt(raw)}',
       ),
     ];
@@ -807,9 +812,13 @@ class NarrativeChatController extends ChangeNotifier {
       modelUsed = endpoint.configuration.model;
       if (rawRecord == null) {
         stage = 'optimizer';
+        promptTokens = null;
+        completionTokens = null;
         await _ensureOptimizedContext(token);
         _check(token);
         stage = 'raw';
+        promptTokens = null;
+        completionTokens = null;
         AppLogger.info('Début narration RAW', component: 'chat');
         final before = diagnostics?.last;
         Object? failed;
@@ -847,6 +856,8 @@ class NarrativeChatController extends ChangeNotifier {
       }
       _check(token);
       stage = 'jsonifier';
+      promptTokens = null;
+      completionTokens = null;
       final formatterEndpoint = resolveFormatterConnection == null
           ? endpoint : await resolveFormatterConnection!();
       _check(token);
