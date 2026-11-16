@@ -478,6 +478,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
       AiNarrativeTask.narrator: 'Narrateur RAW',
       AiNarrativeTask.jsonifier: 'JSONificateur',
       AiNarrativeTask.optimizer: 'Optimiseur de Lore (une fois par Partie)',
+      AiNarrativeTask.memory: 'Extraction mémoire (à chaque tour)',
     };
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SizedBox(height: DomoliaSpacing.compact),
@@ -511,7 +512,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               DropdownMenuItem(value: '', child: Text(
                 task == AiNarrativeTask.optimizer
                     ? 'Désactivé'
-                    : task == AiNarrativeTask.jsonifier
+                    : task == AiNarrativeTask.jsonifier || task == AiNarrativeTask.memory
                         ? 'Même IA que le narrateur' : 'Profil du Livre')),
               for (final profile in controller.profiles)
                 DropdownMenuItem(value: profile.id, child: Text(
@@ -535,6 +536,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
             AiNarrativeTask.narrator => 'low',
             AiNarrativeTask.jsonifier => 'none',
             AiNarrativeTask.optimizer => 'low',
+            AiNarrativeTask.memory => 'none',
           };
           Future<void> save(AiTaskGenerationSettings options) async {
             try {
