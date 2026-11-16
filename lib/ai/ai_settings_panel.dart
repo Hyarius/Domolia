@@ -25,6 +25,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
   final _base = TextEditingController();
   final _key = TextEditingController();
   String? _selectedModel;
+  bool _probingTools = false;
 
   @override
   void initState() {
@@ -160,6 +161,79 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
     }
     if (await widget.controller.selectProfile(id) && mounted) {
       _reloadFields();
+    }
+  }
+
+  /// Optional billed probe. Only a real native tool-call response can mark
+  /// the current profile as confirmed compatible.
+  Future<void> _probeTools() async {
+    if (_probingTools || widget.controller.busy) return;
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Tester le Tool Calling ?'),
+        content: const Text('Ce test envoie une courte requête au modèle '
+            'sélectionné et peut consommer des crédits. Aucun coût '
+            'n’est engagé sans cette confirmation.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annuler')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Lancer le test')),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted) return;
+    final profileId = widget.controller.selectedProfileId;
+    setState(() => _probingTools = true);
+    var verified = false;
+    try {
+      final binding = await widget.controller.connectionForProfile(profileId);
+      if (binding.provider is! AiToolCallingChatProvider) {
+        throw const AiToolsUnsupportedException();
+      }
+      var called = false;
+      var finished = false;
+      await for (final chunk in
+          (binding.provider as AiToolCallingChatProvider).streamToolChat(
+        binding.configuration,
+        messages: const [
+          AiToolMessage(role: 'system', content:
+              'Tu dois appeler le seul outil fourni, sans texte libre.'),
+          AiToolMessage(role: 'user', content:
+              'Appelle ping avec la valeur "ok".'),
+        ],
+        tools: const [
+          AiToolDefinition('ping', 'Echo a short test value', {
+            'type': 'object',
+            'properties': {'value': {'type': 'string'}},
+            'required': ['value'],
+          }),
+        ],
+        maxTokens: 128,
+      )) {
+        if (chunk.callName == 'ping') called = true;
+        if (chunk.finishReason == 'tool_calls') finished = true;
+      }
+      verified = called && finished;
+      if (verified && widget.controller.selectedProfileId == profileId) {
+        verified = await widget.controller.setToolCallingCompatibility(
+            AiToolCallingCompatibility.supported);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
+          verified ? 'Tool Calling confirmé et activé pour ce modèle.'
+              : 'Test non concluant. Compatibilité inchangée.',
+        )));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(
+          'Le modèle n’a pas effectué le test. Compatibilité inchangée.',
+        )));
+      }
+    } finally {
+      if (mounted) setState(() => _probingTools = false);
     }
   }
 
@@ -318,6 +392,15 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
           onChanged: controller.busy ? null : (value) {
             if (value != null) controller.setToolCallingCompatibility(value);
           },
+        ),
+        const SizedBox(height: DomoliaSpacing.compact),
+        TextButton.icon(
+          key: const ValueKey('aiProbeToolCalling'),
+          onPressed: controller.busy || _probingTools
+              ? null : _probeTools,
+          icon: const Icon(Icons.fact_check_outlined),
+          label: Text(_probingTools
+              ? 'Vérification en cours…' : 'Tester le Tool Calling (payant)'),
         ),
         const SizedBox(height: DomoliaSpacing.compact),
         Wrap(
