@@ -360,8 +360,8 @@ class NarrativeReferenceTools {
     final results = <(int, LiveMemoryFact)>[];
     for (final fact in memory?.call() ?? const <LiveMemoryFact>[]) {
       if (eventsOnly && fact.category != 'event' &&
-          fact.category != 'commitment') continue;
-      if (!eventsOnly && category != 'all' && fact.category != category) continue;
+          fact.category != 'commitment') { continue; }
+      if (!eventsOnly && category != 'all' && fact.category != category) { continue; }
       final score = _score(
           '${fact.label} ${fact.text} ${fact.entityId}', query);
       if (score > 0) { results.add((score, fact)); }
