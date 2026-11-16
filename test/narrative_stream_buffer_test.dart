@@ -13,7 +13,7 @@ void main() {
     expect(first.id, 42);
     expect(first.text, 'La porte');
     expect(first.inProgress, true);
-    buffer.add(' s’ouvre."}\\n{"type":"message","speaker":"character",'
+    buffer.add(' s’ouvre."}\n{"type":"message","speaker":"character",'
         '"name":"Oren","status":"prudent","text":"Bonjour');
     final partial = buffer.previewEvents(42);
     expect(partial.map((e) => e.id), [42, 43]);
@@ -29,10 +29,10 @@ void main() {
   test('scene changes never create draft bubbles with broken JSON', () {
     final buffer = NarrativeStreamBuffer();
     buffer.add('{"type":"message","speaker":"narrator",'
-        '"name":"Narrateur","text":"Une porte."}\\n');
+        '"name":"Narrateur","text":"Une porte."}\n');
     buffer.add('{"type":"scene_change"');
     expect(buffer.previewEvents(1), hasLength(1));
-    buffer.add('}\\n{"type":"message","speaker":"character",'
+    buffer.add('}\n{"type":"message","speaker":"character",'
         '"name":"Oren","text":"Entrez."}');
     final events = buffer.finish();
     expect(events[1], isA<ChatSceneChangeOutput>());
@@ -42,19 +42,19 @@ void main() {
   test('broken JSON and player impersonation reject the entire turn', () {
     final malformed = NarrativeStreamBuffer();
     malformed.add('{"type":"message","speaker":"narrator",'
-        '"name":"Narrateur","text":"Début."}\\n');
-    expect(() => malformed.add('{INVALID}\\n'), throwsFormatException);
+        '"name":"Narrateur","text":"Début."}\n');
+    expect(() => malformed.add('{INVALID}\n'), throwsFormatException);
     final spoof = NarrativeStreamBuffer();
     expect(() => spoof.add(jsonEncode({
       'type': 'message', 'speaker': 'player', 'name': 'Vous',
       'text': 'Je promets.'
-    }) + '\\n'), throwsFormatException);
+    }) + '\n'), throwsFormatException);
   });
 
   test('trailing scene separators are rejected before persistence', () {
     final buffer = NarrativeStreamBuffer();
     buffer.add('{"type":"message","speaker":"narrator",'
-        '"name":"Narrateur","text":"Au revoir."}\\n'
+        '"name":"Narrateur","text":"Au revoir."}\n'
         '{"type":"scene_change"}');
     expect(buffer.finish, throwsFormatException);
   });

@@ -13,7 +13,7 @@ const _config = AiConfiguration(
 String _line(String text, {String name = 'Narrateur',
     String role = 'narrator'}) => jsonEncode({
   'type': 'message', 'speaker': role, 'name': name, 'text': text,
-}) + '\\n';
+}) + '\n';
 
 class _FakeStream implements AiChatProvider, AiStreamingChatProvider {
   final updates = StreamController<AiStreamChunk>.broadcast(sync: true);
@@ -106,7 +106,7 @@ void main() {
         '"text":"L’auberge'));
     expect(chat.preview, isNotNull);
     chat.stop();
-    provider.updates.add(AiStreamChunk(text: ' est calme."}\\n'));
+    provider.updates.add(AiStreamChunk(text: ' est calme."}\n'));
     await pending;
     expect(chat.previewEvents, isEmpty);
     expect(chat.messages, hasLength(1));
@@ -124,7 +124,7 @@ void main() {
     await _until(() => provider.calls == 1);
     provider.updates.add(AiStreamChunk(text: _line('Début valide.')));
     expect(chat.previewEvents, hasLength(1));
-    provider.updates.add(const AiStreamChunk(text: '{broken}\\n'));
+    provider.updates.add(const AiStreamChunk(text: '{broken}\n'));
     await pending;
     expect(chat.error, isNotNull);
     expect(chat.previewEvents, isEmpty);
