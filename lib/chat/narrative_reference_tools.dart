@@ -364,7 +364,7 @@ class NarrativeReferenceTools {
       if (!eventsOnly && category != 'all' && fact.category != category) continue;
       final score = _score(
           '${fact.label} ${fact.text} ${fact.entityId}', query);
-      if (score > 0) results.add((score, fact));
+      if (score > 0) { results.add((score, fact)); }
     }
     results.sort((a, b) {
       final byScore = b.$1.compareTo(a.$1);
@@ -388,9 +388,11 @@ class NarrativeReferenceTools {
       throw const FormatException('Invalid memory ID.');
     }
     for (final fact in memory?.call() ?? const <LiveMemoryFact>[]) {
-      if (fact.id == id) return jsonEncode({
-        'source': 'active_party_live_memory', 'entry': fact.toJson(),
-      });
+      if (fact.id == id) {
+        return jsonEncode({
+          'source': 'active_party_live_memory', 'entry': fact.toJson(),
+        });
+      }
     }
     return jsonEncode({'source': 'active_party_live_memory',
       'error': 'entry_not_found'});
