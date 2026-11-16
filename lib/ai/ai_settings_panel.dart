@@ -54,9 +54,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
     });
   }
 
-  void _routingChanged() {
-    if (mounted) setState(() {});
-  }
+  void _routingChanged() { if (mounted) setState(() {}); }
 
   @override
   void dispose() {
@@ -102,9 +100,9 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
   }
 
   Future<String?> _askForName({String? initialName}) => showDialog<String>(
-    context: context,
-    builder: (_) => _ProfileNameDialog(initialName: initialName),
-  );
+        context: context,
+        builder: (_) => _ProfileNameDialog(initialName: initialName),
+      );
 
   Future<void> _createProfile() async {
     if (widget.controller.busy) return;
@@ -120,9 +118,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
   }
 
   Future<void> _renameProfile() async {
-    final name = await _askForName(
-      initialName: widget.controller.selectedProfile.name,
-    );
+    final name = await _askForName(initialName: widget.controller.selectedProfile.name);
     if (name != null && mounted) await widget.controller.renameProfile(name);
   }
 
@@ -176,20 +172,14 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Tester le Tool Calling ?'),
-        content: const Text(
-          'Ce test envoie une courte requête au modèle '
-          'sélectionné et peut consommer des crédits. Aucun coût '
-          'n’est engagé sans cette confirmation.',
-        ),
+        content: const Text('Ce test envoie une courte requête au modèle '
+            'sélectionné et peut consommer des crédits. Aucun coût '
+            'n’est engagé sans cette confirmation.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Annuler'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Lancer le test'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annuler')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Lancer le test')),
         ],
       ),
     );
@@ -204,60 +194,43 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
       }
       var called = false;
       var finished = false;
-      await for (final chunk
-          in (binding.provider as AiToolCallingChatProvider).streamToolChat(
-            binding.configuration,
-            messages: const [
-              AiToolMessage(
-                role: 'system',
-                content:
-                    'Tu dois appeler le seul outil fourni, sans texte libre.',
-              ),
-              AiToolMessage(
-                role: 'user',
-                content: 'Appelle ping avec la valeur "ok".',
-              ),
-            ],
-            tools: const [
-              AiToolDefinition('ping', 'Echo a short test value', {
-                'type': 'object',
-                'properties': {
-                  'value': {'type': 'string'},
-                },
-                'required': ['value'],
-              }),
-            ],
-            maxTokens: 128,
-          )) {
+      await for (final chunk in
+          (binding.provider as AiToolCallingChatProvider).streamToolChat(
+        binding.configuration,
+        messages: const [
+          AiToolMessage(role: 'system', content:
+              'Tu dois appeler le seul outil fourni, sans texte libre.'),
+          AiToolMessage(role: 'user', content:
+              'Appelle ping avec la valeur "ok".'),
+        ],
+        tools: const [
+          AiToolDefinition('ping', 'Echo a short test value', {
+            'type': 'object',
+            'properties': {'value': {'type': 'string'}},
+            'required': ['value'],
+          }),
+        ],
+        maxTokens: 128,
+      )) {
         if (chunk.callName == 'ping') called = true;
         if (chunk.finishReason == 'tool_calls') finished = true;
       }
       verified = called && finished;
       if (verified && widget.controller.selectedProfileId == profileId) {
         verified = await widget.controller.setToolCallingCompatibility(
-          AiToolCallingCompatibility.supported,
-        );
+            AiToolCallingCompatibility.supported);
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              verified
-                  ? 'Tool Calling confirmé et activé pour ce modèle.'
-                  : 'Test non concluant. Compatibilité inchangée.',
-            ),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
+          verified ? 'Tool Calling confirmé et activé pour ce modèle.'
+              : 'Test non concluant. Compatibilité inchangée.',
+        )));
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Le modèle n’a pas effectué le test. Compatibilité inchangée.',
-            ),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(
+          'Le modèle n’a pas effectué le test. Compatibilité inchangée.',
+        )));
       }
     } finally {
       if (mounted) setState(() => _probingTools = false);
@@ -265,8 +238,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
   }
 
   void _showStatusError() {
-    final reason =
-        widget.controller.statusError ??
+    final reason = widget.controller.statusError ??
         'Impossible de joindre le fournisseur. Vérifiez les paramètres.';
     showDialog<void>(
       context: context,
@@ -392,17 +364,13 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               child: Text('Incompatible'),
             ),
           ],
-          onChanged: controller.busy
-              ? null
-              : (value) {
-                  if (value != null) controller.setNsfwCompatibility(value);
-                },
+          onChanged: controller.busy ? null : (value) {
+            if (value != null) controller.setNsfwCompatibility(value);
+          },
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<AiToolCallingCompatibility>(
-          key: ValueKey(
-            'aiToolCallingCapability-${controller.selectedProfileId}',
-          ),
+          key: ValueKey('aiToolCallingCapability-${controller.selectedProfileId}'),
           initialValue: controller.selectedProfile.toolCallingCompatibility,
           decoration: const InputDecoration(
             labelText: 'Capacité Tool Calling déclarée',
@@ -421,23 +389,18 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               child: Text('Incompatible'),
             ),
           ],
-          onChanged: controller.busy
-              ? null
-              : (value) {
-                  if (value != null)
-                    controller.setToolCallingCompatibility(value);
-                },
+          onChanged: controller.busy ? null : (value) {
+            if (value != null) controller.setToolCallingCompatibility(value);
+          },
         ),
         const SizedBox(height: DomoliaSpacing.compact),
         TextButton.icon(
           key: const ValueKey('aiProbeToolCalling'),
-          onPressed: controller.busy || _probingTools ? null : _probeTools,
+          onPressed: controller.busy || _probingTools
+              ? null : _probeTools,
           icon: const Icon(Icons.fact_check_outlined),
-          label: Text(
-            _probingTools
-                ? 'Vérification en cours…'
-                : 'Tester le Tool Calling (payant)',
-          ),
+          label: Text(_probingTools
+              ? 'Vérification en cours…' : 'Tester le Tool Calling (payant)'),
         ),
         const SizedBox(height: DomoliaSpacing.compact),
         Wrap(
@@ -460,7 +423,10 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                 if (action == 'delete') _deleteProfile();
               },
               itemBuilder: (_) => [
-                const PopupMenuItem(value: 'rename', child: Text('Renommer')),
+                const PopupMenuItem(
+                  value: 'rename',
+                  child: Text('Renommer'),
+                ),
                 PopupMenuItem(
                   value: 'delete',
                   enabled: controller.profiles.length > 1,
@@ -472,16 +438,11 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.more_horiz_rounded,
-                      color: DomoliaColors.goldLight,
-                      size: 20,
-                    ),
+                    Icon(Icons.more_horiz_rounded,
+                        color: DomoliaColors.goldLight, size: 20),
                     SizedBox(width: 7),
-                    Text(
-                      'Gérer',
-                      style: TextStyle(color: DomoliaColors.goldLight),
-                    ),
+                    Text('Gérer',
+                        style: TextStyle(color: DomoliaColors.goldLight)),
                   ],
                 ),
               ),
@@ -523,11 +484,9 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                   child: Text('CustomAI'),
                 ),
               ],
-              onChanged: controller.busy
-                  ? null
-                  : (kind) {
-                      if (kind != null) _selectProviderKind(kind);
-                    },
+              onChanged: controller.busy ? null : (kind) {
+                if (kind != null) _selectProviderKind(kind);
+              },
             ),
           ),
         ),
@@ -604,194 +563,130 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
       AiNarrativeTask.optimizer: 'Optimiseur de Lore (une fois par Partie)',
       AiNarrativeTask.memory: 'Extraction mémoire (à chaque tour)',
     };
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SizedBox(height: DomoliaSpacing.compact),
-        const Divider(),
-        const SizedBox(height: DomoliaSpacing.compact),
-        const Text(
-          'IA par tâche',
-          style: TextStyle(
-            color: DomoliaColors.goldLight,
-            fontSize: 19,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Choisissez parmi les profils déjà configurés. '
-          'Ces paramètres s’appliquent par défaut à toutes les Parties ; '
-          'chaque conversation peut les surcharger. '
-          'L’optimiseur est désactivé tant qu’aucun profil ne lui est assigné.',
-          style: TextStyle(color: DomoliaColors.muted),
-        ),
-        const SizedBox(height: DomoliaSpacing.field),
-        for (final task in AiNarrativeTask.values) ...[
-          Builder(
-            builder: (context) {
-              final chosen = routing.profileFor(task);
-              final known =
-                  chosen != null &&
-                  controller.profiles.any((p) => p.id == chosen);
-              final current = known ? chosen : '';
-              return DropdownButtonFormField<String>(
-                key: ValueKey('aiTaskDefault-${task.name}-$current'),
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const SizedBox(height: DomoliaSpacing.compact),
+      const Divider(),
+      const SizedBox(height: DomoliaSpacing.compact),
+      const Text('IA par tâche', style: TextStyle(
+        color: DomoliaColors.goldLight, fontSize: 19,
+        fontWeight: FontWeight.w700)),
+      const SizedBox(height: 8),
+      const Text('Choisissez parmi les profils déjà configurés. '
+        'Ces paramètres s’appliquent par défaut à toutes les Parties ; '
+        'chaque conversation peut les surcharger. '
+        'L’optimiseur est désactivé tant qu’aucun profil ne lui est assigné.',
+        style: TextStyle(color: DomoliaColors.muted)),
+      const SizedBox(height: DomoliaSpacing.field),
+      for (final task in AiNarrativeTask.values) ...[
+        Builder(builder: (context) {
+          final chosen = routing.profileFor(task);
+          final known = chosen != null &&
+              controller.profiles.any((p) => p.id == chosen);
+          final current = known ? chosen : '';
+          return DropdownButtonFormField<String>(
+            key: ValueKey('aiTaskDefault-${task.name}-$current'),
+            isExpanded: true,
+            initialValue: current,
+            decoration: InputDecoration(labelText: titles[task],
+              helperText: chosen != null && !known
+                  ? 'Ancien profil supprimé : choisissez-en un autre.'
+                  : null),
+            items: [
+              DropdownMenuItem(value: '', child: Text(
+                task == AiNarrativeTask.optimizer
+                    ? 'Désactivé'
+                    : task == AiNarrativeTask.jsonifier || task == AiNarrativeTask.memory
+                        ? 'Même IA que le narrateur' : 'Profil du Livre')),
+              for (final profile in controller.profiles)
+                DropdownMenuItem(value: profile.id, child: Text(
+                  profile.name, overflow: TextOverflow.ellipsis)),
+            ],
+            onChanged: controller.busy ? null : (id) async {
+              try {
+                await routing.setProfile(task, id == '' ? null : id);
+              } catch (_) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text(
+                    'Impossible d’enregistrer ce profil de tâche.')));
+              }
+            },
+          );
+        }),
+        Builder(builder: (context) {
+          final generation = routing.generationFor(task);
+          final preset = switch (task) {
+            AiNarrativeTask.narrator => 'low',
+            AiNarrativeTask.jsonifier => 'none',
+            AiNarrativeTask.optimizer => 'low',
+            AiNarrativeTask.memory => 'none',
+          };
+          Future<void> save(AiTaskGenerationSettings options) async {
+            try {
+              await routing.setGeneration(task, options);
+            } catch (_) {
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text(
+                  'Impossible d’enregistrer les paramètres de génération.')));
+            }
+          }
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: DomoliaSpacing.field),
+              DropdownButtonFormField<int>(
+                key: ValueKey('aiTaskTokens-${task.name}-${generation.maxOutputTokens}'),
+                initialValue: generation.maxOutputTokens,
                 isExpanded: true,
-                initialValue: current,
+                decoration: const InputDecoration(
+                  labelText: 'Budget maximal de sortie (tokens)'),
+                items: [
+                  for (final tokens in AiTaskGenerationSettings.tokenChoices)
+                    DropdownMenuItem(value: tokens,
+                      child: Text('$tokens tokens')),
+                ],
+                onChanged: controller.busy ? null : (tokens) {
+                  if (tokens != null) {
+                    save(AiTaskGenerationSettings(
+                      maxOutputTokens: tokens,
+                      reasoningEffort: generation.reasoningEffort,
+                    ));
+                  }
+                },
+              ),
+              const SizedBox(height: DomoliaSpacing.field),
+              DropdownButtonFormField<String>(
+                key: ValueKey('aiTaskReasoning-${task.name}-${generation.reasoningEffort}'),
+                initialValue: generation.reasoningEffort,
+                isExpanded: true,
                 decoration: InputDecoration(
-                  labelText: titles[task],
-                  helperText: chosen != null && !known
-                      ? 'Ancien profil supprimé : choisissez-en un autre.'
-                      : null,
+                  labelText: 'Effort de raisonnement (ChatGPT)',
+                  helperText: 'Auto : Luna = $preset ; autres modèles = défaut fournisseur.',
                 ),
                 items: [
-                  DropdownMenuItem(
-                    value: '',
-                    child: Text(
-                      task == AiNarrativeTask.optimizer
-                          ? 'Désactivé'
-                          : task == AiNarrativeTask.jsonifier ||
-                                task == AiNarrativeTask.memory
-                          ? 'Même IA que le narrateur'
-                          : 'Profil du Livre',
-                    ),
-                  ),
-                  for (final profile in controller.profiles)
-                    DropdownMenuItem(
-                      value: profile.id,
-                      child: Text(
-                        profile.name,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
+                  for (final effort in AiTaskGenerationSettings.reasoningChoices)
+                    DropdownMenuItem(value: effort, child: Text(
+                      effort == 'auto' ? 'Automatique' :
+                      effort == 'provider' ? 'Défaut du fournisseur' :
+                      effort.toUpperCase())),
                 ],
-                onChanged: controller.busy
-                    ? null
-                    : (id) async {
-                        try {
-                          await routing.setProfile(task, id == '' ? null : id);
-                        } catch (_) {
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Impossible d’enregistrer ce profil de tâche.',
-                              ),
-                            ),
-                          );
-                        }
-                      },
-              );
-            },
-          ),
-          Builder(
-            builder: (context) {
-              final generation = routing.generationFor(task);
-              final preset = switch (task) {
-                AiNarrativeTask.narrator => 'low',
-                AiNarrativeTask.jsonifier => 'none',
-                AiNarrativeTask.optimizer => 'low',
-                AiNarrativeTask.memory => 'none',
-              };
-              Future<void> save(AiTaskGenerationSettings options) async {
-                try {
-                  await routing.setGeneration(task, options);
-                } catch (_) {
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Impossible d’enregistrer les paramètres de génération.',
-                      ),
-                    ),
-                  );
-                }
-              }
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: DomoliaSpacing.field),
-                  DropdownButtonFormField<int>(
-                    key: ValueKey(
-                      'aiTaskTokens-${task.name}-${generation.maxOutputTokens}',
-                    ),
-                    initialValue: generation.maxOutputTokens,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Budget maximal de sortie (tokens)',
-                    ),
-                    items: [
-                      for (final tokens
-                          in AiTaskGenerationSettings.tokenChoices)
-                        DropdownMenuItem(
-                          value: tokens,
-                          child: Text('$tokens tokens'),
-                        ),
-                    ],
-                    onChanged: controller.busy
-                        ? null
-                        : (tokens) {
-                            if (tokens != null) {
-                              save(
-                                AiTaskGenerationSettings(
-                                  maxOutputTokens: tokens,
-                                  reasoningEffort: generation.reasoningEffort,
-                                ),
-                              );
-                            }
-                          },
-                  ),
-                  const SizedBox(height: DomoliaSpacing.field),
-                  DropdownButtonFormField<String>(
-                    key: ValueKey(
-                      'aiTaskReasoning-${task.name}-${generation.reasoningEffort}',
-                    ),
-                    initialValue: generation.reasoningEffort,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: 'Effort de raisonnement (ChatGPT)',
-                      helperText:
-                          'Auto : Luna = $preset ; autres modèles = défaut fournisseur.',
-                    ),
-                    items: [
-                      for (final effort
-                          in AiTaskGenerationSettings.reasoningChoices)
-                        DropdownMenuItem(
-                          value: effort,
-                          child: Text(
-                            effort == 'auto'
-                                ? 'Automatique'
-                                : effort == 'provider'
-                                ? 'Défaut du fournisseur'
-                                : effort.toUpperCase(),
-                          ),
-                        ),
-                    ],
-                    onChanged: controller.busy
-                        ? null
-                        : (effort) {
-                            if (effort != null) {
-                              save(
-                                AiTaskGenerationSettings(
-                                  maxOutputTokens: generation.maxOutputTokens,
-                                  reasoningEffort: effort,
-                                ),
-                              );
-                            }
-                          },
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: DomoliaSpacing.section),
-        ],
-        const Divider(),
-        const SizedBox(height: 14),
+                onChanged: controller.busy ? null : (effort) {
+                  if (effort != null) {
+                    save(AiTaskGenerationSettings(
+                      maxOutputTokens: generation.maxOutputTokens,
+                      reasoningEffort: effort,
+                    ));
+                  }
+                },
+              ),
+            ],
+          );
+        }),
+        const SizedBox(height: DomoliaSpacing.section),
       ],
-    );
+      const Divider(),
+      const SizedBox(height: 14),
+    ]);
   }
 
   @override
@@ -841,126 +736,124 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               const SizedBox(height: DomoliaSpacing.section),
               _taskProfiles(c),
               if (c.selectedKind == AiProviderKind.customAi) ...[
-                TextField(
-                  controller: _base,
-                  enabled: !c.busy,
-                  keyboardType: TextInputType.url,
-                  autocorrect: false,
-                  decoration: const InputDecoration(
-                    labelText: 'Adresse du fournisseur (HTTPS)',
-                    hintText: 'https://api.openuncensored.com/v1',
-                  ),
+              TextField(
+                controller: _base,
+                enabled: !c.busy,
+                keyboardType: TextInputType.url,
+                autocorrect: false,
+                decoration: const InputDecoration(
+                  labelText: 'Adresse du fournisseur (HTTPS)',
+                  hintText: 'https://api.openuncensored.com/v1',
                 ),
-                const SizedBox(height: DomoliaSpacing.field),
-                TextField(
-                  controller: _key,
-                  key: const ValueKey('aiApiKeyField'),
-                  enabled: !c.busy,
-                  obscureText: true,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  decoration: InputDecoration(
-                    labelText: 'Clé API',
-                    hintText: c.hasKey ? 'Clé déjà enregistrée' : 'ou-…',
-                    helperText: c.hasKey
-                        ? 'Laissez vide pour conserver la clé actuelle.'
-                        : 'Votre clé reste sur cet appareil.',
-                    suffixIcon: const Icon(Icons.lock_outline),
-                  ),
+              ),
+              const SizedBox(height: DomoliaSpacing.field),
+              TextField(
+                controller: _key,
+                key: const ValueKey('aiApiKeyField'),
+                enabled: !c.busy,
+                obscureText: true,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: InputDecoration(
+                  labelText: 'Clé API',
+                  hintText: c.hasKey ? 'Clé déjà enregistrée' : 'ou-…',
+                  helperText: c.hasKey
+                      ? 'Laissez vide pour conserver la clé actuelle.'
+                      : 'Votre clé reste sur cet appareil.',
+                  suffixIcon: const Icon(Icons.lock_outline),
                 ),
-                const SizedBox(height: DomoliaSpacing.field),
-                InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Modèle de chat',
-                    helperText: 'Charger les modèles actualise cette liste.',
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      key: const ValueKey('aiModelSelector'),
-                      value: modelIds.contains(selectedModel)
-                          ? selectedModel
-                          : null,
-                      isExpanded: true,
-                      itemHeight: 72,
-                      menuMaxHeight: 360,
-                      dropdownColor: DomoliaColors.raisedSurface,
-                      borderRadius: BorderRadius.circular(12),
-                      hint: const Text('Charger les modèles'),
-                      selectedItemBuilder: (context) => [
-                        for (final id in modelIds)
-                          Tooltip(
-                            message: id,
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                id,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                      ],
-                      items: [
-                        for (final id in modelIds)
-                          DropdownMenuItem(
-                            value: id,
+              ),
+              const SizedBox(height: DomoliaSpacing.field),
+              InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Modèle de chat',
+                  helperText: 'Charger les modèles actualise cette liste.',
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    key: const ValueKey('aiModelSelector'),
+                    value: modelIds.contains(selectedModel) ? selectedModel : null,
+                    isExpanded: true,
+                    itemHeight: 72,
+                    menuMaxHeight: 360,
+                    dropdownColor: DomoliaColors.raisedSurface,
+                    borderRadius: BorderRadius.circular(12),
+                    hint: const Text('Charger les modèles'),
+                    selectedItemBuilder: (context) => [
+                      for (final id in modelIds)
+                        Tooltip(
+                          message: id,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
                             child: Text(
                               id,
                               maxLines: 2,
-                              softWrap: true,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                      ],
-                      onChanged: c.busy
-                          ? null
-                          : (value) {
-                              if (value != null) {
-                                setState(() => _selectedModel = value);
-                                if (c.selectedKind == AiProviderKind.chatGpt) {
-                                  c.selectChatGptModel(value);
-                                }
-                              }
-                            },
-                    ),
-                  ),
-                ),
-                const SizedBox(height: DomoliaSpacing.section),
-                FilledButton.icon(
-                  onPressed: c.busy ? null : _save,
-                  icon: const Icon(Icons.save_outlined),
-                  label: const Text('Enregistrer la configuration'),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: c.busy ? null : _saveAndLoadModels,
-                  icon: const Icon(Icons.list_alt),
-                  label: const Text('Charger les modèles'),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: c.busy ? null : _saveAndTest,
-                  icon: const Icon(Icons.wifi_tethering),
-                  label: const Text('Tester la connexion'),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Le test peut consommer des crédits du fournisseur IA.',
-                  style: TextStyle(color: DomoliaColors.muted, fontSize: 12),
-                ),
-                if (c.hasKey) ...[
-                  const SizedBox(height: 14),
-                  TextButton.icon(
-                    onPressed: c.busy
+                        ),
+                    ],
+                    items: [
+                      for (final id in modelIds)
+                        DropdownMenuItem(
+                          value: id,
+                          child: Text(
+                            id,
+                            maxLines: 2,
+                            softWrap: true,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: c.busy
                         ? null
-                        : () async {
-                            await c.removeKey();
-                            if (mounted) _key.clear();
+                        : (value) {
+                            if (value != null) {
+                              setState(() => _selectedModel = value);
+                              if (c.selectedKind == AiProviderKind.chatGpt) {
+                                c.selectChatGptModel(value);
+                              }
+                            }
                           },
-                    icon: const Icon(Icons.delete_outline),
-                    label: const Text('Supprimer la clé API'),
                   ),
-                ],
+                ),
+              ),
+              const SizedBox(height: DomoliaSpacing.section),
+              FilledButton.icon(
+                onPressed: c.busy ? null : _save,
+                icon: const Icon(Icons.save_outlined),
+                label: const Text('Enregistrer la configuration'),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: c.busy ? null : _saveAndLoadModels,
+                icon: const Icon(Icons.list_alt),
+                label: const Text('Charger les modèles'),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: c.busy ? null : _saveAndTest,
+                icon: const Icon(Icons.wifi_tethering),
+                label: const Text('Tester la connexion'),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Le test peut consommer des crédits du fournisseur IA.',
+                style: TextStyle(color: DomoliaColors.muted, fontSize: 12),
+              ),
+              if (c.hasKey) ...[
+                const SizedBox(height: 14),
+                TextButton.icon(
+                  onPressed: c.busy
+                      ? null
+                      : () async {
+                          await c.removeKey();
+                          if (mounted) _key.clear();
+                        },
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Supprimer la clé API'),
+                ),
+              ],
               ] else ...[
                 const Text(
                   'Connectez un compte ChatGPT à cette configuration nommée. '
@@ -1012,62 +905,60 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                   label: const Text('Déconnecter ChatGPT'),
                 ),
                 const SizedBox(height: 18),
-                InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Modèle de chat',
-                    helperText: 'Charger les modèles actualise cette liste.',
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      key: const ValueKey('aiModelSelector'),
-                      value: modelIds.contains(selectedModel)
-                          ? selectedModel
-                          : null,
-                      isExpanded: true,
-                      itemHeight: 72,
-                      menuMaxHeight: 360,
-                      dropdownColor: DomoliaColors.raisedSurface,
-                      borderRadius: BorderRadius.circular(12),
-                      hint: const Text('Charger les modèles'),
-                      selectedItemBuilder: (context) => [
-                        for (final id in modelIds)
-                          Tooltip(
-                            message: id,
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                id,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                      ],
-                      items: [
-                        for (final id in modelIds)
-                          DropdownMenuItem(
-                            value: id,
+              InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Modèle de chat',
+                  helperText: 'Charger les modèles actualise cette liste.',
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    key: const ValueKey('aiModelSelector'),
+                    value: modelIds.contains(selectedModel) ? selectedModel : null,
+                    isExpanded: true,
+                    itemHeight: 72,
+                    menuMaxHeight: 360,
+                    dropdownColor: DomoliaColors.raisedSurface,
+                    borderRadius: BorderRadius.circular(12),
+                    hint: const Text('Charger les modèles'),
+                    selectedItemBuilder: (context) => [
+                      for (final id in modelIds)
+                        Tooltip(
+                          message: id,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
                             child: Text(
                               id,
                               maxLines: 2,
-                              softWrap: true,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                      ],
-                      onChanged: c.busy
-                          ? null
-                          : (value) {
-                              if (value != null) {
-                                setState(() => _selectedModel = value);
-                                if (c.selectedKind == AiProviderKind.chatGpt) {
-                                  c.selectChatGptModel(value);
-                                }
+                        ),
+                    ],
+                    items: [
+                      for (final id in modelIds)
+                        DropdownMenuItem(
+                          value: id,
+                          child: Text(
+                            id,
+                            maxLines: 2,
+                            softWrap: true,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: c.busy
+                        ? null
+                        : (value) {
+                            if (value != null) {
+                              setState(() => _selectedModel = value);
+                              if (c.selectedKind == AiProviderKind.chatGpt) {
+                                c.selectChatGptModel(value);
                               }
-                            },
-                    ),
+                            }
+                          },
                   ),
                 ),
+              ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
                   onPressed: c.busy ? null : _saveAndLoadModels,
@@ -1124,9 +1015,8 @@ class _ProfileNameDialog extends StatefulWidget {
 }
 
 class _ProfileNameDialogState extends State<_ProfileNameDialog> {
-  late final TextEditingController _input = TextEditingController(
-    text: widget.initialName ?? '',
-  );
+  late final TextEditingController _input =
+      TextEditingController(text: widget.initialName ?? '');
 
   @override
   void dispose() {
@@ -1161,7 +1051,10 @@ class _ProfileNameDialogState extends State<_ProfileNameDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Annuler'),
         ),
-        FilledButton(onPressed: _confirm, child: const Text('Valider')),
+        FilledButton(
+          onPressed: _confirm,
+          child: const Text('Valider'),
+        ),
       ],
     );
   }

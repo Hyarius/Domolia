@@ -14,7 +14,7 @@ export 'ai_task_generation.dart';
 /// Settings are local to this installation and excluded from Book exports.
 class AiTaskRouting extends ChangeNotifier {
   AiTaskRouting({Future<SharedPreferences> Function()? preferences})
-    : _preferences = preferences ?? SharedPreferences.getInstance;
+      : _preferences = preferences ?? SharedPreferences.getInstance;
 
   static const _narratorKey = 'aiTaskNarratorProfileId';
   static const _jsonifierKey = 'aiTaskJsonifierProfileId';
@@ -53,8 +53,7 @@ class AiTaskRouting extends ChangeNotifier {
         if (raw != null) {
           try {
             _generation[task] = AiTaskGenerationSettings.fromJson(
-              jsonDecode(raw),
-            );
+                jsonDecode(raw));
           } on FormatException {
             // A corrupt setting does not prevent editing AI profiles.
             _generation.remove(task);
@@ -69,17 +68,13 @@ class AiTaskRouting extends ChangeNotifier {
     }
   }
 
-  Future<void> setGeneration(
-    AiNarrativeTask task,
-    AiTaskGenerationSettings settings,
-  ) async {
+  Future<void> setGeneration(AiNarrativeTask task,
+      AiTaskGenerationSettings settings) async {
     settings.validate();
     await initialize();
     final preferences = await _preferences();
     final saved = await preferences.setString(
-      'aiTaskGeneration-${task.name}',
-      jsonEncode(settings.toJson()),
-    );
+      'aiTaskGeneration-${task.name}', jsonEncode(settings.toJson()));
     if (!saved) throw StateError('Enregistrement des paramètres IA échoué.');
     _generation[task] = settings;
     notifyListeners();

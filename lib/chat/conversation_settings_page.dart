@@ -16,21 +16,11 @@ import '../theme/domolia_theme.dart';
 /// Conversation-level settings only select already configured AI profiles.
 class ConversationSettingsPage extends StatefulWidget {
   const ConversationSettingsPage({
-    super.key,
-    required this.library,
-    required this.ai,
-    required this.chat,
-    required this.bookId,
-    required this.sessionId,
-    this.bookTitle,
-    this.sessionTitle,
-    required this.onBack,
-    this.onExportBookJson,
-    this.onLoadAiDiagnostics,
-    this.onExportAiTrace,
-    this.onPurgeAiDiagnostics,
-    this.taskRouting,
-    this.onOpenMemory,
+    super.key, required this.library, required this.ai,
+    required this.chat, required this.bookId, required this.sessionId,
+    this.bookTitle, this.sessionTitle, required this.onBack,
+    this.onExportBookJson, this.onLoadAiDiagnostics, this.onExportAiTrace,
+    this.onPurgeAiDiagnostics, this.taskRouting, this.onOpenMemory,
     this.showBackButton = true,
   });
   final BookLibraryController library;
@@ -42,23 +32,17 @@ class ConversationSettingsPage extends StatefulWidget {
   final String? sessionTitle;
   final VoidCallback onBack;
   final bool showBackButton;
-
   /// Optional test adapter; production uses the Android file picker.
-  final Future<void> Function(String fileName, Uint8List bytes)?
-  onExportBookJson;
-
+  final Future<void> Function(String fileName, Uint8List bytes)? onExportBookJson;
   /// Waits for queued SQLite diagnostic writes in production.
   final Future<List<StoredAiDiagnostic>> Function()? onLoadAiDiagnostics;
-
   /// Test adapter; production saves through Android's file picker.
-  final Future<void> Function(String fileName, Uint8List bytes)?
-  onExportAiTrace;
+  final Future<void> Function(String fileName, Uint8List bytes)? onExportAiTrace;
   final Future<void> Function()? onPurgeAiDiagnostics;
   final AiTaskRouting? taskRouting;
   final VoidCallback? onOpenMemory;
   @override
-  State<ConversationSettingsPage> createState() =>
-      _ConversationSettingsPageState();
+  State<ConversationSettingsPage> createState() => _ConversationSettingsPageState();
 }
 
 class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
@@ -76,10 +60,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   bool _saving = false;
 
   @override
-  void initState() {
-    super.initState();
-    _load();
-  }
+  void initState() { super.initState(); _load(); }
 
   Future<void> _load() async {
     try {
@@ -114,8 +95,8 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
 
   void _notify(String message) {
     if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)));
     }
   }
 
@@ -130,9 +111,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     } catch (_) {
       _notify('Impossible de sauvegarder cette connexion.');
     } finally {
-      if (mounted) {
-        setState(() => _saving = false);
-      }
+      if (mounted) { setState(() => _saving = false); }
     }
   }
 
@@ -140,10 +119,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     if (_saving || widget.chat.busy) return;
     setState(() => _saving = true);
     try {
-      await widget.library.setSessionToolCallingEnabled(
-        widget.sessionId,
-        enabled,
-      );
+      await widget.library.setSessionToolCallingEnabled(widget.sessionId, enabled);
       if (mounted) setState(() => _toolCallingEnabled = enabled);
     } catch (_) {
       _notify('Impossible de sauvegarder les consultations IA.');
@@ -171,9 +147,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     try {
       final selected = value == '' ? null : value;
       await widget.library.setSessionTaskProfile(
-        widget.sessionId,
-        task,
-        selected,
+        widget.sessionId, task, selected,
       );
       if (mounted) {
         setState(() {
@@ -194,18 +168,13 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     }
   }
 
-  Future<void> _setGeneration(
-    AiNarrativeTask task,
-    AiTaskGenerationOverride options,
-  ) async {
+  Future<void> _setGeneration(AiNarrativeTask task,
+      AiTaskGenerationOverride options) async {
     if (_saving || widget.chat.busy) return;
     setState(() => _saving = true);
     try {
       await widget.library.setSessionGenerationOverride(
-        widget.sessionId,
-        task,
-        options,
-      );
+          widget.sessionId, task, options);
       if (mounted) {
         setState(() {
           _generationOverrides = Map.of(_generationOverrides);
@@ -225,10 +194,9 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   }
 
   Widget _taskGenerationControls(AiNarrativeTask task) {
-    final options =
-        _generationOverrides[task] ?? const AiTaskGenerationOverride();
-    final inherited =
-        widget.taskRouting?.generationFor(task) ??
+    final options = _generationOverrides[task] ??
+        const AiTaskGenerationOverride();
+    final inherited = widget.taskRouting?.generationFor(task) ??
         AiTaskGenerationSettings.defaults(task);
     final title = switch (task) {
       AiNarrativeTask.narrator => 'Narrateur RAW',
@@ -236,86 +204,57 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       AiNarrativeTask.optimizer => 'Optimiseur de Lore',
       AiNarrativeTask.memory => 'Extraction mémoire',
     };
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SizedBox(height: DomoliaSpacing.compact),
-        Text(title, style: const TextStyle(color: DomoliaColors.goldLight)),
-        const SizedBox(height: DomoliaSpacing.compact),
-        DropdownButtonFormField<int>(
-          key: ValueKey(
-            'conversationTokens-${task.name}-${options.maxOutputTokens ?? 0}',
-          ),
-          initialValue: options.maxOutputTokens ?? 0,
-          isExpanded: true,
-          decoration: const InputDecoration(
-            labelText: 'Budget maximal de sortie (tokens)',
-          ),
-          items: [
-            DropdownMenuItem(
-              value: 0,
-              child: Text('Hériter (${inherited.maxOutputTokens})'),
-            ),
-            for (final count in AiTaskGenerationSettings.tokenChoices)
-              DropdownMenuItem(value: count, child: Text('$count tokens')),
-          ],
-          onChanged: _saving || widget.chat.busy
-              ? null
-              : (count) {
-                  if (count != null) {
-                    _setGeneration(
-                      task,
-                      options.copyWith(
-                        maxOutputTokens: count == 0 ? null : count,
-                        clearMaxOutputTokens: count == 0,
-                      ),
-                    );
-                  }
-                },
-        ),
-        const SizedBox(height: DomoliaSpacing.field),
-        DropdownButtonFormField<String>(
-          key: ValueKey(
-            'conversationReasoning-${task.name}-${options.reasoningEffort ?? ""}',
-          ),
-          initialValue: options.reasoningEffort ?? '',
-          isExpanded: true,
-          decoration: const InputDecoration(
-            labelText: 'Effort de raisonnement (ChatGPT)',
-          ),
-          items: [
-            DropdownMenuItem(
-              value: '',
-              child: Text('Hériter (${inherited.reasoningEffort})'),
-            ),
-            for (final effort in AiTaskGenerationSettings.reasoningChoices)
-              DropdownMenuItem(
-                value: effort,
-                child: Text(
-                  effort == 'auto'
-                      ? 'Automatique (Luna)'
-                      : effort == 'provider'
-                      ? 'Défaut fournisseur'
-                      : effort.toUpperCase(),
-                ),
-              ),
-          ],
-          onChanged: _saving || widget.chat.busy
-              ? null
-              : (effort) {
-                  if (effort != null) {
-                    _setGeneration(
-                      task,
-                      options.copyWith(
-                        reasoningEffort: effort.isEmpty ? null : effort,
-                        clearReasoningEffort: effort.isEmpty,
-                      ),
-                    );
-                  }
-                },
-        ),
-      ],
-    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const SizedBox(height: DomoliaSpacing.compact),
+      Text(title, style: const TextStyle(color: DomoliaColors.goldLight)),
+      const SizedBox(height: DomoliaSpacing.compact),
+      DropdownButtonFormField<int>(
+        key: ValueKey('conversationTokens-${task.name}-${options.maxOutputTokens ?? 0}'),
+        initialValue: options.maxOutputTokens ?? 0,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Budget maximal de sortie (tokens)'),
+        items: [
+          DropdownMenuItem(value: 0,
+              child: Text('Hériter (${inherited.maxOutputTokens})')),
+          for (final count in AiTaskGenerationSettings.tokenChoices)
+            DropdownMenuItem(value: count, child: Text('$count tokens')),
+        ],
+        onChanged: _saving || widget.chat.busy ? null : (count) {
+          if (count != null) {
+            _setGeneration(task, options.copyWith(
+              maxOutputTokens: count == 0 ? null : count,
+              clearMaxOutputTokens: count == 0,
+            ));
+          }
+        },
+      ),
+      const SizedBox(height: DomoliaSpacing.field),
+      DropdownButtonFormField<String>(
+        key: ValueKey('conversationReasoning-${task.name}-${options.reasoningEffort ?? ""}'),
+        initialValue: options.reasoningEffort ?? '',
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Effort de raisonnement (ChatGPT)'),
+        items: [
+          DropdownMenuItem(value: '',
+            child: Text('Hériter (${inherited.reasoningEffort})')),
+          for (final effort in AiTaskGenerationSettings.reasoningChoices)
+            DropdownMenuItem(value: effort, child: Text(
+              effort == 'auto' ? 'Automatique (Luna)' :
+              effort == 'provider' ? 'Défaut fournisseur' :
+              effort.toUpperCase())),
+        ],
+        onChanged: _saving || widget.chat.busy ? null : (effort) {
+          if (effort != null) {
+            _setGeneration(task, options.copyWith(
+              reasoningEffort: effort.isEmpty ? null : effort,
+              clearReasoningEffort: effort.isEmpty,
+            ));
+          }
+        },
+      ),
+    ]);
   }
 
   Future<void> _recompileLore() async {
@@ -332,10 +271,8 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
         throw StateError('Une génération est en cours.');
       }
       if (mounted) setState(() => _cachedLoreCharacters = 0);
-      _notify(
-        'Lore à recompiler au prochain message, '
-        'si un profil optimiseur est configuré.',
-      );
+      _notify('Lore à recompiler au prochain message, '
+          'si un profil optimiseur est configuré.');
     } catch (_) {
       _notify('Impossible de réinitialiser le cache de Lore.');
     } finally {
@@ -352,69 +289,45 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, update) => AlertDialog(
           title: const Text('Exporter la conversation'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<ChatExportScope>(
-                key: const ValueKey('chatExportScope'),
-                initialValue: scope,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Portée de l’export',
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: ChatExportScope.complete,
-                    child: Text('Toute la conversation'),
-                  ),
-                  DropdownMenuItem(
-                    value: ChatExportScope.lastScenes,
-                    child: Text('X dernières scènes'),
-                  ),
-                  DropdownMenuItem(
-                    value: ChatExportScope.lastMessages,
-                    child: Text('X derniers messages'),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value != null)
-                    update(() {
-                      scope = value;
-                      invalid = false;
-                    });
-                },
-              ),
-              if (scope != ChatExportScope.complete)
-                TextFormField(
-                  key: const ValueKey('chatExportCount'),
-                  initialValue: quantity,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Nombre',
-                    errorText: invalid ? 'Entre 1 et 50 000' : null,
-                  ),
-                  onChanged: (value) => quantity = value,
-                ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Annuler'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final count = scope == ChatExportScope.complete
-                    ? 1
-                    : int.tryParse(quantity);
-                if (count == null || count < 1 || count > 50000) {
-                  update(() => invalid = true);
-                  return;
-                }
-                Navigator.pop(dialogContext, (scope, count));
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            DropdownButtonFormField<ChatExportScope>(
+              key: const ValueKey('chatExportScope'),
+              initialValue: scope,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Portée de l’export'),
+              items: const [
+                DropdownMenuItem(value: ChatExportScope.complete,
+                    child: Text('Toute la conversation')),
+                DropdownMenuItem(value: ChatExportScope.lastScenes,
+                    child: Text('X dernières scènes')),
+                DropdownMenuItem(value: ChatExportScope.lastMessages,
+                    child: Text('X derniers messages')),
+              ],
+              onChanged: (value) {
+                if (value != null) update(() { scope = value; invalid = false; });
               },
-              child: const Text('Exporter'),
             ),
+            if (scope != ChatExportScope.complete) TextFormField(
+              key: const ValueKey('chatExportCount'),
+              initialValue: quantity,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(labelText: 'Nombre',
+                  errorText: invalid ? 'Entre 1 et 50 000' : null),
+              onChanged: (value) => quantity = value,
+            ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Annuler')),
+            FilledButton(onPressed: () {
+              final count = scope == ChatExportScope.complete
+                  ? 1 : int.tryParse(quantity);
+              if (count == null || count < 1 || count > 50000) {
+                update(() => invalid = true);
+                return;
+              }
+              Navigator.pop(dialogContext, (scope, count));
+            }, child: const Text('Exporter')),
           ],
         ),
       ),
@@ -423,19 +336,15 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     try {
       final payload = exportConversation(
         widget.chat.timeline,
-        scope: selection.$1,
-        count: selection.$2,
-        bookTitle: widget.bookTitle,
-        sessionTitle: widget.sessionTitle,
+        scope: selection.$1, count: selection.$2,
+        bookTitle: widget.bookTitle, sessionTitle: widget.sessionTitle,
       );
       final bytes = Uint8List.fromList(
-        utf8.encode(const JsonEncoder.withIndent('  ').convert(payload)),
-      );
+          utf8.encode(const JsonEncoder.withIndent('  ').convert(payload)));
       final saved = await FilePicker.platform.saveFile(
         dialogTitle: 'Exporter la conversation',
         fileName: 'domolia-conversation.json',
-        type: FileType.custom,
-        allowedExtensions: ['json'],
+        type: FileType.custom, allowedExtensions: ['json'],
         bytes: bytes,
       );
       if (saved != null) _notify('Conversation exportée.');
@@ -479,20 +388,14 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Purger les diagnostics ?'),
-        content: const Text(
-          'Supprimer définitivement les requêtes '
+        content: const Text('Supprimer définitivement les requêtes '
           'et réponses IA de cette Partie ? Le récit et les RAW '
-          'sauvegardés seront conservés.',
-        ),
+          'sauvegardés seront conservés.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Annuler'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Purger'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annuler')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Purger')),
         ],
       ),
     );
@@ -556,8 +459,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     required List<DropdownMenuItem<String>> additional,
   }) {
     final selected = value ?? '';
-    final known =
-        selected.isEmpty ||
+    final known = selected.isEmpty ||
         additional.any((item) => item.value == selected) ||
         profiles.any((profile) => profile.id == selected);
     return DropdownButtonFormField<String>(
@@ -566,9 +468,8 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       isExpanded: true,
       decoration: InputDecoration(
         labelText: label,
-        helperText: known
-            ? null
-            : 'Le profil précédemment choisi a été supprimé.',
+        helperText: known ? null :
+            'Le profil précédemment choisi a été supprimé.',
       ),
       items: [
         DropdownMenuItem(value: '', child: Text(inheritedLabel)),
@@ -580,8 +481,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           ),
       ],
       onChanged: _saving || widget.chat.busy
-          ? null
-          : (value) => _setTaskProfile(task, value),
+          ? null : (value) => _setTaskProfile(task, value),
     );
   }
 
@@ -591,31 +491,17 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       key: const ValueKey('conversationSettings'),
       padding: const EdgeInsets.all(22),
       children: [
-        Row(
-          children: [
-            if (widget.showBackButton)
-              IconButton(
-                tooltip: 'Retour à la conversation',
-                onPressed: widget.onBack,
-                icon: const Icon(Icons.arrow_back),
-              ),
-            const Expanded(
-              child: Text(
-                'Paramètres de la conversation',
-                style: TextStyle(
-                  color: DomoliaColors.goldLight,
-                  fontSize: 21,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
+        Row(children: [
+          if (widget.showBackButton)
+             IconButton(tooltip: 'Retour à la conversation',
+              onPressed: widget.onBack, icon: const Icon(Icons.arrow_back)),
+          const Expanded(child: Text('Paramètres de la conversation',
+            style: TextStyle(color: DomoliaColors.goldLight,
+                fontSize: 21, fontWeight: FontWeight.bold))),
+        ]),
         const SizedBox(height: 24),
-        const Text(
-          'Connexion IA',
-          style: TextStyle(color: DomoliaColors.goldLight, fontSize: 18),
-        ),
+        const Text('Connexion IA', style: TextStyle(
+            color: DomoliaColors.goldLight, fontSize: 18)),
         if (!_loaded)
           const LinearProgressIndicator()
         else if (_loadFailed)
@@ -624,11 +510,9 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
-                  'Les réglages de cette Partie sont indisponibles. '
+                const Text('Les réglages de cette Partie sont indisponibles. '
                   'Aucune modification ne sera appliquée.',
-                  style: TextStyle(color: DomoliaColors.cream),
-                ),
+                  style: TextStyle(color: DomoliaColors.cream)),
                 const SizedBox(height: DomoliaSpacing.field),
                 OutlinedButton.icon(
                   key: const ValueKey('conversationSettingsRetry'),
@@ -642,193 +526,155 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
               ],
             ),
           )
-        else
-          AnimatedBuilder(
-            animation: widget.ai,
-            builder: (context, _) {
-              final profiles = widget.ai.profiles;
-              final exists =
-                  _selected == null ||
-                  profiles.any((profile) => profile.id == _selected);
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (!exists)
-                    const Text(
-                      'La configuration précédente a été supprimée.',
-                      style: TextStyle(color: DomoliaColors.goldLight),
-                    ),
-                  DropdownButtonFormField<String>(
-                    key: ValueKey(_selected ?? 'conversationDefaultProfile'),
-                    initialValue: exists ? _selected ?? '' : '',
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Narrateur RAW — profil de cette Partie',
-                    ),
-                    items: [
-                      const DropdownMenuItem(
-                        value: '',
-                        child: Text('Profil par défaut du Livre'),
-                      ),
-                      for (final profile in profiles)
-                        DropdownMenuItem(
-                          value: profile.id,
-                          child: Text(
-                            profile.name,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                    ],
-                    onChanged: _saving || widget.chat.busy ? null : _setProfile,
-                  ),
-                  const SizedBox(height: DomoliaSpacing.field),
-                  _taskProfileField(
-                    task: 'jsonifier',
-                    label: 'JSONificateur — profil de cette Partie',
-                    value: _formatterProfile,
-                    profiles: profiles,
-                    inheritedLabel: 'Hériter des paramètres généraux',
-                    additional: const [
-                      DropdownMenuItem(
-                        value: '#narrator',
-                        child: Text('Même IA que le narrateur'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: DomoliaSpacing.field),
-                  _taskProfileField(
-                    task: 'optimizer',
-                    label: 'Optimiseur de Lore — profil de cette Partie',
-                    value: _optimizerProfile,
-                    profiles: profiles,
-                    inheritedLabel: 'Hériter des paramètres généraux',
-                    additional: const [
-                      DropdownMenuItem(
-                        value: '#disabled',
-                        child: Text('Désactiver pour cette Partie'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: DomoliaSpacing.field),
-                  SwitchListTile(
-                    key: const ValueKey('conversationMemoryEnabled'),
-                    title: const Text('Mémoire automatique'),
-                    subtitle: const Text(
-                      'Une extraction IA supplémentaire '
-                      'peut être facturée après chaque tour validé. '
-                      'Désactiver ne supprime pas les souvenirs.',
-                    ),
-                    value: _memoryEnabled,
-                    onChanged: _saving || widget.chat.busy
-                        ? null
-                        : _setMemoryEnabled,
-                  ),
-                  const SizedBox(height: DomoliaSpacing.field),
-                  _taskProfileField(
-                    task: 'memory',
-                    label: 'Mémoire — profil de cette Partie',
-                    value: _memoryProfile,
-                    profiles: profiles,
-                    inheritedLabel: 'Même IA que le narrateur (défaut)',
-                    additional: const [
-                      DropdownMenuItem(
-                        value: '#disabled',
-                        child: Text('Désactiver cette tâche'),
-                      ),
-                      DropdownMenuItem(
-                        value: '#narrator',
-                        child: Text('Même IA que le narrateur'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Builder(
-                    builder: (context) {
-                      final inherited = widget.taskRouting?.profileFor(
-                        AiNarrativeTask.narrator,
-                      );
-                      final chosen =
-                          _selected ?? inherited ?? _inheritedNarratorProfile;
-                      final profile = [
-                        for (final p in profiles)
-                          if (p.id == chosen) p,
-                      ];
-                      final supported =
-                          profile.isNotEmpty &&
-                          profile.first.toolCallingCompatibility ==
-                              AiToolCallingCompatibility.supported;
-                      return SwitchListTile(
-                        key: const ValueKey('conversationToolCalling'),
-                        title: const Text(
-                          'Consultations du Lore et de l’historique',
-                        ),
-                        subtitle: Text(
-                          !supported
-                              ? 'Modèle non confirmé compatible : mode classique utilisé.'
-                              : 'Le narrateur peut consulter des souvenirs à la demande.',
-                        ),
-                        value: _toolCallingEnabled,
-                        onChanged: _saving || widget.chat.busy
-                            ? null
-                            : _setToolCallingEnabled,
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  const Divider(),
-                  const SizedBox(height: DomoliaSpacing.compact),
-                  const Text(
-                    'Budget et raisonnement par tâche',
-                    style: TextStyle(
-                      color: DomoliaColors.goldLight,
-                      fontSize: 17,
-                    ),
-                  ),
-                  const SizedBox(height: DomoliaSpacing.compact),
-                  for (final task in AiNarrativeTask.values) ...[
-                    _taskGenerationControls(task),
-                    const SizedBox(height: DomoliaSpacing.field),
+        else AnimatedBuilder(
+          animation: widget.ai,
+          builder: (context, _) {
+            final profiles = widget.ai.profiles;
+            final exists = _selected == null ||
+                profiles.any((profile) => profile.id == _selected);
+            return Column(crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (!exists) const Text(
+                  'La configuration précédente a été supprimée.',
+                  style: TextStyle(color: DomoliaColors.goldLight)),
+                DropdownButtonFormField<String>(
+                  key: ValueKey(_selected ?? 'conversationDefaultProfile'),
+                  initialValue: exists ? _selected ?? '' : '',
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Narrateur RAW — profil de cette Partie'),
+                  items: [
+                    const DropdownMenuItem(value: '',
+                        child: Text('Profil par défaut du Livre')),
+                    for (final profile in profiles)
+                      DropdownMenuItem(value: profile.id,
+                          child: Text(profile.name,
+                              overflow: TextOverflow.ellipsis)),
                   ],
-                  const SizedBox(height: 12),
-                  Text(
-                    _cachedLoreCharacters > 0
-                        ? 'Lore compilé : $_cachedLoreCharacters caractères '
-                              'conservés pour cette Partie.'
-                        : 'Pas de résumé optimisé disponible pour cette Partie.',
-                    key: const ValueKey('conversationLoreCacheStatus'),
-                    style: const TextStyle(color: DomoliaColors.muted),
-                  ),
-                  const SizedBox(height: 10),
-                  OutlinedButton.icon(
-                    key: const ValueKey('conversationRecompileLore'),
-                    onPressed:
-                        _saving ||
-                            widget.chat.busy ||
-                            widget.chat.pendingRaw != null
-                        ? null
-                        : _recompileLore,
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Recompiler le Lore au prochain message'),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Chaque tâche peut hériter de sa configuration générale '
-                    'ou utiliser un profil existant. Le JSONificateur peut '
-                    'également réutiliser le narrateur. L’optimisation du Lore '
-                    'est facultative et ne modifie jamais le Livre original.',
-                    style: TextStyle(color: DomoliaColors.muted),
-                  ),
+                  onChanged: _saving || widget.chat.busy
+                      ? null : _setProfile,
+                ),
+                const SizedBox(height: DomoliaSpacing.field),
+                _taskProfileField(
+                  task: 'jsonifier',
+                  label: 'JSONificateur — profil de cette Partie',
+                  value: _formatterProfile,
+                  profiles: profiles,
+                  inheritedLabel: 'Hériter des paramètres généraux',
+                  additional: const [
+                    DropdownMenuItem(
+                      value: '#narrator',
+                      child: Text('Même IA que le narrateur'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: DomoliaSpacing.field),
+                _taskProfileField(
+                  task: 'optimizer',
+                  label: 'Optimiseur de Lore — profil de cette Partie',
+                  value: _optimizerProfile,
+                  profiles: profiles,
+                  inheritedLabel: 'Hériter des paramètres généraux',
+                  additional: const [
+                    DropdownMenuItem(
+                      value: '#disabled',
+                      child: Text('Désactiver pour cette Partie'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: DomoliaSpacing.field),
+                SwitchListTile(
+                  key: const ValueKey('conversationMemoryEnabled'),
+                  title: const Text('Mémoire automatique'),
+                  subtitle: const Text('Une extraction IA supplémentaire '
+                      'peut être facturée après chaque tour validé. '
+                      'Désactiver ne supprime pas les souvenirs.'),
+                  value: _memoryEnabled,
+                  onChanged: _saving || widget.chat.busy
+                      ? null : _setMemoryEnabled,
+                ),
+                const SizedBox(height: DomoliaSpacing.field),
+                _taskProfileField(
+                  task: 'memory',
+                  label: 'Mémoire — profil de cette Partie',
+                  value: _memoryProfile,
+                  profiles: profiles,
+                  inheritedLabel: 'Même IA que le narrateur (défaut)',
+                  additional: const [
+                    DropdownMenuItem(value: '#disabled',
+                        child: Text('Désactiver cette tâche')),
+                    DropdownMenuItem(value: '#narrator',
+                        child: Text('Même IA que le narrateur')),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Builder(builder: (context) {
+                  final inherited = widget.taskRouting?.profileFor(
+                    AiNarrativeTask.narrator,
+                  );
+                  final chosen = _selected ?? inherited ?? _inheritedNarratorProfile;
+                  final profile = [
+                    for (final p in profiles) if (p.id == chosen) p,
+                  ];
+                  final supported = profile.isNotEmpty &&
+                      profile.first.toolCallingCompatibility ==
+                          AiToolCallingCompatibility.supported;
+                  return SwitchListTile(
+                    key: const ValueKey('conversationToolCalling'),
+                    title: const Text('Consultations du Lore et de l’historique'),
+                    subtitle: Text(!supported
+                        ? 'Modèle non confirmé compatible : mode classique utilisé.'
+                        : 'Le narrateur peut consulter des souvenirs à la demande.'),
+                    value: _toolCallingEnabled,
+                    onChanged: _saving || widget.chat.busy
+                        ? null : _setToolCallingEnabled,
+                  );
+                }),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: DomoliaSpacing.compact),
+                const Text('Budget et raisonnement par tâche',
+                  style: TextStyle(color: DomoliaColors.goldLight,
+                      fontSize: 17)),
+                const SizedBox(height: DomoliaSpacing.compact),
+                for (final task in AiNarrativeTask.values) ...[
+                  _taskGenerationControls(task),
+                  const SizedBox(height: DomoliaSpacing.field),
                 ],
-              );
-            },
-          ),
+                const SizedBox(height: 12),
+                Text(
+                  _cachedLoreCharacters > 0
+                      ? 'Lore compilé : $_cachedLoreCharacters caractères '
+                        'conservés pour cette Partie.'
+                      : 'Pas de résumé optimisé disponible pour cette Partie.',
+                  key: const ValueKey('conversationLoreCacheStatus'),
+                  style: const TextStyle(color: DomoliaColors.muted),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  key: const ValueKey('conversationRecompileLore'),
+                  onPressed: _saving || widget.chat.busy ||
+                      widget.chat.pendingRaw != null ? null : _recompileLore,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Recompiler le Lore au prochain message'),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Chaque tâche peut hériter de sa configuration générale '
+                  'ou utiliser un profil existant. Le JSONificateur peut '
+                  'également réutiliser le narrateur. L’optimisation du Lore '
+                  'est facultative et ne modifie jamais le Livre original.',
+                  style: TextStyle(color: DomoliaColors.muted),
+                ),
+              ],
+            );
+          },
+        ),
         const SizedBox(height: DomoliaSpacing.section),
         const Divider(),
         const SizedBox(height: DomoliaSpacing.compact),
-        const Text(
-          'Mémoire narrative',
-          style: TextStyle(color: DomoliaColors.goldLight, fontSize: 18),
-        ),
+        const Text('Mémoire narrative', style: TextStyle(
+            color: DomoliaColors.goldLight, fontSize: 18)),
         const SizedBox(height: DomoliaSpacing.field),
         OutlinedButton.icon(
           key: const ValueKey('conversationOpenMemory'),
@@ -839,41 +685,34 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
         const SizedBox(height: DomoliaSpacing.section),
         const Divider(),
         const SizedBox(height: DomoliaSpacing.compact),
-        const Text(
-          'Historique',
-          style: TextStyle(color: DomoliaColors.goldLight, fontSize: 18),
-        ),
+        const Text('Historique', style: TextStyle(
+            color: DomoliaColors.goldLight, fontSize: 18)),
         const SizedBox(height: DomoliaSpacing.field),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            FilledButton.icon(
-              key: const ValueKey('conversationExport'),
-              onPressed: _export,
-              icon: const Icon(Icons.file_download_outlined),
-              label: const Text('Exporter la conversation'),
-            ),
-            OutlinedButton.icon(
-              key: const ValueKey('bookRawExport'),
-              onPressed: _exportBook,
-              icon: const Icon(Icons.menu_book_outlined),
-              label: const Text('Livre (JSON brut)'),
-            ),
-            OutlinedButton.icon(
-              key: const ValueKey('aiPipelineExport'),
-              onPressed: _exportAiTrace,
-              icon: const Icon(Icons.bug_report_outlined),
-              label: const Text('Exporter les échanges IA'),
-            ),
-          ],
-        ),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          FilledButton.icon(
+            key: const ValueKey('conversationExport'),
+            onPressed: _export,
+            icon: const Icon(Icons.file_download_outlined),
+            label: const Text('Exporter la conversation'),
+          ),
+          OutlinedButton.icon(
+            key: const ValueKey('bookRawExport'),
+            onPressed: _exportBook,
+            icon: const Icon(Icons.menu_book_outlined),
+            label: const Text('Livre (JSON brut)'),
+          ),
+          OutlinedButton.icon(
+            key: const ValueKey('aiPipelineExport'),
+            onPressed: _exportAiTrace,
+            icon: const Icon(Icons.bug_report_outlined),
+            label: const Text('Exporter les échanges IA'),
+          ),
+        ]),
         const SizedBox(height: 18),
         OutlinedButton.icon(
           key: const ValueKey('conversationPurgeDiagnostics'),
           onPressed: widget.chat.busy || widget.onPurgeAiDiagnostics == null
-              ? null
-              : _purgeAiDiagnostics,
+              ? null : _purgeAiDiagnostics,
           icon: const Icon(Icons.delete_outline),
           label: const Text('Purger les diagnostics de cette Partie'),
         ),

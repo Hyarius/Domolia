@@ -27,22 +27,17 @@ class BookSession {
   final String bookId;
   final String title;
   final List<ChatTimelineEvent> timeline;
-
   /// Overrides the parent Book's default AI profile for this conversation.
   final String? aiProfileId;
-
   /// Explicit per-Party overrides; null inherits the application task profile.
   final String? formatterProfileId;
   final String? optimizerProfileId;
   final String? memoryProfileId;
   final bool memoryEnabled;
-
   /// Per-Party opt-out; never overrides an incompatible profile.
   final bool toolCallingEnabled;
-
   /// Task-specific output/reasoning overrides; never part of a shared Book.
   final Map<AiNarrativeTask, AiTaskGenerationOverride> generationOverrides;
-
   /// Generated summary only. The canonical Lore remains in BookDefinition.
   /// Empty string means an optimization was attempted and rejected.
   final String? optimizedLore;
@@ -71,42 +66,39 @@ class BookSession {
     String? optimizedLoreHash,
     DateTime? updatedAtUtc,
   }) => BookSession(
-    id: id,
-    bookId: bookId,
-    title: title ?? this.title,
-    timeline: timeline ?? this.timeline,
-    aiProfileId: clearAiProfile ? null : aiProfileId ?? this.aiProfileId,
-    formatterProfileId: clearFormatterProfile
-        ? null
-        : formatterProfileId ?? this.formatterProfileId,
-    optimizerProfileId: clearOptimizerProfile
-        ? null
-        : optimizerProfileId ?? this.optimizerProfileId,
-    memoryProfileId: clearMemoryProfile
-        ? null
-        : memoryProfileId ?? this.memoryProfileId,
-    memoryEnabled: memoryEnabled ?? this.memoryEnabled,
-    toolCallingEnabled: toolCallingEnabled ?? this.toolCallingEnabled,
-    generationOverrides: generationOverrides ?? this.generationOverrides,
-    optimizedLore: optimizedLore ?? this.optimizedLore,
-    optimizedLoreHash: optimizedLoreHash ?? this.optimizedLoreHash,
-    updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
-  );
+        id: id,
+        bookId: bookId,
+        title: title ?? this.title,
+        timeline: timeline ?? this.timeline,
+        aiProfileId: clearAiProfile ? null : aiProfileId ?? this.aiProfileId,
+        formatterProfileId: clearFormatterProfile
+            ? null : formatterProfileId ?? this.formatterProfileId,
+        optimizerProfileId: clearOptimizerProfile
+            ? null : optimizerProfileId ?? this.optimizerProfileId,
+        memoryProfileId: clearMemoryProfile
+            ? null : memoryProfileId ?? this.memoryProfileId,
+        memoryEnabled: memoryEnabled ?? this.memoryEnabled,
+        toolCallingEnabled: toolCallingEnabled ?? this.toolCallingEnabled,
+        generationOverrides: generationOverrides ?? this.generationOverrides,
+        optimizedLore: optimizedLore ?? this.optimizedLore,
+        optimizedLoreHash: optimizedLoreHash ?? this.optimizedLoreHash,
+        updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
+      );
 
   String encodeTimeline() => jsonEncode([
-    for (final event in timeline)
-      if (event is ChatSceneChange)
-        {'id': event.id, 'type': 'scene_change'}
-      else if (event is ChatEntry)
-        {
-          'id': event.id,
-          'type': 'message',
-          'speaker': event.speaker.name,
-          'name': event.name,
-          'text': event.text,
-          if (event.status != null) 'status': event.status,
-        },
-  ]);
+        for (final event in timeline)
+          if (event is ChatSceneChange)
+            {'id': event.id, 'type': 'scene_change'}
+          else if (event is ChatEntry)
+            {
+              'id': event.id,
+              'type': 'message',
+              'speaker': event.speaker.name,
+              'name': event.name,
+              'text': event.text,
+              if (event.status != null) 'status': event.status,
+            },
+      ]);
 
   static List<ChatTimelineEvent> decodeTimeline(String raw) {
     final parsed = jsonDecode(raw);
@@ -121,29 +113,23 @@ class BookSession {
       }
       final id = item['id'] as int;
       if (id < 0 || !seenIds.add(id)) {
-        throw const FormatException(
-          'Identifiant d’événement invalide ou dupliqué.',
-        );
+        throw const FormatException('Identifiant d’événement invalide ou dupliqué.');
       }
       if (item['type'] == 'scene_change' && item.length == 2) {
         result.add(ChatSceneChange(id: id));
       } else if (item['type'] == 'message' &&
           item['speaker'] is String &&
-          item['name'] is String &&
-          item['text'] is String &&
-          (item['status'] == null ||
-              item['status'] is String &&
-                  (item['status'] as String).length <= 65) &&
+          item['name'] is String && item['text'] is String &&
+          (item['status'] == null || item['status'] is String &&
+              (item['status'] as String).length <= 65) &&
           ChatSpeaker.values.any((s) => s.name == item['speaker'])) {
-        result.add(
-          ChatEntry(
-            id: id,
-            speaker: ChatSpeaker.values.byName(item['speaker'] as String),
-            name: item['name'] as String,
-            text: item['text'] as String,
-            status: item['status'] as String?,
-          ),
-        );
+        result.add(ChatEntry(
+          id: id,
+          speaker: ChatSpeaker.values.byName(item['speaker'] as String),
+          name: item['name'] as String,
+          text: item['text'] as String,
+          status: item['status'] as String?,
+        ));
       } else {
         throw const FormatException('Événement de partie inconnu.');
       }

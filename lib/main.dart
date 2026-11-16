@@ -1,13 +1,11 @@
 import 'chat/raw_generation.dart';
-
 import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 
 import 'package:cupertino_ui/cupertino_ui.dart' as cupertino_ui;
-import 'package:flutter_localizations/flutter_localizations.dart'
-    as flutter_l10n;
+import 'package:flutter_localizations/flutter_localizations.dart' as flutter_l10n;
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -43,42 +41,27 @@ import 'logging/app_logger.dart';
 import 'logging/app_logs_page.dart';
 
 void main() {
-  runZonedGuarded(
-    () async {
-      WidgetsFlutterBinding.ensureInitialized();
-      await AppLogger.initialize();
-      final flutterHandler = FlutterError.onError;
-      FlutterError.onError = (details) {
-        AppLogger.error(
-          'Exception Flutter',
-          component: 'flutter',
-          error: details.exception,
-          stackTrace: details.stack,
-        );
-        flutterHandler?.call(details);
-      };
-      final platformHandler = PlatformDispatcher.instance.onError;
-      PlatformDispatcher.instance.onError = (error, stackTrace) {
-        AppLogger.error(
-          'Exception non interceptée',
-          component: 'platform',
-          error: error,
-          stackTrace: stackTrace,
-        );
-        return platformHandler?.call(error, stackTrace) ?? false;
-      };
-      AppLogger.info('Démarrage de Domolia', component: 'app');
-      runApp(const DomoliaApp());
-    },
-    (error, stackTrace) {
-      AppLogger.error(
-        'Exception asynchrone non interceptée',
-        component: 'zone',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    },
-  );
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    await AppLogger.initialize();
+    final flutterHandler = FlutterError.onError;
+    FlutterError.onError = (details) {
+      AppLogger.error('Exception Flutter', component: 'flutter',
+          error: details.exception, stackTrace: details.stack);
+      flutterHandler?.call(details);
+    };
+    final platformHandler = PlatformDispatcher.instance.onError;
+    PlatformDispatcher.instance.onError = (error, stackTrace) {
+      AppLogger.error('Exception non interceptée', component: 'platform',
+          error: error, stackTrace: stackTrace);
+      return platformHandler?.call(error, stackTrace) ?? false;
+    };
+    AppLogger.info('Démarrage de Domolia', component: 'app');
+    runApp(const DomoliaApp());
+  }, (error, stackTrace) {
+    AppLogger.error('Exception asynchrone non interceptée', component: 'zone',
+        error: error, stackTrace: stackTrace);
+  });
 }
 
 class DomoliaApp extends StatelessWidget {
@@ -124,20 +107,7 @@ class DomoliaApp extends StatelessWidget {
   }
 }
 
-enum _Page {
-  home,
-  books,
-  book,
-  chat,
-  about,
-  settings,
-  updates,
-  ai,
-  diagnostics,
-  logs,
-  conversationSettings,
-  memory,
-}
+enum _Page { home, books, book, chat, about, settings, updates, ai, diagnostics, logs, conversationSettings, memory }
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -164,8 +134,7 @@ class _HomePageState extends State<HomePage> {
   _Page _page = _Page.home;
   final List<_Page> _history = [];
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  GlobalKey<BookEditorPageState> _bookEditorKey =
-      GlobalKey<BookEditorPageState>();
+  GlobalKey<BookEditorPageState> _bookEditorKey = GlobalKey<BookEditorPageState>();
   bool _leavingBook = false;
   late final UpdateController _updates;
   late final bool _ownsUpdates;
@@ -197,44 +166,32 @@ class _HomePageState extends State<HomePage> {
     _ownsUpdates = widget.updates == null;
     _updates = widget.updates ?? createProductionUpdateController();
     _ownsAi = widget.ai == null;
-    _ai =
-        widget.ai ??
-        AiConnectionController(
-          store: SecureAiProfileStore(),
-          provider: OpenAiCompatibleChatProvider(diagnostics: _aiDiagnostics),
-          chatGpt: ChatGptAuthService(store: SecureChatGptSessionStore()),
-          chatGptProvider: ChatGptResponsesProvider(
-            diagnostics: _aiDiagnostics,
-          ),
-        );
+    _ai = widget.ai ?? AiConnectionController(
+      store: SecureAiProfileStore(),
+      provider: OpenAiCompatibleChatProvider(diagnostics: _aiDiagnostics),
+      chatGpt: ChatGptAuthService(store: SecureChatGptSessionStore()),
+      chatGptProvider: ChatGptResponsesProvider(diagnostics: _aiDiagnostics),
+    );
     _ownsCredits = widget.credits == null;
-    _credits =
-        widget.credits ??
-        OuCreditsController(
-          api: OpenUncensoredApi(),
-          vault: SecureOuVaultStore(),
-          ai: _ai,
-          routing: _taskRouting,
-        );
+    _credits = widget.credits ?? OuCreditsController(
+      api: OpenUncensoredApi(), vault: SecureOuVaultStore(),
+      ai: _ai, routing: _taskRouting,
+    );
     _ownsNarratorSettings = widget.narratorSettings == null;
-    _narratorSettings =
-        widget.narratorSettings ??
-        NarratorSettingsController(store: LocalNarratorSettingsStore());
+    _narratorSettings = widget.narratorSettings ?? NarratorSettingsController(
+      store: LocalNarratorSettingsStore(),
+    );
     _ownsBooks = widget.books == null;
-    _books =
-        widget.books ??
-        BookLibraryController(
-          store: SqliteBookStore(),
-          legacyNarrator: _narratorSettings.store,
-        );
+    _books = widget.books ?? BookLibraryController(
+      store: SqliteBookStore(),
+      legacyNarrator: _narratorSettings.store,
+    );
     _ownsChat = widget.chat == null;
-    _chat =
-        widget.chat ??
-        NarrativeChatController(
-          provider: _ai.provider,
-          configuration: () => null,
-          diagnostics: _aiDiagnostics,
-        );
+    _chat = widget.chat ?? NarrativeChatController(
+      provider: _ai.provider,
+      configuration: () => null,
+      diagnostics: _aiDiagnostics,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(_updates.initialize());
@@ -272,9 +229,7 @@ class _HomePageState extends State<HomePage> {
     final opened = await launchUrl(url, mode: LaunchMode.externalApplication);
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Impossible d’ouvrir les versions sur GitHub.'),
-        ),
+        const SnackBar(content: Text('Impossible d’ouvrir les versions sur GitHub.')),
       );
     }
   }
@@ -306,12 +261,8 @@ class _HomePageState extends State<HomePage> {
         _recentLoading = false;
       });
     } catch (failure, stackTrace) {
-      AppLogger.error(
-        'Chargement des Parties récentes échoué',
-        component: 'books',
-        error: failure,
-        stackTrace: stackTrace,
-      );
+      AppLogger.error('Chargement des Parties récentes échoué',
+          component: 'books', error: failure, stackTrace: stackTrace);
       if (mounted) {
         setState(() {
           _recentError = 'Impossible de charger les Parties récentes.';
@@ -354,18 +305,12 @@ class _HomePageState extends State<HomePage> {
       final book = await _books.create();
       if (mounted) _openBook(book);
     } catch (error, stackTrace) {
-      AppLogger.error(
-        'Création du Livre échouée',
-        component: 'books',
-        error: error,
-        stackTrace: stackTrace,
-      );
+      AppLogger.error('Création du Livre échouée', component: 'books',
+          error: error, stackTrace: stackTrace);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Impossible de créer ce Livre. Réessayez.'),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Impossible de créer ce Livre. Réessayez.'),
+        ));
       }
     }
   }
@@ -410,22 +355,17 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _openBookSession(
-    BookDefinition book,
-    BookSession session,
-  ) async {
+      BookDefinition book, BookSession session) async {
     try {
       await _ai.initialize();
       await _taskRouting.initialize();
       if (!mounted) return;
       if (_ownsChat) {
         Future<NarrativeAiEndpoint> endpointForId(
-          String id,
-          AiNarrativeTask task,
-        ) async {
+            String id, AiNarrativeTask task) async {
           final binding = await _ai.connectionForProfile(id);
           final current = await _books.session(session.id);
-          final settings = _taskRouting
-              .generationFor(task)
+          final settings = _taskRouting.generationFor(task)
               .merged(current?.generationOverrides[task]);
           settings.validate();
           final reasoning = binding.provider is ChatGptResponsesProvider
@@ -435,23 +375,18 @@ class _HomePageState extends State<HomePage> {
             provider: binding.provider,
             configuration: binding.configuration.withReasoning(reasoning),
             maxOutputTokens: settings.maxOutputTokens,
-            toolCallingEnabled:
-                task == AiNarrativeTask.narrator &&
+            toolCallingEnabled: task == AiNarrativeTask.narrator &&
                 binding.provider is AiToolCallingChatProvider &&
                 (current?.toolCallingEnabled ?? true) &&
-                _ai.profiles.any(
-                  (p) =>
-                      p.id == id &&
-                      p.toolCallingCompatibility ==
-                          AiToolCallingCompatibility.supported,
-                ),
+                _ai.profiles.any((p) => p.id == id &&
+                    p.toolCallingCompatibility ==
+                        AiToolCallingCompatibility.supported),
           );
         }
 
         Future<String> narratorProfileId() async {
           final current = await _books.session(session.id);
-          final chosen =
-              current?.aiProfileId ??
+          final chosen = current?.aiProfileId ??
               _taskRouting.profileFor(AiNarrativeTask.narrator) ??
               await _books.profileFor(book.id);
           if (chosen == null || chosen.isEmpty) {
@@ -465,8 +400,8 @@ class _HomePageState extends State<HomePage> {
         _chat.dispose();
         _liveMemory?.dispose();
         final storage = _books.store;
-        _liveMemory =
-            storage is LiveMemoryStore && storage is NarrativeSnapshotStore
+        _liveMemory = storage is LiveMemoryStore &&
+                storage is NarrativeSnapshotStore
             ? LiveMemoryCoordinator(
                 sessionId: session.id,
                 store: storage as LiveMemoryStore,
@@ -475,22 +410,16 @@ class _HomePageState extends State<HomePage> {
                 resolveConnection: () async {
                   final current = await _books.session(session.id);
                   if (current == null || !current.memoryEnabled) return null;
-                  final chosen =
-                      current.memoryProfileId ??
+                  final chosen = current.memoryProfileId ??
                       _taskRouting.profileFor(AiNarrativeTask.memory);
                   if (chosen == '#disabled') return null;
                   final id = chosen == null || chosen == '#narrator'
-                      ? await narratorProfileId()
-                      : chosen;
+                      ? await narratorProfileId() : chosen;
                   final endpoint = await endpointForId(
-                    id,
-                    AiNarrativeTask.memory,
-                  );
-                  return LiveMemoryAiEndpoint(
-                    endpoint.provider,
-                    endpoint.configuration,
-                    maxTokens: endpoint.maxOutputTokens ?? 1024,
-                  );
+                      id, AiNarrativeTask.memory);
+                  return LiveMemoryAiEndpoint(endpoint.provider,
+                      endpoint.configuration,
+                      maxTokens: endpoint.maxOutputTokens ?? 1024);
                 },
               )
             : null;
@@ -506,83 +435,56 @@ class _HomePageState extends State<HomePage> {
           memory: _liveMemory,
           initialOptimizedLore: session.optimizedLore,
           initialOptimizedLoreHash: session.optimizedLoreHash,
-          resolveConnection: () async => endpointForId(
-            await narratorProfileId(),
-            AiNarrativeTask.narrator,
-          ),
+          resolveConnection: () async =>
+              endpointForId(
+                  await narratorProfileId(), AiNarrativeTask.narrator),
           resolveFormatterConnection: () async {
             final current = await _books.session(session.id);
-            final chosen =
-                current?.formatterProfileId ??
+            final chosen = current?.formatterProfileId ??
                 _taskRouting.profileFor(AiNarrativeTask.jsonifier);
             if (chosen == null || chosen == '#narrator') {
               return endpointForId(
-                await narratorProfileId(),
-                AiNarrativeTask.jsonifier,
-              );
+                  await narratorProfileId(), AiNarrativeTask.jsonifier);
             }
             return endpointForId(chosen, AiNarrativeTask.jsonifier);
           },
           resolveOptimizerConnection: () async {
             final current = await _books.session(session.id);
-            final chosen =
-                current?.optimizerProfileId ??
+            final chosen = current?.optimizerProfileId ??
                 _taskRouting.profileFor(AiNarrativeTask.optimizer);
             if (chosen == null || chosen == '#disabled') return null;
             return endpointForId(chosen, AiNarrativeTask.optimizer);
           },
           onOptimizedLore: (hash, compact) {
-            final pending = writes.then(
-              (_) => _books.saveOptimizedLore(session.id, hash, compact),
-            );
-            writes = pending.then(
-              (_) {},
-              onError: (Object error) {
-                AppLogger.warning(
-                  'Lore compact non sauvegardé',
-                  component: 'lore',
-                );
-              },
-            );
+            final pending = writes.then((_) =>
+                _books.saveOptimizedLore(session.id, hash, compact));
+            writes = pending.then((_) {}, onError: (Object error) {
+              AppLogger.warning('Lore compact non sauvegardé', component: 'lore');
+            });
             return pending;
           },
           onPersistState: (events, List<RawGeneration> generations) {
-            final pending = writes.then(
-              (_) => _books.saveSessionState(
-                session.copyWith(timeline: events),
-                generations,
-              ),
-            );
+            final pending = writes.then((_) => _books.saveSessionState(
+              session.copyWith(timeline: events), generations,
+            ));
             // Keep the next autosave queue usable after a failed transaction,
             // but propagate the actual failure to the active generation.
-            writes = pending.then(
-              (_) {},
-              onError: (Object failure, StackTrace trace) {
-                AppLogger.error(
-                  'Snapshot narratif non enregistré',
-                  component: 'books',
-                  error: failure,
-                  stackTrace: trace,
-                );
-              },
-            );
+            writes = pending.then((_) {}, onError: (
+                Object failure, StackTrace trace) {
+              AppLogger.error('Snapshot narratif non enregistré',
+                  component: 'books', error: failure, stackTrace: trace);
+            });
             return pending;
           },
           onTimelineChanged: (events) {
             // Serialize writes, so a slower prior write cannot override
             // the latest conversation snapshot.
-            writes = writes
-                .then(
-                  (_) => _books.saveSession(session.copyWith(timeline: events)),
-                )
-                .catchError((Object failure, StackTrace stackTrace) {
-                  AppLogger.error(
-                    'Sauvegarde de Partie échouée',
-                    component: 'books',
-                    error: failure,
-                    stackTrace: stackTrace,
-                  );
-                });
+            writes = writes.then((_) => _books.saveSession(
+              session.copyWith(timeline: events),
+            )).catchError((Object failure, StackTrace stackTrace) {
+              AppLogger.error('Sauvegarde de Partie échouée',
+                component: 'books', error: failure, stackTrace: stackTrace);
+            });
           },
           onExchangeCaptured: (exchange) {
             // A completed RAW→JSON turn has spent prepaid credits. Refresh
@@ -594,29 +496,23 @@ class _HomePageState extends State<HomePage> {
               }
             }
             // Persist the already-redacted HTTP request and raw response.
-            writes = writes
-                .then((_) async {
-                  final retention =
-                      await const AiDiagnosticsRetentionPreferences().limit();
-                  if (retention == 0) return;
-                  await _books.saveDiagnostic(
-                    StoredAiDiagnostic(
-                      id: 'exchange-${exchange.createdAtUtc.microsecondsSinceEpoch}',
-                      sessionId: session.id,
-                      createdAtUtc: exchange.createdAtUtc,
-                      content: exchange.exportJson(),
-                    ),
-                    retention,
-                  );
-                })
-                .catchError((Object failure, StackTrace stackTrace) {
-                  AppLogger.error(
-                    'Persistance du diagnostic IA échouée',
-                    component: 'diagnostics',
-                    error: failure,
-                    stackTrace: stackTrace,
-                  );
-                });
+            writes = writes.then((_) async {
+              final retention =
+                  await const AiDiagnosticsRetentionPreferences().limit();
+              if (retention == 0) return;
+              await _books.saveDiagnostic(
+                StoredAiDiagnostic(
+                  id: 'exchange-${exchange.createdAtUtc.microsecondsSinceEpoch}',
+                  sessionId: session.id,
+                  createdAtUtc: exchange.createdAtUtc,
+                  content: exchange.exportJson(),
+                ),
+                retention,
+              );
+            }).catchError((Object failure, StackTrace stackTrace) {
+              AppLogger.error('Persistance du diagnostic IA échouée',
+                component: 'diagnostics', error: failure, stackTrace: stackTrace);
+            });
           },
         );
       }
@@ -633,12 +529,8 @@ class _HomePageState extends State<HomePage> {
         _page = _Page.chat;
       });
     } catch (failure, stackTrace) {
-      AppLogger.error(
-        'Ouverture de Partie échouée',
-        component: 'books',
-        error: failure,
-        stackTrace: stackTrace,
-      );
+      AppLogger.error('Ouverture de Partie échouée', component: 'books',
+          error: failure, stackTrace: stackTrace);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Impossible d’ouvrir cette partie.')),
@@ -664,143 +556,128 @@ class _HomePageState extends State<HomePage> {
         if (!didPop) unawaited(_goBack());
       },
       child: AnimatedBuilder(
-        animation: _updates,
-        builder: (context, _) => Scaffold(
-          key: _scaffoldKey,
-          appBar: AppBar(
-            leading: _history.isNotEmpty
-                ? IconButton(
-                    key: const ValueKey('appBack'),
-                    tooltip: 'Retour',
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    onPressed: () => unawaited(_goBack()),
-                  )
-                : null,
-            title: const Text(
-              'DOMOLIA',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                letterSpacing: 3,
-                color: DomoliaColors.goldLight,
-              ),
-            ),
-            actions: [
-              if (_page == _Page.chat)
-                IconButton(
-                  key: const ValueKey('chatSettingsAppBar'),
-                  tooltip: 'Paramètres de la conversation',
-                  onPressed: _openConversationSettings,
-                  icon: const Icon(Icons.tune_rounded),
-                ),
-              if (_history.isNotEmpty)
-                IconButton(
-                  key: const ValueKey('appMenu'),
-                  tooltip: 'Menu',
-                  onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-                  icon: const Icon(Icons.menu),
-                ),
-            ],
-          ),
-          drawer: _buildDrawer(),
-          body: Column(
-            children: [
-              if (_updates.phase == UpdatePhase.downloading)
-                UpdateProgressStrip(controller: _updates),
-              Expanded(
-                child: _page == _Page.home
-                    ? _buildHome()
-                    : _page == _Page.books
-                    ? BookLibraryPage(library: _books, onOpen: _openBook)
-                    : _page == _Page.book &&
-                          _selectedBookId != null &&
-                          _books.byId(_selectedBookId!) != null
-                    ? BookEditorPage(
-                        key: _bookEditorKey,
-                        book: _books.byId(_selectedBookId!)!,
-                        library: _books,
-                        ai: _ai,
-                        onPlay: _openBookSession,
-                      )
-                    : _page == _Page.chat
-                    ? GroupChatPage(
-                        controller: _chat,
-                        onOpenSettings: _openConversationSettings,
-                        bookTitle: _activeBookTitle,
-                        sessionTitle: _activeSessionTitle,
-                        onLoadDiagnostics: () async {
-                          final id = _activeSessionId;
-                          if (id == null) return <StoredAiDiagnostic>[];
-                          await _awaitSessionWrites?.call();
-                          return _books.diagnostics(id);
-                        },
-                      )
-                    : _page == _Page.memory && _liveMemory != null
-                    ? LiveMemoryPage(
-                        memory: _liveMemory!,
-                        onBack: () => unawaited(_goBack()),
-                      )
-                    : _page == _Page.conversationSettings &&
-                          _activeSessionId != null &&
-                          _selectedBookId != null
-                    ? ConversationSettingsPage(
-                        key: ValueKey(_activeSessionId),
-                        library: _books,
-                        ai: _ai,
-                        chat: _chat,
-                        taskRouting: _taskRouting,
-                        onOpenMemory: _liveMemory == null
-                            ? null
-                            : () => unawaited(_navigateTo(_Page.memory)),
-                        bookId: _selectedBookId!,
-                        sessionId: _activeSessionId!,
-                        bookTitle: _activeBookTitle,
-                        sessionTitle: _activeSessionTitle,
-                        onLoadAiDiagnostics: () async {
-                          final id = _activeSessionId;
-                          if (id == null) return <StoredAiDiagnostic>[];
-                          await _awaitSessionWrites?.call();
-                          return _books.diagnostics(id);
-                        },
-                        onPurgeAiDiagnostics: () async {
-                          final id = _activeSessionId;
-                          if (id == null) return;
-                          await _awaitSessionWrites?.call();
-                          await _books.clearDiagnostics(id);
-                        },
-                        onBack: () => unawaited(_goBack()),
-                        showBackButton: false,
-                      )
-                    : _page == _Page.about
-                    ? _buildAbout()
-                    : _page == _Page.settings
-                    ? _buildSettings()
-                    : _page == _Page.updates
-                    ? UpdateSettingsPanel(
-                        controller: _updates,
-                        onViewAllVersions: () => _openUrl(_allReleasesUrl),
-                        onCheckManually: _checkForUpdates,
-                      )
-                    : _page == _Page.ai
-                    ? OpenUncensoredCreditsPage(
-                        controller: _credits,
-                        onBack: () => unawaited(_goBack()),
-                        showBackButton: false,
-                      )
-                    : _page == _Page.diagnostics
-                    ? AiDiagnosticsSettingsPage(
-                        onBack: () => unawaited(_goBack()),
-                        showBackButton: false,
-                        onPrune: _books.pruneDiagnostics,
-                      )
-                    : _page == _Page.logs
-                    ? AppLogsPage()
-                    : _buildSettings(),
-              ),
-            ],
+      animation: _updates,
+      builder: (context, _) => Scaffold(
+      key: _scaffoldKey,
+      appBar: AppBar(
+        leading: _history.isNotEmpty
+            ? IconButton(
+                key: const ValueKey('appBack'),
+                tooltip: 'Retour',
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () => unawaited(_goBack()),
+              )
+            : null,
+        title: const Text(
+          'DOMOLIA',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            letterSpacing: 3,
+            color: DomoliaColors.goldLight,
           ),
         ),
+        actions: [
+          if (_page == _Page.chat)
+            IconButton(
+              key: const ValueKey('chatSettingsAppBar'),
+              tooltip: 'Paramètres de la conversation',
+              onPressed: _openConversationSettings,
+              icon: const Icon(Icons.tune_rounded),
+            ),
+          if (_history.isNotEmpty)
+            IconButton(
+              key: const ValueKey('appMenu'),
+              tooltip: 'Menu',
+              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+              icon: const Icon(Icons.menu),
+            ),
+        ],
       ),
-    );
+      drawer: _buildDrawer(),
+      body: Column(children: [
+        if (_updates.phase == UpdatePhase.downloading)
+          UpdateProgressStrip(controller: _updates),
+        Expanded(child: _page == _Page.home ? _buildHome()
+          : _page == _Page.books ? BookLibraryPage(
+              library: _books, onOpen: _openBook,
+            )
+          : _page == _Page.book && _selectedBookId != null &&
+                  _books.byId(_selectedBookId!) != null
+              ? BookEditorPage(
+                  key: _bookEditorKey,
+                  book: _books.byId(_selectedBookId!)!,
+                  library: _books,
+                  ai: _ai,
+                  onPlay: _openBookSession,
+                )
+          : _page == _Page.chat ? GroupChatPage(
+              controller: _chat,
+              onOpenSettings: _openConversationSettings,
+              bookTitle: _activeBookTitle,
+              sessionTitle: _activeSessionTitle,
+              onLoadDiagnostics: () async {
+                final id = _activeSessionId;
+                if (id == null) return <StoredAiDiagnostic>[];
+                await _awaitSessionWrites?.call();
+                return _books.diagnostics(id);
+              },
+            )
+          : _page == _Page.memory && _liveMemory != null
+              ? LiveMemoryPage(
+                  memory: _liveMemory!,
+                  onBack: () => unawaited(_goBack()),
+                )
+          : _page == _Page.conversationSettings &&
+                  _activeSessionId != null && _selectedBookId != null
+              ? ConversationSettingsPage(
+                  key: ValueKey(_activeSessionId),
+                  library: _books,
+                  ai: _ai,
+                  chat: _chat,
+                  taskRouting: _taskRouting,
+                  onOpenMemory: _liveMemory == null ? null :
+                      () => unawaited(_navigateTo(_Page.memory)),
+                  bookId: _selectedBookId!,
+                  sessionId: _activeSessionId!,
+                  bookTitle: _activeBookTitle,
+                  sessionTitle: _activeSessionTitle,
+                  onLoadAiDiagnostics: () async {
+                    final id = _activeSessionId;
+                    if (id == null) return <StoredAiDiagnostic>[];
+                    await _awaitSessionWrites?.call();
+                    return _books.diagnostics(id);
+                  },
+                  onPurgeAiDiagnostics: () async {
+                    final id = _activeSessionId;
+                    if (id == null) return;
+                    await _awaitSessionWrites?.call();
+                    await _books.clearDiagnostics(id);
+                  },
+                  onBack: () => unawaited(_goBack()),
+                  showBackButton: false,
+                )
+          : _page == _Page.about ? _buildAbout()
+          : _page == _Page.settings ? _buildSettings()
+          : _page == _Page.updates ? UpdateSettingsPanel(
+              controller: _updates,
+              onViewAllVersions: () => _openUrl(_allReleasesUrl),
+              onCheckManually: _checkForUpdates,
+            )
+          : _page == _Page.ai ? OpenUncensoredCreditsPage(
+              controller: _credits,
+              onBack: () => unawaited(_goBack()),
+              showBackButton: false,
+            )
+          : _page == _Page.diagnostics ? AiDiagnosticsSettingsPage(
+              onBack: () => unawaited(_goBack()),
+              showBackButton: false,
+              onPrune: _books.pruneDiagnostics,
+            )
+          : _page == _Page.logs ? AppLogsPage()
+          : _buildSettings()),
+      ]),
+    ),
+    ));
   }
 
   Widget _buildDrawer() {
@@ -857,11 +734,8 @@ class _HomePageState extends State<HomePage> {
             ListTile(
               leading: const Icon(Icons.library_books_outlined),
               title: const Text('Livres'),
-              selected:
-                  _page == _Page.books ||
-                  _page == _Page.book ||
-                  _page == _Page.chat ||
-                  _page == _Page.conversationSettings ||
+              selected: _page == _Page.books || _page == _Page.book ||
+                  _page == _Page.chat || _page == _Page.conversationSettings ||
                   _page == _Page.memory,
               selectedColor: DomoliaColors.goldLight,
               selectedTileColor: DomoliaColors.raisedSurface,
@@ -879,12 +753,9 @@ class _HomePageState extends State<HomePage> {
             ListTile(
               leading: const Icon(Icons.settings_outlined),
               title: const Text('Paramètres'),
-              selected:
-                  _page == _Page.settings ||
-                  _page == _Page.updates ||
-                  _page == _Page.ai ||
-                  _page == _Page.diagnostics ||
-                  _page == _Page.logs,
+              selected: _page == _Page.settings ||
+                  _page == _Page.updates || _page == _Page.ai ||
+                  _page == _Page.diagnostics || _page == _Page.logs,
               selectedColor: DomoliaColors.goldLight,
               selectedTileColor: DomoliaColors.raisedSurface,
               onTap: () => _showPage(_Page.settings),
@@ -909,10 +780,7 @@ class _HomePageState extends State<HomePage> {
         ),
         const SizedBox(height: DomoliaSpacing.section),
         ListTile(
-          leading: const Icon(
-            Icons.smart_toy_outlined,
-            color: DomoliaColors.gold,
-          ),
+          leading: const Icon(Icons.smart_toy_outlined, color: DomoliaColors.gold),
           title: const Text('Crédits IA'),
           subtitle: const Text('OpenUncensored, clés et modèles'),
           trailing: const Icon(Icons.chevron_right),
@@ -920,10 +788,7 @@ class _HomePageState extends State<HomePage> {
         ),
         const Divider(),
         ListTile(
-          leading: const Icon(
-            Icons.system_update_alt_rounded,
-            color: DomoliaColors.gold,
-          ),
+          leading: const Icon(Icons.system_update_alt_rounded, color: DomoliaColors.gold),
           title: const Text('Mises à jour'),
           subtitle: const Text('Version installée, canal et préversions'),
           trailing: const Icon(Icons.chevron_right),
@@ -931,10 +796,8 @@ class _HomePageState extends State<HomePage> {
         ),
         const Divider(),
         ListTile(
-          leading: const Icon(
-            Icons.bug_report_outlined,
-            color: DomoliaColors.gold,
-          ),
+          leading: const Icon(Icons.bug_report_outlined,
+              color: DomoliaColors.gold),
           title: const Text('Diagnostics IA'),
           subtitle: const Text('Conservation locale des requêtes et réponses'),
           trailing: const Icon(Icons.chevron_right),
@@ -943,14 +806,9 @@ class _HomePageState extends State<HomePage> {
         const Divider(),
         ListTile(
           key: const ValueKey('settingsLogs'),
-          leading: const Icon(
-            Icons.article_outlined,
-            color: DomoliaColors.gold,
-          ),
+          leading: const Icon(Icons.article_outlined, color: DomoliaColors.gold),
           title: const Text('Logs'),
-          subtitle: const Text(
-            'Consulter, copier, exporter et effacer le journal',
-          ),
+          subtitle: const Text('Consulter, copier, exporter et effacer le journal'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => unawaited(_navigateTo(_Page.logs)),
         ),
@@ -969,51 +827,29 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    children: [
-                      Image.asset(
-                        'assets/images/domolia_emblem.png',
-                        width: 64,
-                        height: 64,
-                        semanticLabel: 'Emblème Domolia',
-                      ),
-                      const SizedBox(width: 16),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Bienvenue dans Domolia',
-                              style: TextStyle(
-                                color: DomoliaColors.goldLight,
-                                fontSize: 23,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              'Votre prochaine aventure commence ici.',
-                              style: TextStyle(color: DomoliaColors.cream),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                  Row(children: [
+                    Image.asset('assets/images/domolia_emblem.png',
+                      width: 64, height: 64, semanticLabel: 'Emblème Domolia'),
+                    const SizedBox(width: 16),
+                    const Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Bienvenue dans Domolia', style: TextStyle(
+                          color: DomoliaColors.goldLight,
+                          fontSize: 23, fontWeight: FontWeight.bold)),
+                        SizedBox(height: 4),
+                        Text('Votre prochaine aventure commence ici.',
+                          style: TextStyle(color: DomoliaColors.cream)),
+                      ],
+                    )),
+                  ]),
                   const SizedBox(height: DomoliaSpacing.section),
-                  const Text(
-                    'Mes Livres',
-                    style: TextStyle(
-                      color: DomoliaColors.goldLight,
-                      fontSize: 21,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  const Text('Mes Livres', style: TextStyle(
+                    color: DomoliaColors.goldLight, fontSize: 21,
+                    fontWeight: FontWeight.bold)),
                   const SizedBox(height: DomoliaSpacing.compact),
-                  const Text(
-                    'Explorez vos univers ou créez une nouvelle histoire.',
-                    style: TextStyle(color: DomoliaColors.muted),
-                  ),
+                  const Text('Explorez vos univers ou créez une nouvelle histoire.',
+                    style: TextStyle(color: DomoliaColors.muted)),
                   const SizedBox(height: DomoliaSpacing.field),
                   FilledButton.icon(
                     key: const ValueKey('homeBooks'),
@@ -1025,53 +861,35 @@ class _HomePageState extends State<HomePage> {
                   OutlinedButton.icon(
                     key: const ValueKey('homeCreateBook'),
                     onPressed: _recentLoading || _recentError != null
-                        ? null
-                        : _createBookFromHome,
+                        ? null : _createBookFromHome,
                     icon: const Icon(Icons.add_rounded),
                     label: const Text('Créer un Livre'),
                   ),
                   const SizedBox(height: DomoliaSpacing.section),
                   const _GoldSeparator(),
                   const SizedBox(height: DomoliaSpacing.section),
-                  const Text(
-                    'Mes Parties',
-                    style: TextStyle(
-                      color: DomoliaColors.goldLight,
-                      fontSize: 21,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  const Text('Mes Parties', style: TextStyle(
+                    color: DomoliaColors.goldLight, fontSize: 21,
+                    fontWeight: FontWeight.bold)),
                   const SizedBox(height: DomoliaSpacing.compact),
                   if (_recentLoading)
                     const _DomoliaPanel(
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.hourglass_empty_rounded,
-                            color: DomoliaColors.gold,
-                          ),
-                          SizedBox(width: DomoliaSpacing.field),
-                          Expanded(
-                            child: Text(
-                              'Chargement de vos Parties...',
-                              style: TextStyle(color: DomoliaColors.cream),
-                            ),
-                          ),
-                        ],
-                      ),
+                      child: Row(children: [
+                        Icon(Icons.hourglass_empty_rounded,
+                          color: DomoliaColors.gold),
+                        SizedBox(width: DomoliaSpacing.field),
+                        Expanded(child: Text('Chargement de vos Parties...',
+                          style: TextStyle(color: DomoliaColors.cream))),
+                      ]),
                     )
                   else if (_recentError != null)
                     _DomoliaPanel(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Bibliothèque indisponible',
-                            style: TextStyle(
-                              color: DomoliaColors.goldLight,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          const Text('Bibliothèque indisponible',
+                            style: TextStyle(color: DomoliaColors.goldLight,
+                                fontWeight: FontWeight.bold)),
                           const SizedBox(height: DomoliaSpacing.compact),
                           Text(_recentError!),
                           const SizedBox(height: DomoliaSpacing.field),
@@ -1089,66 +907,45 @@ class _HomePageState extends State<HomePage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.auto_stories_outlined,
-                            color: DomoliaColors.goldDark,
-                            size: 30,
-                          ),
+                          Icon(Icons.auto_stories_outlined,
+                            color: DomoliaColors.goldDark, size: 30),
                           SizedBox(height: DomoliaSpacing.compact),
-                          Text(
-                            'Aucune aventure commencée',
-                            style: TextStyle(
-                              color: DomoliaColors.goldLight,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          Text('Aucune aventure commencée',
+                            style: TextStyle(color: DomoliaColors.goldLight,
+                              fontWeight: FontWeight.bold)),
                           SizedBox(height: 6),
-                          Text(
-                            'Ouvrez un Livre pour commencer une Partie. '
+                          Text('Ouvrez un Livre pour commencer une Partie. '
                             'Vous pourrez ensuite la retrouver ici.',
-                            style: TextStyle(color: DomoliaColors.cream),
-                          ),
+                            style: TextStyle(color: DomoliaColors.cream)),
                         ],
                       ),
                     ),
                   if (!_recentLoading && _recentError == null)
                     for (final session in _recentSessions)
                       Card(
-                        color: DomoliaColors.surface,
-                        child: ListTile(
-                          key: ValueKey('recentSession-${session.id}'),
-                          leading: const Icon(
-                            Icons.auto_stories_outlined,
-                            color: DomoliaColors.gold,
-                          ),
-                          title: Text(
-                            session.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            _books.byId(session.bookId)?.title ??
-                                'Livre indisponible',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () {
-                            final book = _books.byId(session.bookId);
-                            if (book != null) {
-                              unawaited(_openBookSession(book, session));
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Ce Livre n’est plus disponible.',
-                                  ),
-                                ),
-                              );
-                            }
-                          },
-                        ),
+                      color: DomoliaColors.surface,
+                      child: ListTile(
+                        key: ValueKey('recentSession-${session.id}'),
+                        leading: const Icon(Icons.auto_stories_outlined,
+                          color: DomoliaColors.gold),
+                        title: Text(session.title, maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                        subtitle: Text(
+                          _books.byId(session.bookId)?.title ?? 'Livre indisponible',
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          final book = _books.byId(session.bookId);
+                          if (book != null) {
+                            unawaited(_openBookSession(book, session));
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content:
+                                Text('Ce Livre n’est plus disponible.')));
+                          }
+                        },
                       ),
+                    ),
                 ],
               ),
             ),
@@ -1191,7 +988,10 @@ class _HomePageState extends State<HomePage> {
                       'Domolia est une application de jeu de rôle narratif '
                       'assisté par IA. Créez des Livres, définissez vos univers '
                       'et vivez des Parties qui évoluent avec vos choix.',
-                      style: TextStyle(color: DomoliaColors.cream, height: 1.6),
+                      style: TextStyle(
+                        color: DomoliaColors.cream,
+                        height: 1.6,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
