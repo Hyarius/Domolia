@@ -105,7 +105,7 @@ void main() {
     addTearDown(chat.dispose);
     await showChat(tester, chat);
     await enter(tester, 'Je découvre ce lieu.');
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 250));
     final transcript = tester.widget<ListView>(
         find.byKey(const ValueKey('groupChatTranscript')));
     final scroll = transcript.controller!;
@@ -132,7 +132,7 @@ void main() {
     final transcript = tester.widget<ListView>(
       find.byKey(const ValueKey('groupChatTranscript')));
     final scroll = transcript.controller!;
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 250));
     final beforeReply = scroll.offset;
 
     provider.formatGate!.complete(jsonEncode({'events': [
