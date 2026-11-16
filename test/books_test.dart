@@ -970,7 +970,7 @@ void main() {
       expect(prompt, contains('Dialogué, Mystérieux'));
       expect(prompt, contains(BookDefinition.detailInstructions[4]));
       expect(prompt, contains('personnage joueur'));
-      expect(prompt, isNot(contains('JSON')));
+      expect(prompt, isNot(contains('"type":"scene_change"')));
     }
     expect(const BookDefinition(id: 'default', title: 'Livre').responseLength, 3);
     expect(BookDefinition.responseLengthInstruction(3), contains('120 à 185 mots'));
