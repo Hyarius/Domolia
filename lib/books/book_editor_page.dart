@@ -156,10 +156,12 @@ class BookEditorPageState extends State<BookEditorPage> {
       lore: lore,
     );
     await widget.library.save(next);
-    if (mounted) setState(() {
-      _book = next;
-      _savedRevision = _editRevision;
-    });
+    if (mounted) {
+      setState(() {
+        _book = next;
+        _savedRevision = _editRevision;
+      });
+    }
   }
 
   Future<void> _chooseCover() async {
