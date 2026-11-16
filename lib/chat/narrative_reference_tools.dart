@@ -186,14 +186,53 @@ class NarrativeReferenceTools {
     return value;
   }
 
+  /// Match the actual field containing an exact canonical detail. A short
+  /// excerpt can answer a lookup without a second get_lore_entry round-trip.
+  /// Secrets remain restricted to explicit full-entry retrieval.
   String _searchLore(Map<String, dynamic> input) {
     final query = _query(input);
-    final results = <(int, String, LoreRecord)>[];
+    final results = <(int, String, LoreRecord, String, String)>[];
     for (final (type, item) in _entries(_category(input, all: true))) {
-      final searchable = [item.id, item.name, ...item.aliases,
-        ...item.tags, item.description].join(' ');
-      final score = _score(searchable, query);
-      if (score != 0) results.add((score, type, item));
+      final fields = switch (item) {
+        LoreCharacter e => <String, String>{
+          'description': e.description, 'background': e.background,
+          'appearance': e.appearance, 'personality': e.personality,
+          'motivations': e.motivations, 'values': e.values,
+        },
+        LorePlace e => <String, String>{
+          'description': e.description, 'history': e.history,
+          'features': e.features, 'atmosphere': e.atmosphere,
+        },
+        LoreScenario e => <String, String>{
+          'description': e.description, 'summary': e.summary,
+          'initialContext': e.initialContext,
+          'introduction': e.introduction,
+        },
+        LoreEvent e => <String, String>{
+          'description': e.description, 'condition': e.condition,
+          'consequences': e.consequences, 'timing': e.timing,
+        },
+        _ => <String, String>{'description': item.description},
+      };
+      final nameScore = _score(
+        [item.id, item.name, ...item.aliases, ...item.tags].join(' '),
+        query,
+      );
+      var bestScore = 0;
+      var bestField = 'description';
+      var bestText = item.description;
+      for (final field in fields.entries) {
+        final score = _score(field.value, query);
+        if (score > bestScore) {
+          bestScore = score;
+          bestField = field.key;
+          bestText = field.value;
+        }
+      }
+      final score = nameScore * 2 + bestScore;
+      if (score > 0) {
+        results.add((score, type, item, bestField, bestText));
+      }
     }
     results.sort((a, b) {
       final score = b.$1.compareTo(a.$1);
@@ -202,10 +241,11 @@ class NarrativeReferenceTools {
     return jsonEncode({
       'source': 'book_canon',
       'results': [
-        for (final (_, type, item) in results.take(_limit(input)))
+        for (final (_, type, item, field, text) in results.take(_limit(input)))
           {
             'category': type, 'id': item.id, 'name': item.name,
-            'description': _excerpt(item.description, query, size: 180),
+            'matchedField': field,
+            'excerpt': _excerpt(text, query, size: 260),
             if (type == 'event') 'status': 'potential_not_verified',
           },
       ],
