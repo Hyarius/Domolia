@@ -471,16 +471,6 @@ class _HomePageState extends State<HomePage> {
           resolveConnection: () async =>
               endpointForId(
                   await narratorProfileId(), AiNarrativeTask.narrator),
-          resolveFormatterConnection: () async {
-            final current = await _books.session(session.id);
-            final chosen = current?.formatterProfileId ??
-                _taskRouting.profileFor(AiNarrativeTask.jsonifier);
-            if (chosen == null || chosen == '#narrator') {
-              return endpointForId(
-                  await narratorProfileId(), AiNarrativeTask.jsonifier);
-            }
-            return endpointForId(chosen, AiNarrativeTask.jsonifier);
-          },
           resolveOptimizerConnection: () async {
             final current = await _books.session(session.id);
             final chosen = current?.optimizerProfileId ??
