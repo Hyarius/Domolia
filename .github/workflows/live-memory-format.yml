@@ -1,0 +1,33 @@
+name: Temporary Live Memory formatter
+
+on:
+  push:
+    branches: [feat/live-memory]
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/live-memory
+          persist-credentials: true
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Run dart format and commit only changed Dart sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart format lib/ai/ai_settings_panel.dart lib/ai/ai_task_generation.dart lib/ai/ai_task_routing.dart lib/ai/openuncensored_controller.dart lib/ai/openuncensored_credits_page.dart lib/books/book_session.dart lib/books/book_store.dart lib/books/book_library_controller.dart lib/chat/chat_controller.dart lib/chat/narrative_reference_tools.dart lib/chat/conversation_settings_page.dart lib/main.dart lib/memory test/live_memory_test.dart test/live_memory_sqlite_test.dart test/live_memory_widget_test.dart
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add lib test/live_memory_test.dart test/live_memory_sqlite_test.dart test/live_memory_widget_test.dart
+            git commit -m "style(memory): apply dart format"
+            git push origin HEAD:feat/live-memory
+          fi
