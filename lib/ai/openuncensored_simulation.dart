@@ -43,14 +43,14 @@ class SimulatedOpenUncensoredApi extends OpenUncensoredApi {
     OuModel(
       id: 'domolia-demo-narrator',
       available: true,
-      toolCompatible: true,
+      toolSupport: OuToolSupport.supported,
       inputPerTokenUsd: 0,
       outputPerTokenUsd: 0,
     ),
     OuModel(
       id: 'domolia-demo-jsonifier',
       available: true,
-      toolCompatible: false,
+      toolSupport: OuToolSupport.unknown,
       inputPerTokenUsd: 0,
       outputPerTokenUsd: 0,
     ),

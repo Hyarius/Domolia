@@ -160,4 +160,102 @@ void main() {
     await expectLater(api.balance(key),
       throwsA(isA<OpenUncensoredFailure>()));
   });
+  test('Catalogue preserves unknown, explicit negative and provider evidence', () {
+    expect(OuModel.parse({'id': 'unknown'})!.toolSupport,
+        OuToolSupport.unknown);
+    expect(OuModel.parse({'id': 'no', 'supports_tools': false})!.toolSupport,
+        OuToolSupport.unsupported);
+    expect(OuModel.parse({'id': 'yes', 'supported_parameters': ['tools']})!
+        .toolSupport, OuToolSupport.supported);
+    expect(OuModel.parse({'id': 'mixed', 'providers': [
+      {'supports_tools': false}, {'name': 'provider-without-metadata'},
+    ]})!.toolSupport, OuToolSupport.unknown);
+    expect(OuModel.parse({'id': 'provider-yes', 'providers': [
+      {'supports_tools': false}, {'supports_tools': true},
+    ]})!.toolSupport, OuToolSupport.supported);
+  });
+
+  test('Probe sends a bounded paid request only when explicitly invoked',
+      () async {
+    var calls = 0;
+    final api = OpenUncensoredApi(client: MockClient((request) async {
+      calls++;
+      expect(request.method, 'POST');
+      expect(request.url.path, '/v1/chat/completions');
+      expect(request.followRedirects, false);
+      expect(request.headers['Authorization'], 'Bearer $key');
+      final data = jsonDecode(request.body) as Map<String, dynamic>;
+      expect(data['model'], 'model-unknown');
+      expect(data['max_tokens'], 96);
+      expect(data['stream'], false);
+      expect(data['tool_choice'], 'auto');
+      expect((data['tools'] as List).single['function']['name'],
+          'domolia_tool_probe');
+      return jsonResponse({'choices': [
+        {'finish_reason': 'tool_calls', 'message': {'tool_calls': [
+          {'type': 'function', 'function': {
+            'name': 'domolia_tool_probe',
+            'arguments': '{"value":"ok"}',
+          }},
+        ]}},
+      ]});
+    }));
+    expect(calls, 0);
+    expect(await api.probeToolCalling(key, 'model-unknown'),
+        OuToolProbeOutcome.supported);
+    expect(calls, 1);
+    api.close();
+  });
+
+  test('A normal response or invalid tool arguments stays inconclusive',
+      () async {
+    final api = OpenUncensoredApi(client: MockClient((request) async =>
+      jsonResponse({'choices': [
+        {'message': {'content': 'I can call tools.'}},
+      ]})));
+    expect(await api.probeToolCalling(key, 'model'),
+        OuToolProbeOutcome.inconclusive);
+    api.close();
+    final invalid = OpenUncensoredApi(client: MockClient((request) async =>
+      jsonResponse({'choices': [
+        {'message': {'tool_calls': [
+          {'type': 'function', 'function': {
+            'name': 'domolia_tool_probe', 'arguments': '{"value":"wrong"}',
+          }},
+        ]}},
+      ]})));
+    expect(await invalid.probeToolCalling(key, 'model'),
+        OuToolProbeOutcome.inconclusive);
+    invalid.close();
+  });
+
+  test('Only explicit upstream rejection proves incompatibility', () async {
+    final unsupported = OpenUncensoredApi(client: MockClient((request) async =>
+      jsonResponse({'error': {'param': 'tools',
+          'message': 'Tools are not supported'}}, 400)));
+    expect(await unsupported.probeToolCalling(key, 'model'),
+        OuToolProbeOutcome.unsupported);
+    unsupported.close();
+
+    final ambiguous = OpenUncensoredApi(client: MockClient((request) async =>
+      jsonResponse({'error': {'message': 'Bad request'}}, 400)));
+    await expectLater(ambiguous.probeToolCalling(key, 'model'),
+        throwsA(isA<OpenUncensoredFailure>()));
+    ambiguous.close();
+  });
+
+  test('Probe handles exhausted credits without leaking the private key',
+      () async {
+    final api = OpenUncensoredApi(client: MockClient((request) async =>
+      jsonResponse({'error': {'message': key}}, 402)));
+    try {
+      await api.probeToolCalling(key, 'model');
+      fail('Expected a credit error.');
+    } on OpenUncensoredFailure catch (error) {
+      expect(error.message, contains('Crédits insuffisants'));
+      expect(error.message, isNot(contains(key)));
+    }
+    api.close();
+  });
+
 }
