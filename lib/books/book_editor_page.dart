@@ -30,15 +30,18 @@ class BookEditorPage extends StatefulWidget {
   final Future<void> Function(BookDefinition book, BookSession session) onPlay;
 
   @override
-  State<BookEditorPage> createState() => _BookEditorPageState();
+  State<BookEditorPage> createState() => BookEditorPageState();
 }
 
-class _BookEditorPageState extends State<BookEditorPage> {
+class BookEditorPageState extends State<BookEditorPage> {
   late BookDefinition _book;
   late final TextEditingController _title;
   late final TextEditingController _style;
   late final TextEditingController _openings;
   Timer? _saveDelay;
+  Future<void> _saveTail = Future<void>.value();
+  int _editRevision = 0;
+  int _savedRevision = 0;
   String? _profileId;
   int _tab = 0;
 
@@ -68,8 +71,39 @@ class _BookEditorPageState extends State<BookEditorPage> {
   }
 
   void _queueSave() {
+    _editRevision++;
     _saveDelay?.cancel();
-    _saveDelay = Timer(const Duration(milliseconds: 500), _save);
+    _saveDelay = Timer(const Duration(milliseconds: 500), () {
+      _save();
+    });
+  }
+
+  /// The host asks before leaving. Pending edits are saved or explicitly discarded.
+  Future<bool> prepareToLeave() async {
+    _saveDelay?.cancel();
+    await _saveTail;
+    if (_savedRevision == _editRevision) return true;
+    if (await _save() && _savedRevision == _editRevision) return true;
+    if (!mounted) return false;
+    return await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Modifications non enregistrées'),
+        content: const Text(
+          'Impossible d’enregistrer les dernières modifications. '
+          'Voulez-vous quitter sans les conserver ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Rester'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Quitter sans enregistrer'),
+          ),
+        ],
+      ),
+    ) ?? false;
   }
 
   void _show(String text) {
@@ -79,16 +113,26 @@ class _BookEditorPageState extends State<BookEditorPage> {
   }
 
   Future<bool> _save() async {
+    _saveDelay?.cancel();
+    final revision = _editRevision;
+    final updated = _book.copyWith(
+      title: _title.text.trim(),
+      narrativeStyle: _style.text.trim(),
+      openingMessages: _openings.text.split('\n')
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty).toList(),
+    );
+    // Serialize writes so a slower autosave cannot overwrite a newer edit.
+    final pending = _saveTail.then((_) => widget.library.save(updated));
+    _saveTail = pending.then<void>((_) {}, onError: (Object _) {});
     try {
-      final updated = _book.copyWith(
-        title: _title.text.trim(),
-        narrativeStyle: _style.text.trim(),
-        openingMessages: _openings.text.split('\n')
-            .map((line) => line.trim())
-            .where((line) => line.isNotEmpty).toList(),
-      );
-      await widget.library.save(updated);
-      if (mounted) setState(() => _book = updated);
+      await pending;
+      if (mounted) {
+        setState(() {
+          _book = updated;
+          _savedRevision = revision;
+        });
+      }
       return true;
     } on FormatException catch (error) {
       _show(error.message);
@@ -112,7 +156,10 @@ class _BookEditorPageState extends State<BookEditorPage> {
       lore: lore,
     );
     await widget.library.save(next);
-    if (mounted) setState(() => _book = next);
+    if (mounted) setState(() {
+      _book = next;
+      _savedRevision = _editRevision;
+    });
   }
 
   Future<void> _chooseCover() async {
@@ -331,7 +378,9 @@ class _BookEditorPageState extends State<BookEditorPage> {
                 ))),
               TextButton.icon(
                 key: const ValueKey('bookSave'),
-                onPressed: _save,
+                onPressed: () async {
+                  if (await _save()) _show('Livre enregistré.');
+                },
                 icon: const Icon(Icons.save_outlined),
                 label: const Text('Sauver'),
               ),
@@ -407,11 +456,6 @@ class _BookEditorPageState extends State<BookEditorPage> {
       label: const Text('Choisir une image locale'),
     ),
     const SizedBox(height: DomoliaSpacing.compact),
-    OutlinedButton.icon(
-      onPressed: null,
-      icon: Icon(Icons.auto_awesome_outlined),
-      label: Text('Générer une couverture — à venir'),
-    ),
     const SizedBox(height: DomoliaSpacing.section),
     SwitchListTile(
       key: const ValueKey('bookNsfw'),
@@ -459,9 +503,7 @@ class _BookEditorPageState extends State<BookEditorPage> {
     const SizedBox(height: 5),
     Text(BookDefinition.detailInstruction(_book.detailLevel)),
     const SizedBox(height: 18),
-    const Text(
-      'Le protocole technique NDJSON est géré par Domolia et non éditable.',
-      style: TextStyle(color: DomoliaColors.muted)),
+
   ];
 
   List<Widget> _systemTab() => [
