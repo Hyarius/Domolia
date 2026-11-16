@@ -110,8 +110,11 @@ class LiveMemoryCoordinator extends ChangeNotifier {
       final snapshots = store as NarrativeSnapshotStore;
       final records = await snapshots.listRawGenerations(sessionId);
       final analyzed = await store.analyzedMemoryTurns(sessionId);
-      final candidates = records.where((source) =>
-          source.isStructured && !analyzed.contains(source.playerEventId))
+      final candidates = records
+          .where(
+            (source) =>
+                source.isStructured && !analyzed.contains(source.playerEventId),
+          )
           .toList(growable: false);
       for (final (index, source) in candidates.indexed) {
         if (_closed || !await isEnabled()) return;
