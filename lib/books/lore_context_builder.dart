@@ -11,6 +11,8 @@ class LoreContextBuilder {
     final g = lore.global;
     final recent = _fold(recentText.join('\n'));
     final output = <String>[];
+    // Keep indispensable canon protected when reclaiming space for notices.
+    final essentialBlocks = <bool>[];
     var used = 0;
     var omitted = 0;
     void include(String section, String value, {bool essential = false}) {
@@ -27,6 +29,7 @@ class LoreContextBuilder {
         return;
       }
       output.add(block);
+      essentialBlocks.add(essential);
       used += block.length + 2;
     }
 
@@ -146,17 +149,29 @@ class LoreContextBuilder {
       ].join('\n'), essential: mentioned(e));
     }
     if (omitted > 0) {
-      // Visible notice avoids silently treating an incomplete selection as total.
-      final warning = '$omitted fiche(s) de priorité secondaire non transmises '
-          'faute de budget. Ne les invente pas.';
+      // A notice is useful, but must never invalidate an otherwise valid
+      // selection of essential canon. Make room by removing only optional
+      // entries; the author-provided world and direct references remain.
+      String warning = '$omitted fiche(s) secondaires écartées du contexte. '
+          'Ne les invente pas.';
+      if (used + warning.length + 2 > maxCharacters) {
+        warning = 'LORE PARTIEL : $omitted fiche(s) omise(s).';
+      }
+      while (used + warning.length + 2 > maxCharacters) {
+        final index = essentialBlocks.lastIndexOf(false);
+        if (index < 0) break;
+        used -= output[index].length + 2;
+        output.removeAt(index);
+        essentialBlocks.removeAt(index);
+        omitted++;
+        warning = 'LORE PARTIEL : $omitted fiche(s) omise(s).';
+      }
       if (used + warning.length + 2 <= maxCharacters) {
         output.add(warning);
-      } else if (output.isNotEmpty) {
-        // The omission remains observable to callers through a bounded error.
-        throw const FormatException(
-          'Budget de Lore saturé : des fiches pertinentes ont été écartées. '
-          'Réduisez le Lore global ou augmentez le budget.',
-        );
+      } else {
+        // Only mandatory canon remains, and even the short notice won't
+        // fit. Never turn a purely optional omission into a failed turn.
+        // The next input still receives all essential selected facts.
       }
     }
     return output.join('\n\n');
