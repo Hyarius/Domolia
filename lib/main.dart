@@ -25,6 +25,7 @@ import 'memory/live_memory_page.dart';
 import 'ai/ai_controller.dart';
 import 'ai/ai_task_routing.dart';
 import 'ai/ai_diagnostics.dart';
+import 'ai/ai_usage.dart';
 import 'ai/ai_diagnostic_settings.dart';
 import 'ai/ai_provider.dart';
 import 'ai/openuncensored_api.dart';
@@ -400,11 +401,44 @@ class _HomePageState extends State<HomePage> {
         _chat.dispose();
         _liveMemory?.dispose();
         final storage = _books.store;
+        Future<void> writes = Future<void>.value();
+        _awaitSessionWrites = () => writes;
+        final usageStore = storage is AiUsageStore ? storage : null;
+        void captureExchange(AiExchange exchange) {
+          // The usage ledger is separate from bounded, purgeable diagnostics.
+          // A tool round is one billed LLM request, not another fee per tool.
+          final usage = AiUsageRecord.fromExchange(session.id, exchange);
+          if (exchange.stage == 'jsonifier') {
+            final key = _credits.active;
+            if (key != null) unawaited(_credits.refresh(key.id));
+          }
+          writes = writes.then((_) async {
+            if (usageStore != null) await usageStore.putUsage(usage);
+            final retention =
+                await const AiDiagnosticsRetentionPreferences().limit();
+            if (retention == 0) return;
+            await _books.saveDiagnostic(
+              StoredAiDiagnostic(
+                id: 'exchange-${exchange.createdAtUtc.microsecondsSinceEpoch}',
+                sessionId: session.id,
+                createdAtUtc: exchange.createdAtUtc,
+                content: exchange.exportJson(),
+              ),
+              retention,
+            );
+          }).catchError((Object failure, StackTrace stackTrace) {
+            AppLogger.error('Comptabilisation IA non enregistrée',
+                component: 'diagnostics', error: failure,
+                stackTrace: stackTrace);
+          });
+        }
         _liveMemory = storage is LiveMemoryStore &&
                 storage is NarrativeSnapshotStore
             ? LiveMemoryCoordinator(
                 sessionId: session.id,
                 store: storage as LiveMemoryStore,
+                diagnostics: _aiDiagnostics,
+                onExchangeCaptured: captureExchange,
                 isEnabled: () async =>
                     (await _books.session(session.id))?.memoryEnabled == true,
                 resolveConnection: () async {
@@ -424,8 +458,6 @@ class _HomePageState extends State<HomePage> {
               )
             : null;
         if (_liveMemory != null) await _liveMemory!.refresh();
-        Future<void> writes = Future<void>.value();
-        _awaitSessionWrites = () => writes;
         _chat = NarrativeChatController(
           provider: _ai.provider,
           configuration: () => null,
@@ -486,34 +518,7 @@ class _HomePageState extends State<HomePage> {
                 component: 'books', error: failure, stackTrace: stackTrace);
             });
           },
-          onExchangeCaptured: (exchange) {
-            // A completed RAW→JSON turn has spent prepaid credits. Refresh
-            // once, on the final stage, without delaying narrative storage.
-            if (exchange.stage == 'jsonifier') {
-              final key = _credits.active;
-              if (key != null) {
-                unawaited(_credits.refresh(key.id));
-              }
-            }
-            // Persist the already-redacted HTTP request and raw response.
-            writes = writes.then((_) async {
-              final retention =
-                  await const AiDiagnosticsRetentionPreferences().limit();
-              if (retention == 0) return;
-              await _books.saveDiagnostic(
-                StoredAiDiagnostic(
-                  id: 'exchange-${exchange.createdAtUtc.microsecondsSinceEpoch}',
-                  sessionId: session.id,
-                  createdAtUtc: exchange.createdAtUtc,
-                  content: exchange.exportJson(),
-                ),
-                retention,
-              );
-            }).catchError((Object failure, StackTrace stackTrace) {
-              AppLogger.error('Persistance du diagnostic IA échouée',
-                component: 'diagnostics', error: failure, stackTrace: stackTrace);
-            });
-          },
+          onExchangeCaptured: captureExchange,
         );
       }
       final rawGenerations = await _books.rawGenerations(session.id);
