@@ -173,7 +173,8 @@ class _LocalAiSettingsPageState extends State<LocalAiSettingsPage> {
     } catch (failure) {
       _notice(failure is AiProviderException
           ? failure.userMessage
-          : 'Le modèle local ne peut pas générer sur ce téléphone. '\n            'Vérifiez la mémoire disponible.');
+          : 'Le modèle local ne peut pas générer sur ce téléphone. '
+            'Vérifiez la mémoire disponible.');
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -252,7 +253,8 @@ class _LocalAiSettingsPageState extends State<LocalAiSettingsPage> {
               key: const ValueKey('localModelEnabled'),
               title: const Text('Narrateur entièrement local'),
               subtitle: const Text('Le JSONificateur et la mémoire utilisent '
-                  'aussi le modèle choisi. En cas d’erreur, aucun secours distant '\n                   'automatique : la Partie reste sauvegardée.'),
+                  'aussi le modèle choisi. En cas d’erreur, aucun secours distant '
+                   'automatique : la Partie reste sauvegardée.'),
               value: models.ready && models.enabled,
               onChanged: models.ready && _canModify ? _toggle : null,
             ),
