@@ -6,66 +6,22 @@ import 'package:llama_flutter_android/llama_flutter_android.dart';
 import 'ai_provider.dart';
 import 'local_model_manager.dart';
 import 'local_model_catalog.dart';
+import 'local_context_budget.dart';
+import 'local_prompt.dart';
+
+export 'local_prompt.dart';
 import '../logging/app_logger.dart';
-
-/// Formats on-device prompts according to the installed model's template.
-/// Book settings, including NSFW choices, are not edited or filtered here.
-class LocalPrompt {
-  static String format(LocalModelVariant model, List<AiMessage> messages) =>
-      switch (model.format) {
-        LocalPromptFormat.chatMl => _chatMl(messages),
-        LocalPromptFormat.mistralInst => _mistral(messages),
-      };
-
-  static String _chatMl(List<AiMessage> messages) {
-    if (!messages.any((message) => message.role == 'user')) {
-      throw const FormatException('Aucun message utilisateur.');
-    }
-    final buffer = StringBuffer();
-    for (final message in messages) {
-      if (!const {'system', 'user', 'assistant'}.contains(message.role)) {
-        continue;
-      }
-      buffer.write('<|im_start|>${message.role}\n');
-      buffer.write(message.content);
-      buffer.write('<|im_end|>\n');
-    }
-    buffer.write('<|im_start|>assistant\n');
-    return buffer.toString();
-  }
-
-  static String _mistral(List<AiMessage> messages) {
-    final system = messages.where((m) => m.role == 'system')
-        .map((m) => m.content).join('\n\n');
-    final buffer = StringBuffer('<s>');
-    if (system.isNotEmpty) {
-      buffer.write('[SYSTEM_PROMPT]');
-      buffer.write(system);
-      buffer.write('[/SYSTEM_PROMPT]');
-    }
-    var hasUser = false;
-    for (final message in messages) {
-      if (message.role == 'system') continue;
-      if (message.role == 'user') {
-        buffer.write('[INST]');
-        buffer.write(message.content);
-        buffer.write('[/INST]');
-        hasUser = true;
-      } else if (message.role == 'assistant') {
-        buffer.write(message.content);
-        buffer.write('</s>');
-      }
-    }
-    if (!hasUser) throw const FormatException('Aucun message utilisateur.');
-    return buffer.toString();
-  }
-}
 
 /// Multi-model local text-only provider: no network, no API token, no paid fallback.
 /// A shared engine is serialized across narrator, JSONifier, and memory.
 class LocalAiProvider implements AiChatProvider, AiStreamingChatProvider {
   LocalAiProvider(this.models);
   final LocalModelManager models;
+  final LocalTokenEstimator tokenEstimator = LocalTokenEstimator();
+
+  LocalContextBudget budgetFor(LocalModelVariant model, int outputTokens) =>
+      LocalContextBudget(model: model, estimator: tokenEstimator,
+          outputTokens: outputTokens.clamp(8, 1200));
   LlamaController? _runtime;
   String? _loadedId;
   Future<void> _queue = Future<void>.value();
@@ -104,14 +60,14 @@ class LocalAiProvider implements AiChatProvider, AiStreamingChatProvider {
     await models.markNativeStage('chargement du modèle');
     AppLogger.info('IA locale : chargement natif commencé',
         component: 'local_ai',
-        details: {'model': variant.id, 'contextSize': 2048,
+        details: {'model': variant.id, 'contextSize': variant.contextTokens,
                   'threads': 2, 'gpuLayers': 0});
     await AppLogger.current.flush();
     try {
       await runtime.loadModel(
         modelPath: models.installedPath!,
         threads: 2,
-        contextSize: 2048,
+        contextSize: variant.contextTokens,
         gpuLayers: 0,
       );
     } catch (failure, trace) {
@@ -149,13 +105,19 @@ class LocalAiProvider implements AiChatProvider, AiStreamingChatProvider {
       await _load();
       final variant = models.installedVariant!;
       final prompt = LocalPrompt.format(variant, messages);
-      // A hard ceiling prevents accidental multi-minute generations.
       final limit = maxTokens.clamp(8, 1200).toInt();
+      final budget = budgetFor(variant, limit);
+      budget.requireFit(messages);
+      // Native KV tokens otherwise accumulate although each request includes
+      // its own history, which invalidates our context accounting.
+      await _runtime!.clearContext();
       final watch = Stopwatch()..start();
       await models.markNativeStage('génération du texte');
       AppLogger.info('IA locale : génération native commencée',
           component: 'local_ai',
           details: {'model': variant.id, 'promptCharacters': prompt.length,
+                    'promptTokensEstimated': budget.estimate(messages),
+                    'contextTokens': variant.contextTokens,
                     'outputLimit': limit});
       await AppLogger.current.flush();
       // A stuck native decode must not wait forever. On timeout the
@@ -176,10 +138,23 @@ class LocalAiProvider implements AiChatProvider, AiStreamingChatProvider {
         yield AiStreamChunk(text: token);
       }
       completed = true;
+      // This plugin emits one fragment per decoded non-EOS token.
+      // Empty native KV plus decoded count yields real prompt token usage.
+      int? nativePromptTokens;
+      try {
+        final usage = await _runtime!.getContextInfo();
+        if (usage.tokensUsed >= fragments) {
+          nativePromptTokens = usage.tokensUsed - fragments;
+          tokenEstimator.observe(variant, prompt, nativePromptTokens);
+        }
+      } catch (_) {
+        // Diagnostics must not turn a successful answer into an error.
+      }
       AppLogger.info('IA locale : génération native terminée',
           component: 'local_ai',
           details: {'durationMs': watch.elapsedMilliseconds,
-                    'fragments': fragments});
+                    'fragments': fragments,
+                    'promptTokensNative': nativePromptTokens});
     } on TimeoutException catch (failure, trace) {
       AppLogger.error('IA locale : aucun fragment reçu dans les délais',
           component: 'local_ai', error: failure, stackTrace: trace,

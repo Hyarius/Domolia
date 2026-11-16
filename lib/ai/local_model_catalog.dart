@@ -16,6 +16,7 @@ class LocalModelVariant {
     required this.format,
     required this.storageFolder,
     this.sha256,
+    this.contextTokens = 2048,
   });
 
   final String id;
@@ -28,6 +29,8 @@ class LocalModelVariant {
   final String storageFolder;
   /// Official upstream digest, when published and verified.
   final String? sha256;
+  /// Validated native context baseline; no increase without device testing.
+  final int contextTokens;
 
   String get downloadUrl =>
       'https://huggingface.co/$repository/resolve/main/$filename';
