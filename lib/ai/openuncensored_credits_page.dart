@@ -18,10 +18,12 @@ class OpenUncensoredCreditsPage extends StatefulWidget {
     super.key,
     required this.controller,
     required this.onBack,
+    this.showBackButton = true,
     this.sandbox,
   });
   final OuCreditsController controller;
   final VoidCallback onBack;
+  final bool showBackButton;
   final OpenUncensoredSandbox? sandbox;
 
   @override
@@ -431,7 +433,8 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
         padding: const EdgeInsets.all(20),
         children: [
           Row(children: [
-            IconButton(onPressed: widget.onBack,
+            if (widget.showBackButton)
+               IconButton(onPressed: widget.onBack,
               icon: const Icon(Icons.arrow_back)),
             const Expanded(child: Text('Crédits IA', style: TextStyle(
               color: DomoliaColors.goldLight, fontSize: 24,
