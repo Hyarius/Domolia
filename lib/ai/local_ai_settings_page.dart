@@ -7,6 +7,7 @@ import 'ai_provider.dart';
 import 'local_ai_provider.dart';
 import 'local_model_manager.dart';
 import 'local_model_catalog.dart';
+import 'local_inference_options.dart';
 
 /// User-controlled model replacement, never a background installation.
 /// The active model is removed only after explicit confirmation.
@@ -32,6 +33,7 @@ class LocalAiSettingsPage extends StatefulWidget {
 
 class _LocalAiSettingsPageState extends State<LocalAiSettingsPage> {
   String _selected = localModelVariants.first.id;
+  LocalInferenceOptions _options = const LocalInferenceOptions();
   bool _working = false;
   String? _benchmark;
 
@@ -44,9 +46,11 @@ class _LocalAiSettingsPageState extends State<LocalAiSettingsPage> {
   Future<void> _initialize() async {
     try {
       await widget.models.initialize();
+      final options = await LocalInferenceOptions.load();
       if (mounted) {
         setState(() {
           _selected = widget.models.installedId ?? localModelVariants.first.id;
+          _options = options;
         });
       }
     } catch (_) {
@@ -80,6 +84,22 @@ class _LocalAiSettingsPageState extends State<LocalAiSettingsPage> {
           ],
         ),
       ) ?? false;
+
+  Future<void> _saveInferenceOptions(LocalInferenceOptions next) async {
+    if (!_canModify) return;
+    setState(() => _working = true);
+    try {
+      // A running inference must finish before changing its native settings.
+      await widget.provider.unload();
+      await next.save();
+      if (mounted) setState(() => _options = next);
+      _notice('Réglages IA locale enregistrés : prochain chargement du modèle.');
+    } catch (_) {
+      _notice('Impossible de modifier les réglages CPU/GPU.');
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
 
   Future<void> _install() async {
     if (!_canModify) return;
@@ -218,6 +238,58 @@ class _LocalAiSettingsPageState extends State<LocalAiSettingsPage> {
                 if (value != null) setState(() => _selected = value);
               } : null,
             ),
+            const SizedBox(height: 20),
+            const Text('Performances du moteur local',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              key: ValueKey('localCpuThreads-${_options.threads}'),
+              initialValue: _options.threads,
+              decoration: const InputDecoration(labelText: 'Threads CPU'),
+              items: [
+                DropdownMenuItem(value: 0,
+                    child: Text('Tous les cœurs logiques disponibles '
+                        '(${_options.effectiveThreads()})')),
+                const DropdownMenuItem(value: 2, child: Text('2 threads')),
+                const DropdownMenuItem(value: 4, child: Text('4 threads')),
+              ],
+              onChanged: _canModify ? (value) {
+                if (value != null) {
+                  unawaited(_saveInferenceOptions(
+                      _options.copyWith(threads: value)));
+                }
+              } : null,
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<LocalGpuMode>(
+              key: ValueKey('localGpuMode-${_options.gpuMode.name}'),
+              initialValue: _options.gpuMode,
+              decoration: const InputDecoration(labelText: 'Accélération GPU'),
+              items: const [
+                DropdownMenuItem(value: LocalGpuMode.automatic,
+                    child: Text('Automatique (Vulkan si disponible)')),
+                DropdownMenuItem(value: LocalGpuMode.cpuOnly,
+                    child: Text('CPU uniquement')),
+              ],
+              onChanged: _canModify ? (value) {
+                if (value != null) {
+                  unawaited(_saveInferenceOptions(
+                      _options.copyWith(gpuMode: value)));
+                }
+              } : null,
+            ),
+            const SizedBox(height: 8),
+            Text(LocalAiProvider.vulkanBackendBuilt
+                ? 'Backend Vulkan inclus. Le pilote et les couches GPU seront '
+                  'détectés au chargement. Un échec de chargement GPU entraîne '
+                  'une tentative sur CPU.'
+                : 'Cet APK est compilé sans backend Vulkan : le CPU sera '
+                  'utilisé quel que soit le réglage.',
+              style: const TextStyle(color: DomoliaColors.muted)),
+            const SizedBox(height: 8),
+            const Text('Tous les threads n’est pas toujours plus rapide : '
+                'comparer 2, 4 et tous pour observer la chauffe et la latence.',
+              style: TextStyle(color: DomoliaColors.muted)),
             const SizedBox(height: 12),
             Text('Téléchargement : ${(selected.bytes / 1000000000).toStringAsFixed(2)} Go. '
                  'La RAM requise est supérieure à la taille du fichier. '
