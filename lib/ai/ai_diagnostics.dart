@@ -57,6 +57,7 @@ class AiExchange {
   DateTime? completedAtUtc;
   int? promptTokens;
   int? completionTokens;
+  int toolCalls = 0;
   String? error;
   bool cancelled = false;
   List<Map<String, dynamic>> interpretedEvents = const [];
@@ -65,6 +66,7 @@ class AiExchange {
   void complete({
     int? promptTokens,
     int? completionTokens,
+    int toolCalls = 0,
     String? error,
     bool cancelled = false,
     List<Map<String, dynamic>> interpretedEvents = const [],
@@ -72,6 +74,7 @@ class AiExchange {
     completedAtUtc = DateTime.now().toUtc();
     this.promptTokens = promptTokens;
     this.completionTokens = completionTokens;
+    this.toolCalls = toolCalls;
     this.error = error;
     this.cancelled = cancelled;
     this.interpretedEvents = List.unmodifiable(interpretedEvents);
@@ -131,6 +134,7 @@ class AiExchange {
     'interpretation': {
       'promptTokens': promptTokens,
       'completionTokens': completionTokens,
+      'toolCalls': toolCalls,
       'cancelled': cancelled,
       'error': error == null ? null : _redact(error!),
       'events': [
