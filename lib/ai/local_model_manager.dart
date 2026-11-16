@@ -15,11 +15,9 @@ import 'local_model_catalog.dart';
 class LocalModelManager extends ChangeNotifier {
   LocalModelManager({
     http.Client? client,
-    Directory? modelRoot,
-    List<LocalModelVariant> catalog = localModelVariants,
-  })  : _client = client ?? http.Client(),
-        _modelRoot = modelRoot,
-        catalog = catalog;
+    this.modelRoot,
+    this.catalog = localModelVariants,
+  }) : _client = client ?? http.Client();
 
   static const _enabledKey = 'local-model-enabled';
   static const _variantKey = 'local-model-variant';
@@ -31,7 +29,7 @@ class LocalModelManager extends ChangeNotifier {
   static const _legacyVariantKey = 'ministral-local-model-variant';
 
   final http.Client _client;
-  final Directory? _modelRoot;
+  final Directory? modelRoot;
   final List<LocalModelVariant> catalog;
   bool _disposed = false;
   bool _cancel = false;
@@ -61,7 +59,7 @@ class LocalModelManager extends ChangeNotifier {
   }
 
   Future<Directory> _modelDirectory(LocalModelVariant variant) async {
-    final root = _modelRoot ?? await getApplicationSupportDirectory();
+    final root = modelRoot ?? await getApplicationSupportDirectory();
     final dir = Directory(p.join(root.path, 'models', variant.storageFolder));
     await dir.create(recursive: true);
     return dir;
