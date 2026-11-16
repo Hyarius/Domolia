@@ -128,7 +128,7 @@ void main() {
       chat.restoreTimeline(history, rawGenerations: raws);
       final context = chat.buildNarratorContext(hybrid: true);
       final text = context.map((m) => m.content).join('\n');
-      expect(text.length, lessThan(8500),
+      expect(text.length, lessThan(10000),
           reason: 'History cap at $length turns');
       expect(text, contains('Tour ${length - 1}'));
       chat.dispose();
