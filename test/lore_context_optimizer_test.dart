@@ -30,6 +30,12 @@ void main() {
       global: LoreGlobal(universe: 'Court'),
     )), false);
     expect(optimizer.canOptimize(sampleLore()), true);
+    expect(optimizer.canOptimize(BookLore(
+      global: LoreGlobal(
+        universe: 'Livre moyen',
+        overview: List.filled(350, 'Abbaye, fjord, bois et froid').join(' '),
+      ),
+    )), false);
     final request = optimizer.request(sampleLore());
     expect(request, hasLength(2));
     expect(request[0].content, contains('sans'));

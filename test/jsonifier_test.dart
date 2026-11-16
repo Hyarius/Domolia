@@ -371,6 +371,42 @@ void main() {
     expect((parsed.single as ChatLine).text, 'Je ne comprends pas.');
   });
 
+
+  test('Curly apostrophe and source-anchored em-dash speech are accepted', () {
+    const raw = 'L’aubergiste essuie une tasse.\\n\\n'
+        '— La pluie tient bien, ce soir.\\n\\n'
+        'Il désigne le banc près de la fenêtre.\\n\\n'
+        '— Si vous restez, asseyez-vous.\\n\\n'
+        'L’horloge marque le temps.';
+    final result = decoder.decode(raw, jsonEncode({
+      'events': [
+        {'type': 'part', 'part': 0, 'kind': 'narration'},
+        {'type': 'part', 'part': 1, 'kind': 'dialogue',
+         'name': "L'aubergiste"},
+        {'type': 'part', 'part': 2, 'kind': 'narration'},
+        {'type': 'part', 'part': 3, 'kind': 'dialogue',
+         'name': "L'aubergiste"},
+        {'type': 'part', 'part': 4, 'kind': 'narration'},
+      ],
+    }));
+    final lines = result.whereType<ChatLine>().toList();
+    expect(lines, hasLength(5));
+    expect(lines[1].speaker, ChatSpeaker.character);
+    expect(lines[1].name, "L'aubergiste");
+    expect(lines[1].text, 'La pluie tient bien, ce soir.');
+    expect(lines[3].text, 'Si vous restez, asseyez-vous.');
+  });
+
+  test('Unattributed em-dash dialogue cannot borrow an old character', () {
+    const raw = '— Qui est là ?';
+    expect(() => decoder.decode(raw, jsonEncode({
+      'events': [
+        {'type': 'part', 'part': 0, 'kind': 'dialogue',
+         'name': 'Brann'},
+      ],
+    }), knownCharacters: ['Brann']), throwsFormatException);
+  });
+
   test('JSONifier returns optional compact memory and keeps complete events', () {
     final raw = List.filled(26,
         'Astrid attend dans la chapelle tandis que Liv observe la porte.')

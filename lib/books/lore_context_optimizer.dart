@@ -11,7 +11,9 @@ class LoreContextOptimizer {
 
   static const maxInputCharacters = 24000;
   static const maxSummaryCharacters = 6500;
-  static const minInputCharacters = 6000;
+  // Avoid paying an extra LLM call for medium Books: deterministic Lore
+  // selection already provides a bounded narrator context without setup cost.
+  static const minInputCharacters = 12000;
 
   String sourceHash(BookLore lore) {
     final input = jsonEncode(lore.toJson());

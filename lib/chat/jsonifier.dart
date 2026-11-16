@@ -19,7 +19,9 @@ prononcées), aside (incise purement éditoriale, indication de locuteur,
 ponctuation autour des « » ou brève expression transférée au statut).
 N'escamote JAMAIS une action, un fait nouveau ou un paragraphe autonome.
 Les citations entre « » appartiennent à la bulle de dialogue sans guillemets ;
-une prose non citée n'est dialogue que sous la forme explicite « Nom : paroles ».
+une prose non citée n'est dialogue que sous la forme « Nom : paroles »,
+ou comme réplique commençant par « — » si une narration RAW précédente
+identifie clairement le locuteur.
 Un "dialogue" doit avoir un "name" réel identifié par le RAW ou le contexte,
 jamais le joueur ; si l'attribution est inconnue, utilise narration.
 "status" est facultatif, réservé aux dialogues, et décrit seulement une émotion,
