@@ -13,11 +13,13 @@ const config = AiConfiguration(
     baseUrl: defaultAiBaseUrl, model: defaultAiModel, apiKey: 'fake');
 
 String bubble(String text, {String role = 'narrator',
-    String name = 'Narrateur', String? status}) =>
-    '${jsonEncode({
-      'type': 'message', 'speaker': role, 'name': name, 'text': text,
-      if (status != null) 'status': status,
-    })}\n';
+    String name = 'Narrateur', String? status}) {
+  final entry = <String, dynamic>{
+    'type': 'message', 'speaker': role, 'name': name, 'text': text,
+  };
+  if (status != null) entry['status'] = status;
+  return '${jsonEncode(entry)}\n';
+}
 
 class _CompleteProvider implements AiChatProvider {
   _CompleteProvider([String? value]) : reply = value ?? bubble('Le temple apparaît.');

@@ -13,11 +13,13 @@ const credentials = AiConfiguration(
   baseUrl: defaultAiBaseUrl, model: defaultAiModel, apiKey: 'test-only');
 
 String line(String text, {String speaker = 'narrator',
-    String name = 'Narrateur', String? status}) =>
-    '${jsonEncode({
-      'type': 'message', 'speaker': speaker, 'name': name,
-      'text': text, if (status != null) 'status': status,
-    })}\n';
+    String name = 'Narrateur', String? status}) {
+  final entry = <String, dynamic>{
+    'type': 'message', 'speaker': speaker, 'name': name, 'text': text,
+  };
+  if (status != null) entry['status'] = status;
+  return '${jsonEncode(entry)}\n';
+}
 
 class _Provider implements AiChatProvider {
   String prose = 'La porte s’ouvre.';
