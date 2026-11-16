@@ -306,10 +306,7 @@ void main() {
     expect(find.byKey(const ValueKey('allVersionsLink')), findsOneWidget);
     await tester.drag(updatesList, const Offset(0, 900));
     await tester.pumpAndSettle();
-    await tester.tap(find.descendant(
-      of: find.byType(UpdateSettingsPanel),
-      matching: find.text('Retour aux paramètres'),
-    ));
+    await tester.tap(find.byKey(const ValueKey('appBack')));
     await tester.pumpAndSettle();
 
     await tester.tap(find.widgetWithText(ListTile, 'Crédits IA'));
