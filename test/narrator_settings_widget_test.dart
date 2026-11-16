@@ -136,6 +136,7 @@ void main() {
 
     await tester.enterText(find.byKey(const ValueKey('groupChatInput')),
         'J’ouvre la porte.');
+    await tester.pump(); // Send is enabled only when there is text.
     await tester.tap(find.byKey(const ValueKey('groupChatSend')));
     await tester.pumpAndSettle();
     expect(fake.calls, 2);
