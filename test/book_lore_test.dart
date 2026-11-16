@@ -86,24 +86,27 @@ class _FakeProvider implements AiChatProvider {
 void main() {
   sqfliteFfiInit();
 
-  test('Empty lore defaults to a portable v2 Book', () {
+  test('Empty lore defaults to a portable v3 Book', () {
     const book = BookDefinition(id:'empty',title:'Vide');
     final parsed = BookDefinition.importJson(book.exportJson());
     expect(parsed.lore.isEmpty,true);
-    expect(parsed.toPortableJson()['version'],2);
+    expect(parsed.toPortableJson()['version'],3);
     expect(parsed.lore.characters,isEmpty);
   });
 
-  test('v1 portable import upgrades to v2 without changing old fields', () {
+  test('v1 portable import upgrades to v3 without changing old fields', () {
     final old = jsonDecode(const BookDefinition(
       id:'old',title:'Livre ancien',narrativeStyle:'Style original',
     ).exportJson()) as Map<String,dynamic>;
     old['version'] = 1;
+    (old['narrative'] as Map<String,dynamic>)
+      ..remove('responseLength')
+      ..remove('styleKeywords');
     old.remove('lore');
     final imported = BookDefinition.importJson(jsonEncode(old));
     expect(imported.lore.isEmpty,true);
     expect(imported.narrativeStyle,'Style original');
-    expect(jsonDecode(imported.exportJson())['version'],2);
+    expect(jsonDecode(imported.exportJson())['version'],3);
     old['lore'] = {};
     expect(() => BookDefinition.importJson(jsonEncode(old)),throwsFormatException);
   });
