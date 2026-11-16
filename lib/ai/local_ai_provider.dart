@@ -7,6 +7,7 @@ import 'ai_provider.dart';
 import 'local_model_manager.dart';
 import 'local_model_catalog.dart';
 import 'local_context_budget.dart';
+import 'local_inference_options.dart';
 import 'local_prompt.dart';
 
 export 'local_prompt.dart';
@@ -24,6 +25,9 @@ class LocalAiProvider implements AiChatProvider, AiStreamingChatProvider {
           outputTokens: outputTokens.clamp(8, 1200));
   LlamaController? _runtime;
   String? _loadedId;
+  String? _loadedConfiguration;
+  static const bool vulkanBackendBuilt =
+      bool.fromEnvironment('DOMOLIA_VULKAN_BACKEND', defaultValue: false);
   Future<void> _queue = Future<void>.value();
   bool _closed = false;
 
@@ -47,29 +51,70 @@ class LocalAiProvider implements AiChatProvider, AiStreamingChatProvider {
       throw const AiProviderException(
           'Modèle local non installé. Ouvrez Paramètres > IA locale.');
     }
-    if (_loadedId == models.installedId && _runtime != null) return;
+    final options = await LocalInferenceOptions.load();
+    final threads = options.effectiveThreads();
+    final signature = '${models.installedId}:$threads:${options.gpuMode.name}:'
+        '$vulkanBackendBuilt';
+    if (_loadedConfiguration == signature && _runtime != null) return;
+
     if (_runtime != null) {
       await _runtime!.dispose();
       _runtime = null;
       _loadedId = null;
+      _loadedConfiguration = null;
     }
-    final runtime = LlamaController();
+    var runtime = LlamaController();
     final variant = models.installedVariant!;
-    // A small context is safer on phones with 6 GB RAM. Keep the GPU off
-    // until the CPU baseline is demonstrated on the device.
+    var gpuLayers = 0;
     await models.markNativeStage('chargement du modèle');
-    AppLogger.info('IA locale : chargement natif commencé',
-        component: 'local_ai',
-        details: {'model': variant.id, 'contextSize': variant.contextTokens,
-                  'threads': 2, 'gpuLayers': 0});
-    await AppLogger.current.flush();
     try {
-      await runtime.loadModel(
-        modelPath: models.installedPath!,
-        threads: 2,
-        contextSize: variant.contextTokens,
-        gpuLayers: 0,
-      );
+      if (vulkanBackendBuilt && options.gpuMode == LocalGpuMode.automatic) {
+        try {
+          final gpu = await runtime.detectGpu();
+          if (gpu.vulkanSupported) {
+            gpuLayers = gpu.recommendedGpuLayers.clamp(0, 99).toInt();
+          }
+          AppLogger.info('IA locale : matériel GPU détecté',
+              component: 'local_ai', details: {
+                'gpu': gpu.gpuName,
+                'vulkanSupported': gpu.vulkanSupported,
+                'recommendedGpuLayers': gpu.recommendedGpuLayers,
+                'gpuLayersRequested': gpuLayers,
+              });
+        } catch (failure) {
+          AppLogger.info('IA locale : détection Vulkan indisponible',
+              component: 'local_ai', details: {'reason': failure.toString()});
+        }
+      }
+      AppLogger.info('IA locale : chargement natif commencé',
+          component: 'local_ai', details: {
+            'model': variant.id, 'contextSize': variant.contextTokens,
+            'threads': threads, 'logicalProcessors': options.effectiveThreads(),
+            'gpuLayers': gpuLayers, 'vulkanBackendBuilt': vulkanBackendBuilt,
+          });
+      await AppLogger.current.flush();
+      try {
+        await runtime.loadModel(
+          modelPath: models.installedPath!,
+          threads: threads,
+          contextSize: variant.contextTokens,
+          gpuLayers: gpuLayers,
+        );
+      } catch (failure) {
+        if (gpuLayers == 0) rethrow;
+        AppLogger.info('IA locale : échec GPU, tentative CPU',
+            component: 'local_ai', details: {'reason': failure.toString()});
+        // A failed native load may leave state behind: retry in a fresh engine.
+        await runtime.dispose();
+        runtime = LlamaController();
+        await runtime.loadModel(
+          modelPath: models.installedPath!,
+          threads: threads,
+          contextSize: variant.contextTokens,
+          gpuLayers: 0,
+        );
+        gpuLayers = 0;
+      }
     } catch (failure, trace) {
       AppLogger.error('IA locale : échec de chargement natif',
           component: 'local_ai', error: failure, stackTrace: trace);
@@ -82,9 +127,11 @@ class LocalAiProvider implements AiChatProvider, AiStreamingChatProvider {
     }
     await models.clearNativeStage();
     AppLogger.info('IA locale : modèle natif chargé', component: 'local_ai',
-        details: {'model': variant.id});
+        details: {'model': variant.id, 'threads': threads,
+                  'gpuLayers': gpuLayers});
     _runtime = runtime;
     _loadedId = models.installedId;
+    _loadedConfiguration = signature;
   }
 
   @override
@@ -193,6 +240,7 @@ class LocalAiProvider implements AiChatProvider, AiStreamingChatProvider {
     final runtime = _runtime;
     _runtime = null;
     _loadedId = null;
+    _loadedConfiguration = null;
     if (runtime != null) await runtime.dispose();
   }
 
