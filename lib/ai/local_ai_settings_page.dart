@@ -4,13 +4,14 @@ import 'package:material_ui/material_ui.dart';
 
 import '../theme/domolia_theme.dart';
 import 'ai_provider.dart';
-import 'ministral_local_provider.dart';
-import 'ministral_model_manager.dart';
+import 'local_ai_provider.dart';
+import 'local_model_manager.dart';
+import 'local_model_catalog.dart';
 
 /// User-controlled model replacement, never a background installation.
 /// The active model is removed only after explicit confirmation.
-class MinistralSettingsPage extends StatefulWidget {
-  const MinistralSettingsPage({
+class LocalAiSettingsPage extends StatefulWidget {
+  const LocalAiSettingsPage({
     super.key,
     required this.models,
     required this.provider,
@@ -19,18 +20,18 @@ class MinistralSettingsPage extends StatefulWidget {
     this.showBackButton = true,
   });
 
-  final MinistralModelManager models;
-  final MinistralLocalProvider provider;
+  final LocalModelManager models;
+  final LocalAiProvider provider;
   final VoidCallback onBack;
   final bool Function()? canChangeModel;
   final bool showBackButton;
 
   @override
-  State<MinistralSettingsPage> createState() => _MinistralSettingsPageState();
+  State<LocalAiSettingsPage> createState() => _LocalAiSettingsPageState();
 }
 
-class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
-  String _selected = ministralVariants.first.id;
+class _LocalAiSettingsPageState extends State<LocalAiSettingsPage> {
+  String _selected = localModelVariants.first.id;
   bool _working = false;
   String? _benchmark;
 
@@ -45,7 +46,7 @@ class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
       await widget.models.initialize();
       if (mounted) {
         setState(() {
-          _selected = widget.models.installedId ?? ministralVariants.first.id;
+          _selected = widget.models.installedId ?? localModelVariants.first.id;
         });
       }
     } catch (_) {
@@ -82,20 +83,22 @@ class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
 
   Future<void> _install() async {
     if (!_canModify) return;
-    final variant = ministralVariants.firstWhere((v) => v.id == _selected);
+    final variant = localModelVariants.firstWhere((v) => v.id == _selected);
     if (widget.models.installedId == variant.id && widget.models.ready) {
       _notice('Ce modèle est déjà installé.');
       return;
     }
     final ok = await _confirm(
       'Remplacer le modèle IA local ?',
-      'Le modèle actuellement installé sera désinstallé pour libérer '
-      'de la place. Domolia téléchargera ensuite ${variant.name}.\n\n'
-      'Le fichier fait environ ${(variant.bytes / 1000000000).toStringAsFixed(2)} Go. '
-      'Le téléchargement peut prendre un moment : privilégiez le Wi-Fi et '
-      'gardez Domolia ouvert. Si l’installation échoue, le mode local restera '
-      'désactivé. Aucun appel IA payant ne sera lancé automatiquement.',
-      'Désinstaller et télécharger',
+      'Domolia téléchargera ${variant.name} et vérifiera son intégrité. '
+      'Le modèle actuellement installé sera conservé jusqu’au succès '
+      'du téléchargement, puis supprimé.\n\n'
+      'Prévoyez environ ${(variant.bytes / 1000000000).toStringAsFixed(2)} Go '
+      'd’espace libre supplémentaire. Privilégiez le Wi-Fi et gardez '
+      'Domolia ouvert. En cas d’échec, l’ancien modèle reste disponible '
+      'mais le mode local doit être réactivé manuellement. '
+      'Aucun appel IA payant n’est lancé en secours automatique.',
+      'Confirmer le téléchargement',
     );
     if (!ok || !mounted || !_canModify) return;
     setState(() { _working = true; _benchmark = null; });
@@ -103,7 +106,7 @@ class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
       await widget.provider.unload();
       await widget.models.install(variant);
       await widget.models.setEnabled(true);
-      _notice('Ministral installé : narrateur local activé.');
+      _notice('Modèle installé : narration locale activée.');
     } catch (_) {
       _notice(widget.models.error ?? 'Installation du modèle interrompue.');
     } finally {
@@ -123,7 +126,7 @@ class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
 
   Future<void> _remove() async {
     if (!_canModify || !widget.models.ready) return;
-    final ok = await _confirm('Supprimer le modèle Ministral ?',
+    final ok = await _confirm('Supprimer le modèle local ?',
       'Le modèle sera supprimé du téléphone. Les Livres et les Parties '
       'ne seront pas touchés.', 'Supprimer');
     if (!ok || !mounted || !_canModify) return;
@@ -145,7 +148,7 @@ class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
     final watch = Stopwatch()..start();
     try {
       final result = await widget.provider.complete(
-        MinistralLocalProvider.configuration,
+        LocalAiProvider.configurationFor(widget.models.installedVariant!),
         maxTokens: quick ? 24 : 240,
         messages: quick
             ? const [
@@ -170,7 +173,7 @@ class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
     } catch (failure) {
       _notice(failure is AiProviderException
           ? failure.userMessage
-          : 'Ministral ne peut pas générer sur ce téléphone. '
+          : 'Le modèle local ne peut pas générer sur ce téléphone. 
             'Vérifiez la mémoire disponible.');
     } finally {
       if (mounted) setState(() => _working = false);
@@ -182,17 +185,17 @@ class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
     animation: widget.models,
     builder: (context, _) {
       final models = widget.models;
-      final selected = ministralVariants.firstWhere((v) => v.id == _selected);
+      final selected = localModelVariants.firstWhere((v) => v.id == _selected);
       return SafeArea(
         child: ListView(
-          key: const ValueKey('ministralSettings'),
+          key: const ValueKey('localModelSettings'),
           padding: const EdgeInsets.all(24),
           children: [
             Row(children: [
               if (widget.showBackButton)
                 IconButton(onPressed: widget.onBack,
                     icon: const Icon(Icons.arrow_back)),
-              const Expanded(child: Text('IA locale — Mistral',
+              const Expanded(child: Text('IA locale — Modèles',
                 style: TextStyle(color: DomoliaColors.goldLight,
                     fontSize: 23, fontWeight: FontWeight.bold))),
             ]),
@@ -202,12 +205,12 @@ class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
                 'Une fois installé, l’inférence reste sur le téléphone.'),
             const SizedBox(height: 20),
             DropdownButtonFormField<String>(
-              key: ValueKey('ministralSelected-$_selected'),
+              key: ValueKey('localSelected-$_selected'),
               initialValue: _selected,
               isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Modèle Mistral'),
+              decoration: const InputDecoration(labelText: 'Modèle local'),
               items: [
-                for (final variant in ministralVariants)
+                for (final variant in localModelVariants)
                   DropdownMenuItem(value: variant.id,
                     child: Text(variant.name, overflow: TextOverflow.ellipsis)),
               ],
@@ -218,7 +221,7 @@ class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
             const SizedBox(height: 12),
             Text('Téléchargement : ${(selected.bytes / 1000000000).toStringAsFixed(2)} Go. '
                  'La RAM requise est supérieure à la taille du fichier. '
-                 'Sur un S20 FE 6 Go, commencez par Q4.',
+                 'Sur un S20 FE 6 Go, commencez par Qwen Q4.',
               style: const TextStyle(color: DomoliaColors.muted)),
             const SizedBox(height: 18),
             if (models.installing) ...[
@@ -230,7 +233,7 @@ class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
                   child: const Text('Annuler le téléchargement')),
             ] else
               FilledButton.icon(
-                key: const ValueKey('ministralInstall'),
+                key: const ValueKey('localModelInstall'),
                 onPressed: _canModify ? _install : null,
                 icon: const Icon(Icons.download_rounded),
                 label: Text(models.installedId == _selected && models.ready
@@ -247,17 +250,17 @@ class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
                 ? 'Modèle installé : ${models.installedVariant!.name}'
                 : 'Aucun modèle installé'),
             SwitchListTile(
-              key: const ValueKey('ministralEnabled'),
+              key: const ValueKey('localModelEnabled'),
               title: const Text('Narrateur entièrement local'),
               subtitle: const Text('Le JSONificateur et la mémoire utilisent '
-                  'aussi Ministral. En cas d’erreur, aucun secours distant '
+                  'aussi le modèle choisi. En cas d’erreur, aucun secours distant 
                   'automatique : la Partie reste sauvegardée.'),
               value: models.ready && models.enabled,
               onChanged: models.ready && _canModify ? _toggle : null,
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              key: const ValueKey('ministralQuickTest'),
+              key: const ValueKey('localModelQuickTest'),
               onPressed: models.ready && _canModify
                   ? () => _test(quick: true)
                   : null,
@@ -266,7 +269,7 @@ class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              key: const ValueKey('ministralTest'),
+              key: const ValueKey('localModelTest'),
               onPressed: models.ready && _canModify ? () => _test() : null,
               icon: const Icon(Icons.science_outlined),
               label: const Text('Tester la narration sur ce téléphone'),
@@ -283,12 +286,13 @@ class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
               label: const Text('Désinstaller le modèle local'),
             ),
             const SizedBox(height: 18),
-            const Text('Ministral 3 3B Instruct est publié par Mistral AI '
-                '(licence Apache 2.0). La compatibilité NSFW n’est pas '
-                'garantie : aucun filtrage applicatif supplémentaire n’est '
-                'introduit ici, mais le modèle peut refuser certaines scènes. '
-                'Les performances et la qualité narrative doivent être '
-                'mesurées sur le téléphone.',
+            const Text('Qwen2.5 1.5B et Ministral 3B sont des modèles '
+                'distincts, publiés sous licence Apache 2.0. '
+                'Le mode NSFW des Livres est conservé, sans filtre '
+                'supplémentaire dans le moteur local. Les modèles standards '
+                'peuvent toutefois refuser des scènes adultes. '
+                'Comparez la qualité, la vitesse et les refus sur le téléphone. '
+                'L’accélération GPU n’est pas encore activée.',
               style: TextStyle(color: DomoliaColors.muted)),
           ],
         ),
