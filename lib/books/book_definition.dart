@@ -15,13 +15,15 @@ class BookDefinition {
     this.tags = const <String>{},
     this.narrativeStyle = defaultNarratorNarrativePrompt,
     this.detailLevel = 3,
+    this.responseLength = 3,
+    this.styleKeywords = const <String>[],
     this.openingMessages = defaultNarratorOpeningMessages,
     this.extensions = const <String, Object?>{},
     this.lore = const BookLore(),
   });
 
   static const format = 'domolia.book';
-  static const version = 2;
+  static const version = 3;
   static const maxJsonBytes = 2 * 1024 * 1024;
   static const maxCoverBytes = 1024 * 1024;
   static const _allowedMime = {'image/png', 'image/jpeg', 'image/webp'};
@@ -34,6 +36,9 @@ class BookDefinition {
   final Set<String> tags;
   final String narrativeStyle;
   final int detailLevel;
+  /// Turn duration is independent of descriptive detail density.
+  final int responseLength;
+  final List<String> styleKeywords;
   final List<String> openingMessages;
   /// Reserved for future versioned, explicitly safe scenario/character data.
   final Map<String, Object?> extensions;
@@ -45,6 +50,10 @@ class BookDefinition {
         narrativePrompt: [
           narrativeStyle,
           detailInstruction(detailLevel),
+          responseLengthInstruction(responseLength),
+          if (styleKeywords.isNotEmpty)
+            'Mots-clés du style d’écriture à privilégier : '
+                '${styleKeywords.join(', ')}. Reste naturel et cohérent.',
           if (nsfw)
             'Le contenu adulte est une préférence du Livre. Respecte '
                 'toujours les règles et limites du fournisseur IA.',
@@ -64,6 +73,42 @@ class BookDefinition {
     'Niveau de détail 5 : enrichis les descriptions, ambiance et sensations.',
   ];
 
+  /// Suggested targets from a 26-message conversation export (median 146 words).
+  /// These are soft targets, not hard truncation limits.
+  static const responseLengthNames = <String>[
+    'Très court', 'Court', 'Équilibré', 'Développé', 'Long',
+  ];
+
+  static const responseLengthInstructions = <String>[
+    'Rythme très court : vise 50 à 85 mots par réponse. '
+        'Une réaction ou action immédiate, sans faire progresser '
+        'plusieurs événements. Redonne rapidement l’initiative au joueur.',
+    'Rythme court : vise 85 à 120 mots par réponse. '
+        'Privilégie un seul échange ou un petit mouvement de scène. '
+        'Arrête-toi avant la prochaine décision du joueur.',
+    'Rythme équilibré : vise environ 120 à 185 mots par réponse. '
+        'Décris les réactions, fais dialoguer les personnages si utile, '
+        'mais limite-toi à un seul temps narratif significatif.',
+    'Rythme développé : vise 190 à 300 mots par réponse. '
+        'Une séquence plus riche peut se dérouler, avec descriptions '
+        'et plusieurs réactions, sans décider pour le joueur.',
+    'Rythme long : vise 300 à 450 mots par réponse. '
+        'Tu peux développer une action étendue et son ambiance, '
+        'en conservant les décisions importantes au joueur.',
+  ];
+
+  static String responseLengthInstruction(int level) {
+    if (level < 1 || level > 5) {
+      throw const FormatException('Longueur de réponse invalide.');
+    }
+    return '${responseLengthInstructions[level - 1]} '
+        'Ces nombres sont indicatifs, jamais une raison de couper une phrase. '
+        'Ne raconte pas à la place du personnage joueur et n’enchaîne pas '
+        'plusieurs scènes sans intervention possible. '
+        'Termine sur une situation ouverte plutôt que sur une décision imposée. '
+        'Évite de demander mécaniquement « Que faites-vous ? » à chaque tour.';
+  }
+
   static String detailInstruction(int level) {
     if (level < 1 || level > 5) {
       throw const FormatException('Niveau de détail invalide.');
@@ -80,6 +125,8 @@ class BookDefinition {
     Set<String>? tags,
     String? narrativeStyle,
     int? detailLevel,
+    int? responseLength,
+    List<String>? styleKeywords,
     List<String>? openingMessages,
     Map<String, Object?>? extensions,
     BookLore? lore,
@@ -91,6 +138,8 @@ class BookDefinition {
         tags: tags ?? this.tags,
         narrativeStyle: narrativeStyle ?? this.narrativeStyle,
         detailLevel: detailLevel ?? this.detailLevel,
+        responseLength: responseLength ?? this.responseLength,
+        styleKeywords: styleKeywords ?? this.styleKeywords,
         openingMessages: openingMessages ?? this.openingMessages,
         extensions: extensions ?? this.extensions,
         lore: lore ?? this.lore,
@@ -116,6 +165,8 @@ class BookDefinition {
         'narrative': {
           'style': narrativeStyle,
           'detailLevel': detailLevel,
+          'responseLength': responseLength,
+          'styleKeywords': styleKeywords,
         },
         'openingMessages': openingMessages,
         'extensions': extensions,
@@ -136,6 +187,13 @@ class BookDefinition {
         title.trim().isEmpty || title.length > 120 ||
         narrativeStyle.trim().isEmpty || narrativeStyle.length > 8000 ||
         detailLevel < 1 || detailLevel > 5 ||
+        responseLength < 1 || responseLength > 5 ||
+        styleKeywords.length > 10 ||
+        styleKeywords.any((word) => word.trim().isEmpty ||
+            word.length > 40 || word.contains(',') ||
+            word.contains('\\n') || word.contains('\\r')) ||
+        styleKeywords.map((word) => word.trim().toLowerCase()).toSet().length
+            != styleKeywords.length ||
         openingMessages.isEmpty || openingMessages.length > 30 ||
         openingMessages.any((s) => s.trim().isEmpty || s.length > 2000) ||
         tags.any((tag) => !_allowedTags.contains(tag))) {
@@ -197,9 +255,10 @@ class BookDefinition {
     };
     if (parsed.keys.any((key) => !allowed.contains(key)) ||
         parsed['format'] != format ||
-        (parsed['version'] != 1 && parsed['version'] != version) ||
+        (parsed['version'] != 1 && parsed['version'] != 2 &&
+            parsed['version'] != version) ||
         (parsed['version'] == 1 && parsed.containsKey('lore')) ||
-        (parsed['version'] == version && !parsed.containsKey('lore')) ||
+        (parsed['version'] != 1 && !parsed.containsKey('lore')) ||
         parsed['id'] is! String || parsed['title'] is! String ||
         parsed['tags'] is! List || parsed['narrative'] is! Map<String, dynamic> ||
         parsed['openingMessages'] is! List ||
@@ -211,8 +270,15 @@ class BookDefinition {
     final narrative = parsed['narrative'] as Map<String, dynamic>;
     if (tags.any((e) => e is! String) ||
         openings.any((e) => e is! String) ||
-        narrative.length != 2 || narrative['style'] is! String ||
-        narrative['detailLevel'] is! int) {
+        narrative['style'] is! String ||
+        narrative['detailLevel'] is! int ||
+        (parsed['version'] == version
+          ? (narrative.length != 4 ||
+              narrative['responseLength'] is! int ||
+              narrative['styleKeywords'] is! List ||
+              (narrative['styleKeywords'] as List)
+                  .any((item) => item is! String))
+          : narrative.length != 2)) {
       throw const FormatException('Champs narratifs invalides.');
     }
     final cover = parsed['cover'];
@@ -229,6 +295,12 @@ class BookDefinition {
       tags: tags.cast<String>().toSet(),
       narrativeStyle: narrative['style'] as String,
       detailLevel: narrative['detailLevel'] as int,
+      responseLength: parsed['version'] == version
+          ? narrative['responseLength'] as int : 3,
+      styleKeywords: parsed['version'] == version
+          ? List<String>.unmodifiable(
+              (narrative['styleKeywords'] as List).cast<String>())
+          : const <String>[],
       openingMessages: List<String>.unmodifiable(openings.cast<String>()),
       extensions: Map<String, Object?>.unmodifiable(
         parsed['extensions'] as Map<String, dynamic>,
