@@ -257,7 +257,7 @@ void main() {
     );
     final requiredOnly = const LoreContextBuilder(maxCharacters: 10000)
         .build(BookLore(global: lore.global), ['Je regarde.']);
-    final cap = requiredOnly.length + 105;
+    final cap = requiredOnly.length + 45;
     final result = LoreContextBuilder(maxCharacters: cap)
         .build(lore, ['Je regarde.']);
     expect(result.length, lessThanOrEqualTo(cap));
