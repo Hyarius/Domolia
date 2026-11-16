@@ -240,10 +240,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _refreshRecent() async {
-    if (mounted) setState(() {
-      _recentLoading = true;
-      _recentError = null;
-    });
+    if (mounted) {
+      setState(() {
+        _recentLoading = true;
+        _recentError = null;
+      });
+    }
     try {
       final sessions = await _books.recentSessions();
       if (!mounted) {
@@ -257,10 +259,12 @@ class _HomePageState extends State<HomePage> {
     } catch (failure, stackTrace) {
       AppLogger.error('Chargement des Parties récentes échoué',
           component: 'books', error: failure, stackTrace: stackTrace);
-      if (mounted) setState(() {
-        _recentError = 'Impossible de charger les Parties récentes.';
-        _recentLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _recentError = 'Impossible de charger les Parties récentes.';
+          _recentLoading = false;
+        });
+      }
     }
   }
 
