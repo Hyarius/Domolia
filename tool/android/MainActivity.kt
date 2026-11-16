@@ -1,5 +1,8 @@
 package fr.domolia.domolia
 
+import android.app.ActivityManager
+import android.app.ApplicationExitInfo
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
@@ -15,8 +18,50 @@ import java.io.File
 class MainActivity : FlutterActivity() {
     private val channelName = "domolia/updates"
 
+    // Android's ApplicationExitInfo survives a native SIGSEGV, ANR, or
+    // low-memory process kill where the Dart exception handlers cannot run.
+    private fun previousProcessExit(): Map<String, Any?>? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        val activityManager =
+            getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val exit = activityManager.getHistoricalProcessExitReasons(
+            packageName, 0, 8
+        ).maxByOrNull { it.timestamp } ?: return null
+        val reason = when (exit.reason) {
+            ApplicationExitInfo.REASON_CRASH -> "CRASH"
+            ApplicationExitInfo.REASON_CRASH_NATIVE -> "CRASH_NATIVE"
+            ApplicationExitInfo.REASON_LOW_MEMORY -> "LOW_MEMORY"
+            ApplicationExitInfo.REASON_ANR -> "ANR"
+            ApplicationExitInfo.REASON_SIGNALED -> "SIGNALED"
+            ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "EXCESSIVE_RESOURCE_USAGE"
+            ApplicationExitInfo.REASON_USER_REQUESTED -> "USER_REQUESTED"
+            ApplicationExitInfo.REASON_EXIT_SELF -> "EXIT_SELF"
+            else -> "OTHER"
+        }
+        return mapOf(
+            "reason" to reason,
+            "reasonCode" to exit.reason,
+            "timestampMs" to exit.timestamp,
+            "pssKb" to exit.pss,
+            "rssKb" to exit.rss,
+            "importance" to exit.importance
+        )
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
+            "domolia/native_exit").setMethodCallHandler { call, result ->
+            if (call.method == "lastProcessExit") {
+                try {
+                    result.success(previousProcessExit())
+                } catch (exception: Exception) {
+                    result.error("NATIVE_EXIT", "Diagnostic Android indisponible.", null)
+                }
+            } else {
+                result.notImplemented()
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 try {

@@ -117,11 +117,13 @@ class MinistralLocalProvider implements AiChatProvider, AiStreamingChatProvider 
       await _load();
       final prompt = MinistralPrompt.format(messages);
       // A hard ceiling prevents accidental multi-minute generations.
-      final limit = maxTokens.clamp(64, 1200).toInt();
+      final limit = maxTokens.clamp(8, 1200).toInt();
+      final watch = Stopwatch()..start();
+      var fragments = 0;
       await models.markNativeStage('génération du texte');
       AppLogger.info('Ministral : génération native commencée',
           component: 'local_ai',
-          details: {'promptCharacters': prompt.length, 'maxTokens': limit});
+          details: {'promptCharacters': prompt.length, 'outputLimit': limit});
       await AppLogger.current.flush();
       await for (final token in _runtime!.generate(
         prompt: prompt,
@@ -129,11 +131,20 @@ class MinistralLocalProvider implements AiChatProvider, AiStreamingChatProvider 
         temperature: 0.55,
         topP: 0.9,
       )) {
+        fragments++;
+        if (fragments == 1) {
+          AppLogger.info('Ministral : premier fragment reçu',
+              component: 'local_ai',
+              details: {'firstFragmentMs': watch.elapsedMilliseconds});
+          await AppLogger.current.flush();
+        }
         yield AiStreamChunk(text: token);
       }
       completed = true;
       AppLogger.info('Ministral : génération native terminée',
-          component: 'local_ai');
+          component: 'local_ai',
+          details: {'durationMs': watch.elapsedMilliseconds,
+                    'fragments': fragments});
     } catch (failure, trace) {
       AppLogger.error('Ministral : échec pendant la génération',
           component: 'local_ai', error: failure, stackTrace: trace);

@@ -41,12 +41,16 @@ import 'updates/update_service.dart';
 import 'updates/update_io.dart';
 import 'updates/update_widgets.dart';
 import 'logging/app_logger.dart';
+import 'logging/native_exit_diagnostics.dart';
 import 'logging/app_logs_page.dart';
 
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     await AppLogger.initialize();
+    // Collect Android system exit reason independently from the Flutter
+    // exception handlers; native crashes may kill the entire process.
+    unawaited(NativeExitDiagnostics.logLastUnexpectedExit());
     final flutterHandler = FlutterError.onError;
     FlutterError.onError = (details) {
       AppLogger.error('Exception Flutter', component: 'flutter',

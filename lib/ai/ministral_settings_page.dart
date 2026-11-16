@@ -139,27 +139,32 @@ class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
     }
   }
 
-  Future<void> _test() async {
+  Future<void> _test({bool quick = false}) async {
     if (!_canModify || !widget.models.ready) return;
     setState(() { _working = true; _benchmark = null; });
     final watch = Stopwatch()..start();
     try {
       final result = await widget.provider.complete(
         MinistralLocalProvider.configuration,
-        maxTokens: 240,
-        messages: const [
-          AiMessage(role: 'system', content:
-              'Tu écris de courtes scènes de jeu de rôle en français. '
-              'N’agis jamais à la place du joueur.'),
-          AiMessage(role: 'user', content:
-              'La pluie tombe sur la vitre de l’auberge du Pont de Verre. '
-              'Décris une courte interaction avec l’aubergiste Oren.'),
-        ],
+        maxTokens: quick ? 24 : 240,
+        messages: quick
+            ? const [
+                AiMessage(role: 'user',
+                    content: 'Réponds en français par un bonjour très court.'),
+              ]
+            : const [
+                AiMessage(role: 'system', content:
+                    'Tu écris de courtes scènes de jeu de rôle en français. '
+                    'N’agis jamais à la place du joueur.'),
+                AiMessage(role: 'user', content:
+                    'La pluie tombe sur la vitre de l’auberge du Pont de Verre. '
+                    'Décris une courte interaction avec l’aubergiste Oren.'),
+              ],
       );
       watch.stop();
       if (mounted) {
         setState(() => _benchmark =
-          'Génération hors connexion : ${watch.elapsed.inSeconds} s\n\n'
+          '${quick ? "Diagnostic rapide" : "Génération hors connexion"} : ${watch.elapsed.inSeconds} s\n\n'
           '${result.trim()}');
       }
     } catch (_) {
@@ -250,8 +255,17 @@ class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
+              key: const ValueKey('ministralQuickTest'),
+              onPressed: models.ready && _canModify
+                  ? () => _test(quick: true)
+                  : null,
+              icon: const Icon(Icons.bug_report_outlined),
+              label: const Text('Diagnostic rapide (24 tokens)'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
               key: const ValueKey('ministralTest'),
-              onPressed: models.ready && _canModify ? _test : null,
+              onPressed: models.ready && _canModify ? () => _test() : null,
               icon: const Icon(Icons.science_outlined),
               label: const Text('Tester la narration sur ce téléphone'),
             ),
