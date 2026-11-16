@@ -372,6 +372,7 @@ class _HomePageState extends State<HomePage> {
           provider: _ai.provider,
           configuration: () => null,
           narrator: book.narrator,
+          narratorProvider: () => _books.byId(book.id)?.narrator ?? book.narrator,
           loreProvider: () => _books.byId(book.id)?.lore ?? book.lore,
           diagnostics: _aiDiagnostics,
           initialOptimizedLore: session.optimizedLore,
