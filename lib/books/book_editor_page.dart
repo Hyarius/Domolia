@@ -85,7 +85,7 @@ class BookEditorPageState extends State<BookEditorPage> {
     final revision = ++_editRevision;
     if (mounted) setState(() => _book = next);
     final pending = _saveTail.then((_) => widget.library.save(next));
-    _saveTail = pending.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    _saveTail = pending.then<void>((_) {}, onError: (Object error, StackTrace stackTrace) {});
     return pending.then((_) {
       if (mounted) setState(() => _savedRevision = revision);
     });
