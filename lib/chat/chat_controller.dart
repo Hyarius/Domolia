@@ -7,7 +7,7 @@ import '../ai/ai_provider.dart';
 import '../ai/ai_diagnostics.dart';
 import '../logging/app_logger.dart';
 import 'chat_protocol.dart';
-import 'jsonifier.dart';
+import 'narrative_stream_buffer.dart';
 import 'narrator.dart';
 import 'raw_generation.dart';
 import 'narrative_reference_tools.dart';
@@ -41,8 +41,7 @@ class _ToolTurn {
   final int? completionTokens;
 }
 
-/// A two-call pipeline. No AI event is observable before the RAW and its
-/// complete validated representation have been written to durable storage.
+/// A one-pass streaming pipeline. Only validated turns reach SQLite.
 class NarrativeChatController extends ChangeNotifier {
   NarrativeChatController({
     required this.provider,
@@ -91,8 +90,7 @@ class NarrativeChatController extends ChangeNotifier {
   final void Function(AiExchange exchange)? onExchangeCaptured;
   final void Function(List<ChatTimelineEvent> events)? onTimelineChanged;
 
-  /// Production persists timeline + RAW records in one SQLite transaction.
-  /// A pending RAW is saved before the JSONification HTTP request begins.
+  /// Production persists messages and their source in one SQLite transaction.
   final Future<void> Function(
     List<ChatTimelineEvent> timeline,
     List<RawGeneration> generations,
@@ -111,8 +109,35 @@ class NarrativeChatController extends ChangeNotifier {
     return List.unmodifiable(_timeline.skip(boundary + 1).whereType<ChatEntry>());
   }
 
-  /// The old streaming preview API is intentionally inert.
-  ChatEntry? get preview => null;
+  /// Drafts are visible but never published to the canonical timeline.
+  final List<ChatTimelineEvent> _previewEvents = [];
+  List<ChatTimelineEvent> get previewEvents =>
+      List.unmodifiable(_previewEvents);
+  ChatEntry? get preview {
+    for (final item in _previewEvents.reversed) {
+      if (item is ChatEntry) return item;
+    }
+    return null;
+  }
+  int _lastPreviewTextLength = 0;
+  void _refreshPreview(NarrativeStreamBuffer stream) {
+    final next = stream.previewEvents(_nextId);
+    final length = next.whereType<ChatEntry>()
+        .fold<int>(0, (sum, item) => sum + item.text.length);
+    final notify = next.length != _previewEvents.length ||
+        (length - _lastPreviewTextLength).abs() >= 12;
+    _previewEvents..clear()..addAll(next);
+    if (notify) {
+      _lastPreviewTextLength = length;
+      _notify();
+    }
+  }
+  void _clearPreview() {
+    if (_previewEvents.isEmpty) return;
+    _previewEvents.clear();
+    _lastPreviewTextLength = 0;
+    _notify();
+  }
   bool busy = false;
   String? error;
   int? promptTokens;
@@ -175,8 +200,8 @@ class NarrativeChatController extends ChangeNotifier {
     );
     _lastPlayerIndex = last < 0 ? null : last;
     if (pendingRaw != null) {
-      error = 'Une réponse attend sa mise en forme. '
-          'Réessayez sans régénérer le récit.';
+      error = 'Un ancien récit non structuré attend sa récupération. '
+          'Réessayez pour le publier sans coût IA.';
     }
     _notify();
   }
@@ -451,62 +476,6 @@ class NarrativeChatController extends ChangeNotifier {
           'N’invente aucune action du joueur.\n$memories',
       ].join('\n\n')),
       ...selected.reversed,
-    ];
-  }
-
-  /// Character names may be explicitly established by this player's action
-  /// before the narrator's RAW uses pronouns or anonymous quoted dialogue.
-  /// Only a canonical Book name/alias mentioned in THIS player turn qualifies;
-  /// unrelated names from the entire Book must not become valid speakers.
-  Set<String> _verifiedJsonifierSpeakers() {
-    final known = _timeline.whereType<ChatEntry>()
-        .where((e) => e.speaker == ChatSpeaker.character)
-        .map((e) => e.name).toSet();
-    final lore = loreProvider?.call();
-    final index = _lastPlayerIndex;
-    if (lore == null || index == null ||
-        _timeline[index] is! ChatEntry) {
-      return known;
-    }
-    final playerText = (_timeline[index] as ChatEntry).text;
-    bool mentioned(String label) {
-      if (label.trim().length < 3) return false;
-      final escaped = RegExp.escape(label.trim());
-      return RegExp(
-        r'(^|[^A-Za-zÀ-ÿ0-9])' + escaped +
-            r'($|[^A-Za-zÀ-ÿ0-9])',
-        caseSensitive: false,
-      ).hasMatch(playerText);
-    }
-    for (final character in lore.characters) {
-      final labels = [character.name, ...character.aliases];
-      if (labels.any(mentioned)) known.addAll(labels);
-    }
-    return known;
-  }
-
-  List<AiMessage> _jsonifierContext(String raw) {
-    // Quoted/anonymous dialogue may require the preceding speakers to resolve
-    // pronouns. Otherwise the RAW is self-contained and history is wasted.
-    final ambiguousSpeech = raw.contains('«') || raw.contains('»') ||
-        RegExp(r'(^|\n)\s*[—–-]\s+', multiLine: true).hasMatch(raw);
-    final previous = ambiguousSpeech
-        ? _timeline.reversed.whereType<ChatEntry>().take(2).toList().reversed
-        : const <ChatEntry>[];
-    final context = [
-      for (final entry in previous)
-        '${entry.name}${entry.status == null ? '' : ' (${entry.status})'} : '
-        '${entry.text.length <= 160 ? entry.text : entry.text.substring(0, 160)}',
-    ].join('\n');
-    return [
-      const AiMessage(role: 'system', content: jsonifierSystemPrompt),
-      AiMessage(
-        role: 'user',
-        content: '${context.isEmpty ? '' : 'Contexte précédent (ne pas convertir) :\n$context\n\n'}'
-            'Parties RAW à classifier (texte JSON échappé, '
-            'numéros fournis par Dart) :\n'
-            '${const Jsonifier().partsForPrompt(raw)}',
-      ),
     ];
   }
 
