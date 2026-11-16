@@ -92,6 +92,10 @@ class DialogueParts {
     var nextPart = 0;
     var hasMessage = false;
     var lastScene = false;
+    // The latest verified speaker may continue after one short narrative
+    // beat. Never infer an entirely new speaker from previous session history.
+    String? lastVerifiedSpeaker;
+    int? lastVerifiedDialoguePart;
     for (final event in events) {
       if (event is! Map<String, dynamic>) {
         throw const FormatException('JSONification : partie non objet.');
@@ -104,6 +108,8 @@ class DialogueParts {
           throw const FormatException('JSONification : scène mal placée.');
         }
         result.add(const ChatSceneChangeOutput());
+        lastVerifiedSpeaker = null;
+        lastVerifiedDialoguePart = null;
         lastScene = true;
         continue;
       }
@@ -154,8 +160,13 @@ class DialogueParts {
               // An unlabelled em-dash line is only attributable if this same
               // speaker was explicitly mentioned in nearby earlier RAW prose.
               // A name from an unrelated session does not suffice.
+              final followsVerifiedSpeaker =
+                  lastVerifiedSpeaker == speakerKey &&
+                  lastVerifiedDialoguePart != null &&
+                  nextPart - lastVerifiedDialoguePart <= 2;
               if (dash == null ||
-                  !_hasEarlierSpeakerAnchor(parts, nextPart, name)) {
+                  !(_hasEarlierSpeakerAnchor(parts, nextPart, name) ||
+                    followsVerifiedSpeaker)) {
                 throw const FormatException(
                     'JSONification : dialogue non cité sans attribution.');
               }
@@ -173,6 +184,8 @@ class DialogueParts {
           result.add(ChatLine(
               speaker: ChatSpeaker.character, name: name, text: text,
               status: status.isEmpty ? null : status));
+          lastVerifiedSpeaker = speakerKey;
+          lastVerifiedDialoguePart = nextPart;
           hasMessage = true;
         case 'aside':
           if (event.length != 3 || source.quoted ||

@@ -397,6 +397,47 @@ void main() {
     expect(lines[3].text, 'Si vous restez, asseyez-vous.');
   });
 
+
+  test('Oren remains attributed across three dash replies and short beats', () {
+    const raw = 'Oren repose sa tasse et s’essuie les mains sur son tablier.\n\n'
+        '— Toujours ? Non. Le pont est là depuis plus longtemps que moi.\n\n'
+        'Il s’accoude au comptoir, la moustache frémissant d’aise.\n\n'
+        '— Avant, on y rangeait des cordages, je crois.\n\n'
+        'Le pendule bat deux fois.\n\n'
+        '— Vous cherchez quelqu’un dans la ville ?';
+    final events = [
+      for (var i = 0; i < 6; i++)
+        i.isEven
+            ? {'type': 'part', 'part': i, 'kind': 'narration'}
+            : {'type': 'part', 'part': i, 'kind': 'dialogue', 'name': 'Oren'},
+    ];
+    final decoded = decoder.decode(raw, jsonEncode({'events': events}));
+    final lines = decoded.whereType<ChatLine>().toList();
+    expect(lines, hasLength(6));
+    expect(lines.where((l) => l.name == 'Oren'), hasLength(3));
+    expect(lines.last.text, 'Vous cherchez quelqu’un dans la ville ?');
+  });
+
+  test('Speaker continuity never crosses a genuine scene boundary', () {
+    const raw = 'Oren repose sa tasse.\n\n'
+        '— Bonjour.\n\n'
+        'Une porte claque.\n\n'
+        'Le lendemain, il pleut.\n\n'
+        'Un bruit retentit.\n\n'
+        '— Vous êtes là ?';
+    final events = [
+      {'type': 'part', 'part': 0, 'kind': 'narration'},
+      {'type': 'part', 'part': 1, 'kind': 'dialogue', 'name': 'Oren'},
+      {'type': 'part', 'part': 2, 'kind': 'narration'},
+      {'type': 'scene_change', 'before': 3},
+      {'type': 'part', 'part': 3, 'kind': 'narration'},
+      {'type': 'part', 'part': 4, 'kind': 'narration'},
+      {'type': 'part', 'part': 5, 'kind': 'dialogue', 'name': 'Oren'},
+    ];
+    expect(() => decoder.decode(raw, jsonEncode({'events': events})),
+        throwsFormatException);
+  });
+
   test('Unattributed em-dash dialogue cannot borrow an old character', () {
     const raw = '— Qui est là ?';
     expect(() => decoder.decode(raw, jsonEncode({
