@@ -167,9 +167,11 @@ class _MinistralSettingsPageState extends State<MinistralSettingsPage> {
           '${quick ? "Diagnostic rapide" : "Génération hors connexion"} : ${watch.elapsed.inSeconds} s\n\n'
           '${result.trim()}');
       }
-    } catch (_) {
-      _notice('Ministral ne peut pas générer sur ce téléphone. '
-          'Vérifiez la mémoire disponible.');
+    } catch (failure) {
+      _notice(failure is AiProviderException
+          ? failure.message
+          : 'Ministral ne peut pas générer sur ce téléphone. '
+            'Vérifiez la mémoire disponible.');
     } finally {
       if (mounted) setState(() => _working = false);
     }

@@ -13,23 +13,35 @@ class NativeExitDiagnostics {
   static const _lastLoggedKey = 'native-exit-last-reported-ms';
 
   static Future<void> logLastUnexpectedExit() async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
     try {
       final data = await _channel.invokeMapMethod<String, dynamic>(
           'lastProcessExit');
-      if (data == null) return;
+      if (data == null) {
+        return;
+      }
       final reason = data['reason'] as String?;
       if (!const {
         'CRASH', 'CRASH_NATIVE', 'LOW_MEMORY', 'ANR', 'SIGNALED',
         'EXCESSIVE_RESOURCE_USAGE'
-      }.contains(reason)) return;
+      }.contains(reason)) {
+        return;
+      }
       final timestampMs = (data['timestampMs'] as num?)?.toInt();
-      if (timestampMs == null || timestampMs <= 0) return;
+      if (timestampMs == null || timestampMs <= 0) {
+        return;
+      }
       final happened = DateTime.fromMillisecondsSinceEpoch(timestampMs);
       final age = DateTime.now().difference(happened);
-      if (age.isNegative || age > const Duration(days: 2)) return;
+      if (age.isNegative || age > const Duration(days: 2)) {
+        return;
+      }
       final prefs = await SharedPreferences.getInstance();
-      if (prefs.getInt(_lastLoggedKey) == timestampMs) return;
+      if (prefs.getInt(_lastLoggedKey) == timestampMs) {
+        return;
+      }
       await prefs.setInt(_lastLoggedKey, timestampMs);
       AppLogger.warning('Android : arrêt inattendu du processus précédent',
           component: 'native_exit', details: {

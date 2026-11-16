@@ -125,12 +125,14 @@ class MinistralLocalProvider implements AiChatProvider, AiStreamingChatProvider 
           component: 'local_ai',
           details: {'promptCharacters': prompt.length, 'outputLimit': limit});
       await AppLogger.current.flush();
+      // A stuck native decode must not wait forever. On timeout the
+      // controller receives stop() in the finally block below.
       await for (final token in _runtime!.generate(
         prompt: prompt,
         maxTokens: limit,
         temperature: 0.55,
         topP: 0.9,
-      )) {
+      ).timeout(const Duration(seconds: 90))) {
         fragments++;
         if (fragments == 1) {
           AppLogger.info('Ministral : premier fragment reçu',
@@ -145,6 +147,12 @@ class MinistralLocalProvider implements AiChatProvider, AiStreamingChatProvider 
           component: 'local_ai',
           details: {'durationMs': watch.elapsedMilliseconds,
                     'fragments': fragments});
+    } on TimeoutException catch (failure, trace) {
+      AppLogger.error('Ministral : aucun fragment reçu dans les délais',
+          component: 'local_ai', error: failure, stackTrace: trace,
+          details: {'firstFragmentReceived': fragments > 0});
+      throw const AiProviderException('Ministral ne répond pas après 90 secondes. '
+          'La génération locale est interrompue. Consultez les journaux.');
     } catch (failure, trace) {
       AppLogger.error('Ministral : échec pendant la génération',
           component: 'local_ai', error: failure, stackTrace: trace);
