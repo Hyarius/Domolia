@@ -15,6 +15,8 @@ import '../memory/live_memory_coordinator.dart';
 import '../books/book_lore.dart';
 import '../books/lore_context_builder.dart';
 import '../books/lore_context_optimizer.dart';
+import '../ai/local_context_budget.dart';
+import '../ai/local_context_packer.dart';
 
 class NarrativeAiEndpoint {
   const NarrativeAiEndpoint({required this.provider, required this.configuration,
@@ -61,6 +63,7 @@ class NarrativeChatController extends ChangeNotifier {
     this.hybridRecentBudget = 7000,
     this.memoryContextBudget = 3600,
     this.isLocalContext,
+    this.localBudgetFor,
     this.onTimelineChanged,
     this.memory,
     this.onPersistState,
@@ -92,6 +95,8 @@ class NarrativeChatController extends ChangeNotifier {
   /// Evaluated per turn so switching local mode without reopening a Party
   /// still uses a prompt that fits the phone's small context window.
   final bool Function()? isLocalContext;
+  /// Provides the model-specific budget only for local inference.
+  final LocalContextBudget? Function(int outputTokens)? localBudgetFor;
   final AiExchangeRecorder? diagnostics;
   final LiveMemoryCoordinator? memory;
   final void Function(AiExchange exchange)? onExchangeCaptured;
@@ -384,7 +389,8 @@ class NarrativeChatController extends ChangeNotifier {
   /// The last 24 conversational turns / 16k UTF-16 units are retained.
   /// Compact narration replaces that turn's RAW when available; RAW is the fallback.
   /// Legacy sessions without RAW fall back to their structured history.
-  List<AiMessage> buildNarratorContext({bool hybrid = false}) {
+  List<AiMessage> buildNarratorContext({bool hybrid = false,
+      int maxOutputTokens = 320}) {
     final local = isLocalContext?.call() ?? false;
     final history = <AiMessage>[];
     final raws = {for (final r in _generations)
@@ -417,6 +423,14 @@ class NarrativeChatController extends ChangeNotifier {
               content: 'Une nouvelle scène commence.'));
         }
       }
+    }
+    final localBudget = local ? localBudgetFor?.call(maxOutputTokens) : null;
+    if (localBudget != null) {
+      return LocalContextPacker(localBudget).narrator(
+        narrator: narratorProvider?.call() ?? narrator,
+        history: history,
+        lore: loreProvider?.call(), memory: memory,
+      );
     }
     final selected = <AiMessage>[];
     var used = 0;
@@ -462,7 +476,15 @@ class NarrativeChatController extends ChangeNotifier {
     ];
   }
 
-  List<AiMessage> _jsonifierContext(String raw) {
+  List<AiMessage> _jsonifierContext(String raw,
+      {int maxOutputTokens = 700}) {
+    final budget = (isLocalContext?.call() ?? false)
+        ? localBudgetFor?.call(maxOutputTokens) : null;
+    if (budget != null) {
+      return LocalContextPacker(budget).jsonifier(raw: raw,
+          previous: _timeline.reversed.whereType<ChatEntry>()
+              .take(6).toList().reversed);
+    }
     final previous = _timeline.reversed.whereType<ChatEntry>()
         .take(6).toList().reversed;
     final context = [
@@ -642,7 +664,8 @@ class NarrativeChatController extends ChangeNotifier {
         if (round == 0) {
           _capture('narrator_tool_unsupported', before,
               failure: const AiToolsUnsupportedException());
-          return _requestText(endpoint, buildNarratorContext(), token, maxTokens);
+          return _requestText(endpoint, buildNarratorContext(
+              maxOutputTokens: maxTokens), token, maxTokens);
         }
         rethrow;
       } catch (error) {
@@ -826,7 +849,8 @@ class NarrativeChatController extends ChangeNotifier {
                   endpoint.provider is AiToolCallingChatProvider
               ? await _requestHybrid(endpoint, token,
                   endpoint.maxOutputTokens ?? 2400)
-              : await _requestText(endpoint, buildNarratorContext(), token,
+              : await _requestText(endpoint, buildNarratorContext(
+                  maxOutputTokens: endpoint.maxOutputTokens ?? 2400), token,
                   endpoint.maxOutputTokens ?? 2400);
           _check(token);
           if (response.trim().isEmpty) {
@@ -864,8 +888,9 @@ class NarrativeChatController extends ChangeNotifier {
       List<ChatTimelineEvent> additions = const [];
       try {
         final formatted = await _requestText(
-            formatterEndpoint, _jsonifierContext(rawRecord.rawText), token,
-            formatterEndpoint.maxOutputTokens ?? 2400);
+            formatterEndpoint, _jsonifierContext(rawRecord.rawText,
+                maxOutputTokens: formatterEndpoint.maxOutputTokens ?? 2400),
+            token, formatterEndpoint.maxOutputTokens ?? 2400);
         _check(token);
         final known = _timeline.whereType<ChatEntry>()
             .where((e) => e.speaker == ChatSpeaker.character)
