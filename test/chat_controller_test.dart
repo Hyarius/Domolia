@@ -108,7 +108,7 @@ BookLore _largeLore() => BookLore(
   ),
   characters: [
     LoreCharacter(id:'astrid',name:'Astrid',
-      description: List.filled(280, 'Astrid veille au foyer.').join(' ')),
+      description: List.filled(500, 'Astrid veille au foyer.').join(' ')),
   ],
 );
 
