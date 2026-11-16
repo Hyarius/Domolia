@@ -16,6 +16,7 @@ permissions:
 jobs:
   focused:
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -25,5 +26,12 @@ jobs:
       - run: flutter pub get
       - name: Check formatting of new memory files
         run: dart format --output=none --set-exit-if-changed lib/memory test/live_memory_test.dart test/live_memory_sqlite_test.dart test/live_memory_widget_test.dart
-      - name: Focused unit, SQLite and widget tests
-        run: flutter test test/live_memory_test.dart test/live_memory_sqlite_test.dart test/live_memory_widget_test.dart
+      - name: Memory unit tests
+        timeout-minutes: 4
+        run: flutter test --reporter expanded test/live_memory_test.dart
+      - name: Memory SQLite tests
+        timeout-minutes: 4
+        run: flutter test --reporter expanded test/live_memory_sqlite_test.dart
+      - name: Memory widget tests
+        timeout-minutes: 4
+        run: flutter test --reporter expanded test/live_memory_widget_test.dart
