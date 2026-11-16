@@ -45,6 +45,11 @@ void main() {
     expect(record.reasoningTokens, 12);
     expect(record.providerCostUsd, closeTo(0.00098, 1e-8));
     expect(record.toolCalls, 2);
+    final routed = AiUsageRecord.fromExchange('party', _exchange(
+        '{"usage":{"prompt_tokens":12,"completion_tokens":4},'
+        '"ou":{"cost_usd":0.00042,"usage_estimated":true}}'));
+    expect(routed.providerCostUsd, closeTo(0.00042, 1e-8));
+    expect(routed.usageEstimated, true);
     expect(record.toJson().toString(), isNot(contains('not-stored-secret')));
   });
 
