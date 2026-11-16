@@ -373,10 +373,10 @@ void main() {
 
 
   test('Curly apostrophe and source-anchored em-dash speech are accepted', () {
-    const raw = 'L’aubergiste essuie une tasse.\\n\\n'
-        '— La pluie tient bien, ce soir.\\n\\n'
-        'Il désigne le banc près de la fenêtre.\\n\\n'
-        '— Si vous restez, asseyez-vous.\\n\\n'
+    const raw = 'L’aubergiste essuie une tasse.\n\n'
+        '— La pluie tient bien, ce soir.\n\n'
+        'Il désigne le banc près de la fenêtre.\n\n'
+        '— Si vous restez, asseyez-vous.\n\n'
         'L’horloge marque le temps.';
     final result = decoder.decode(raw, jsonEncode({
       'events': [
