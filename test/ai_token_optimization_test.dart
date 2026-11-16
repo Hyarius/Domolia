@@ -76,8 +76,8 @@ void main() {
     chat.restoreTimeline([
       for (var i = 0; i < 12; i++)
         ChatEntry(id: i, speaker: ChatSpeaker.character,
-          name: 'Personnage', text: 'Très long discours précédent $i '
-              'NaN'),
+          name: 'Personnage', text: 'Très long discours précédent $i ' +
+              List.filled(40, 'mystère').join(' ')),
     ]);
     await chat.send('Je regarde la pluie');
     final prompt = fake.formattedContext!.last.content;
