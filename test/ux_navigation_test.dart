@@ -236,6 +236,14 @@ void main() {
     expect(storage.blockNextBookWrite, isNull,
         reason: 'The debounced text save must be in progress.');
 
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('bookNsfw')),
+      180,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('bookTab-0')),
+        matching: find.byType(Scrollable),
+      ),
+    );
     await tester.tap(find.byKey(const ValueKey('bookNsfw')));
     await tester.pump();
     firstWrite.complete();
