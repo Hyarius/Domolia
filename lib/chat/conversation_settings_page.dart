@@ -6,10 +6,12 @@ import 'package:material_ui/material_ui.dart';
 
 import '../ai/ai_controller.dart';
 import '../ai/ai_diagnostics.dart';
+import '../ai/ai_usage.dart';
 import '../ai/ai_provider.dart';
 import '../ai/ai_task_routing.dart';
 import '../books/book_library_controller.dart';
 import '../chat/chat_controller.dart';
+import '../chat/chat_protocol.dart';
 import '../chat/chat_exports.dart';
 import '../theme/domolia_theme.dart';
 
@@ -20,7 +22,8 @@ class ConversationSettingsPage extends StatefulWidget {
     required this.chat, required this.bookId, required this.sessionId,
     this.bookTitle, this.sessionTitle, required this.onBack,
     this.onExportBookJson, this.onLoadAiDiagnostics, this.onExportAiTrace,
-    this.onPurgeAiDiagnostics, this.taskRouting, this.onOpenMemory,
+    this.onPurgeAiDiagnostics, this.onLoadAiUsage,
+    this.taskRouting, this.onOpenMemory,
     this.showBackButton = true,
   });
   final BookLibraryController library;
@@ -39,6 +42,7 @@ class ConversationSettingsPage extends StatefulWidget {
   /// Test adapter; production saves through Android's file picker.
   final Future<void> Function(String fileName, Uint8List bytes)? onExportAiTrace;
   final Future<void> Function()? onPurgeAiDiagnostics;
+  final Future<List<AiUsageRecord>> Function()? onLoadAiUsage;
   final AiTaskRouting? taskRouting;
   final VoidCallback? onOpenMemory;
   @override
@@ -55,6 +59,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   bool _toolCallingEnabled = true;
   int _cachedLoreCharacters = 0;
   Map<AiNarrativeTask, AiTaskGenerationOverride> _generationOverrides = {};
+  List<AiUsageRecord> _usageRecords = const [];
   bool _loaded = false;
   bool _loadFailed = false;
   bool _saving = false;
@@ -67,6 +72,9 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       await widget.ai.initialize();
       final session = await widget.library.session(widget.sessionId);
       final bookProfile = await widget.library.profileFor(widget.bookId);
+      List<AiUsageRecord> usage = const [];
+      try { usage = await widget.onLoadAiUsage?.call() ?? const []; }
+      catch (_) { /* Accounting must not block configuration. */ }
       if (mounted) {
         setState(() {
           _selected = session?.aiProfileId;
@@ -77,6 +85,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           _toolCallingEnabled = session?.toolCallingEnabled ?? true;
           _inheritedNarratorProfile = bookProfile;
           _cachedLoreCharacters = session?.optimizedLore?.length ?? 0;
+          _usageRecords = usage;
           _generationOverrides = Map.of(session?.generationOverrides ?? {});
           _loaded = true;
           _loadFailed = false;
@@ -485,6 +494,72 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     );
   }
 
+  Widget _usageSection() {
+    final summary = AiUsageSummary(_usageRecords);
+    final all = summary.total;
+    String tokens(AiUsageTotals value) {
+      if (value.calls == 0) return '—';
+      final count = value.measuredTokens.toString();
+      return value.unknownTokens == 0
+          ? count : '$count+ (partiel)';
+    }
+    String cost(AiUsageTotals value) {
+      if (value.calls == 0 || value.unknownCost == value.calls) {
+        return 'indisponible';
+      }
+      final label = value.knownCostUsd.toStringAsFixed(5);
+      return value.unknownCost == 0 ? '$label USD' : '≥ $label USD';
+    }
+    Widget item(String label, AiUsageTotals value, {bool bold = false}) =>
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Row(children: [
+            SizedBox(width: 112, child: Text(label,
+              style: TextStyle(fontWeight:
+                  bold ? FontWeight.bold : FontWeight.normal))),
+            Expanded(child: Text(tokens(value), textAlign: TextAlign.right)),
+            const SizedBox(width: 12),
+            SizedBox(width: 110, child: Text(cost(value),
+              textAlign: TextAlign.right, style:
+                  const TextStyle(fontSize: 12))),
+          ]),
+        );
+    final turns = widget.chat.messages.where(
+        (m) => m.speaker == ChatSpeaker.player).length;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const Text('Consommation IA', style: TextStyle(
+          color: DomoliaColors.goldLight, fontSize: 18)),
+      const SizedBox(height: 6),
+      for (final task in AiUsageSummary.tasks)
+        item(task, summary.forTask(task)),
+      const Divider(),
+      item('Total', all, bold: true),
+      const SizedBox(height: 8),
+      Text('${all.calls} appels IA · ${all.toolCalls} consultations d’outils · '
+          '${all.errors} erreurs · '
+          '${turns == 0 ? '—' : (all.measuredTokens / turns).round().toString()} '
+          'tokens connus/tour',
+        style: const TextStyle(color: DomoliaColors.muted)),
+      const SizedBox(height: 6),
+      const Text('Tokens : mesures déclarées par le fournisseur. '
+          'Un « + » signale des appels sans usage disponible. '
+          'Le coût est affiché seulement si le fournisseur le fournit ; '
+          '« ≥ » signifie que le total est incomplet. '
+          'Les anciens appels et les diagnostics purgés avant cette version '
+          'ne sont pas reconstitués.',
+        style: TextStyle(color: DomoliaColors.muted, fontSize: 12)),
+      Align(alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed: widget.onLoadAiUsage == null ? null : () async {
+            final records = await widget.onLoadAiUsage!();
+            if (mounted) setState(() => _usageRecords = records);
+          },
+          icon: const Icon(Icons.refresh_rounded),
+          label: const Text('Actualiser la consommation'),
+        )),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) => SafeArea(
     child: ListView(
@@ -682,6 +757,10 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           icon: const Icon(Icons.auto_stories_outlined),
           label: const Text('Consulter et corriger la mémoire'),
         ),
+        const SizedBox(height: DomoliaSpacing.section),
+        const Divider(),
+        const SizedBox(height: DomoliaSpacing.compact),
+        _usageSection(),
         const SizedBox(height: DomoliaSpacing.section),
         const Divider(),
         const SizedBox(height: DomoliaSpacing.compact),
