@@ -57,6 +57,8 @@ void main() {
   late Map<String, double> balances;
   late int paymentsCreated;
   late int checks;
+  int probes = 0;
+  String probeMode = 'supported';
   bool paid = false;
   bool expired = false;
   bool missClaimedKey = false;
@@ -76,6 +78,27 @@ void main() {
           'balance_usd': value,
           'pending_usage_usd': 0, 'currency': 'usd',
         }});
+      }
+      if (uri.path == '/v1/chat/completions') {
+        probes++;
+        if (probeMode == 'unsupported') {
+          return jsonOk({'error': {
+            'param': 'tools', 'message': 'Tools are not supported',
+          }}, 400);
+        }
+        if (probeMode == 'credits') return jsonOk({'error': {}}, 402);
+        if (probeMode == 'inconclusive') {
+          return jsonOk({'choices': [
+            {'message': {'content': 'No function was used'}},
+          ]});
+        }
+        return jsonOk({'choices': [
+          {'finish_reason': 'tool_calls', 'message': {'tool_calls': [
+            {'type': 'function', 'function': {
+              'name': 'domolia_tool_probe', 'arguments': '{"value":"ok"}',
+            }},
+          ]}},
+        ]});
       }
       if (uri.path == '/v1/models') {
         return jsonOk({'data': [
@@ -121,6 +144,8 @@ void main() {
     balances = {keyA: 5, keyB: 10};
     paymentsCreated = 0;
     checks = 0;
+    probes = 0;
+    probeMode = 'supported';
     paid = false;
     expired = false;
     missClaimedKey = false;
@@ -309,15 +334,94 @@ void main() {
     expect(controller.taskModels['narrator'], defaultAiModel);
   });
 
-  test('Advanced narrator requires explicit tool compatibility', () async {
+  test('Unknown narrator stays selectable with native tools disabled', () async {
     await controller.importKey(keyA);
     await controller.loadModels();
     expect(await controller.setAdvanced({
       'narrator': 'cheap-json-model',
       'jsonifier': 'cheap-json-model',
       'optimizer': 'cheap-json-model',
-    }), false);
-    expect(controller.error, contains('tool calling'));
+    }), true);
+    expect(controller.toolSupportFor('cheap-json-model'), OuToolSupport.unknown);
+    final narrator = ai.profiles.firstWhere(
+        (p) => p.id == AiConnectionController.ouNarratorProfileId);
+    expect(narrator.model, 'cheap-json-model');
+    expect(narrator.toolCallingCompatibility,
+        AiToolCallingCompatibility.unknown);
+    expect(probes, 0);
+  });
+
+  test('Real tool probe enables tools and is cached per key across restart',
+      () async {
+    await controller.importKey(keyA);
+    await controller.loadModels();
+    expect(await controller.setAdvanced({
+      'narrator': 'cheap-json-model',
+      'jsonifier': 'cheap-json-model',
+      'optimizer': 'cheap-json-model',
+    }), true);
+    expect(await controller.testToolCalling('cheap-json-model'),
+        OuToolProbeOutcome.supported);
+    expect(controller.probeFor('cheap-json-model'),
+        OuToolProbeOutcome.supported);
+    expect(ai.profiles.firstWhere((p) =>
+        p.id == AiConnectionController.ouNarratorProfileId)
+        .toolCallingCompatibility, AiToolCallingCompatibility.supported);
+    expect(probes, 1);
+    final cached = await vault.read();
+    expect(cached.toolChecks['${ouKeyId(keyA)}:cheap-json-model'], 'supported');
+    controller.dispose();
+    attach();
+    await controller.initialize();
+    expect(controller.probeFor('cheap-json-model'),
+        OuToolProbeOutcome.supported);
+    expect(probes, 1);
+    await controller.importKey(keyB);
+    expect(controller.probeFor('cheap-json-model'), null);
+    expect(controller.toolSupportFor('cheap-json-model'),
+        OuToolSupport.unknown);
+    expect(ai.profiles.firstWhere((p) =>
+        p.id == AiConnectionController.ouNarratorProfileId)
+        .toolCallingCompatibility, AiToolCallingCompatibility.unknown);
+    await controller.activate(ouKeyId(keyA));
+    expect(controller.probeFor('cheap-json-model'),
+        OuToolProbeOutcome.supported);
+  });
+
+  test('Upstream rejection is cached, transport failures do not overwrite',
+      () async {
+    await controller.importKey(keyA);
+    await controller.loadModels();
+    await controller.setAdvanced({
+      'narrator': 'cheap-json-model',
+      'jsonifier': 'cheap-json-model',
+      'optimizer': 'cheap-json-model',
+    });
+    probeMode = 'unsupported';
+    expect(await controller.testToolCalling('cheap-json-model'),
+        OuToolProbeOutcome.unsupported);
+    expect(controller.toolSupportFor('cheap-json-model'),
+        OuToolSupport.unsupported);
+    expect(ai.profiles.firstWhere((p) =>
+        p.id == AiConnectionController.ouNarratorProfileId)
+        .toolCallingCompatibility, AiToolCallingCompatibility.unsupported);
+    probeMode = 'credits';
+    expect(await controller.testToolCalling('cheap-json-model'), null);
+    expect(controller.probeFor('cheap-json-model'),
+        OuToolProbeOutcome.unsupported);
+    expect(controller.error, contains('Crédits insuffisants'));
+  });
+
+  test('Text-only probe remains inconclusive and is never promoted', () async {
+    await controller.importKey(keyA);
+    await controller.loadModels();
+    probeMode = 'inconclusive';
+    expect(await controller.testToolCalling('cheap-json-model'),
+        OuToolProbeOutcome.inconclusive);
+    expect(controller.probeFor('cheap-json-model'),
+        OuToolProbeOutcome.inconclusive);
+    expect(controller.toolSupportFor('cheap-json-model'),
+        OuToolSupport.unknown);
   });
 
   test('Legacy profile is preserved during managed OpenUncensored activation', () async {
