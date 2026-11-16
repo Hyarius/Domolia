@@ -8,6 +8,7 @@ class AiUsageRecord {
     required this.createdAtUtc, this.inputTokens, this.outputTokens,
     this.cachedTokens, this.reasoningTokens, this.providerCostUsd,
     this.toolCalls = 0, this.durationMs, this.failed = false,
+    this.usageEstimated = false,
   });
 
   final String id, sessionId, stage;
@@ -17,6 +18,7 @@ class AiUsageRecord {
   final int toolCalls;
   final int? durationMs;
   final bool failed;
+  final bool usageEstimated;
 
   String get task {
     if (stage.startsWith('narrator_')) return 'Narrateur';
@@ -36,6 +38,7 @@ class AiUsageRecord {
     'cachedTokens': cachedTokens, 'reasoningTokens': reasoningTokens,
     'providerCostUsd': providerCostUsd, 'toolCalls': toolCalls,
     'durationMs': durationMs, 'failed': failed,
+    'usageEstimated': usageEstimated,
   };
 
   factory AiUsageRecord.fromJson(Map<String, dynamic> value) => AiUsageRecord(
@@ -51,6 +54,7 @@ class AiUsageRecord {
     toolCalls: value['toolCalls'] as int? ?? 0,
     durationMs: value['durationMs'] as int?,
     failed: value['failed'] as bool? ?? false,
+    usageEstimated: value['usageEstimated'] as bool? ?? false,
   );
 
   /// Never infer billed tokens from max_tokens, string length or requests.
@@ -61,10 +65,14 @@ class AiUsageRecord {
     final response = data['response'] as Map<String, dynamic>;
     final raw = response['rawBody'] as String? ?? '';
     Map<String, dynamic>? usage;
+    Map<String, dynamic>? ou;
     void capture(dynamic decoded) {
-      if (decoded is Map<String, dynamic> &&
-          decoded['usage'] is Map<String, dynamic>) {
+      if (decoded is! Map<String, dynamic>) return;
+      if (decoded['usage'] is Map<String, dynamic>) {
         usage = decoded['usage'] as Map<String, dynamic>;
+      }
+      if (decoded['ou'] is Map<String, dynamic>) {
+        ou = decoded['ou'] as Map<String, dynamic>;
       }
     }
     if (raw.trimLeft().startsWith('{')) {
@@ -83,7 +91,7 @@ class AiUsageRecord {
     final cached = promptDetails is Map ? promptDetails['cached_tokens'] : null;
     final reasoning = completionDetails is Map
         ? completionDetails['reasoning_tokens'] : null;
-    final cost = usage?['cost'];
+    final cost = ou?['cost_usd'] ?? usage?['cost'];
     return AiUsageRecord(
       id: 'usage-${exchange.createdAtUtc.microsecondsSinceEpoch}',
       sessionId: sessionId, stage: exchange.stage ?? 'unknown',
@@ -96,6 +104,7 @@ class AiUsageRecord {
       providerCostUsd: cost is num && cost >= 0 ? cost.toDouble() : null,
       toolCalls: interpretation['toolCalls'] as int? ?? 0,
       durationMs: data['durationMs'] as int?,
+      usageEstimated: ou?['usage_estimated'] == true,
       failed: interpretation['error'] != null ||
           (response['statusCode'] is int && response['statusCode'] != 200),
     );
@@ -113,6 +122,7 @@ class AiUsageTotals {
   int get calls => records.length;
   int get toolCalls => records.fold(0, (sum, r) => sum + r.toolCalls);
   int get errors => records.where((r) => r.failed).length;
+  int get estimatedUsage => records.where((r) => r.usageEstimated).length;
   int get measuredTokens => records.fold(
       0, (sum, r) => sum + (r.totalTokens ?? 0));
   int get unknownTokens => records.where((r) => r.totalTokens == null).length;
