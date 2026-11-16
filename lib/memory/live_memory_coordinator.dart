@@ -88,9 +88,9 @@ class LiveMemoryCoordinator extends ChangeNotifier {
       for (final source in records) {
         if (_closed || !await isEnabled()) return;
         if (!source.isStructured ||
-            analyzed.contains(source.playerEventId)) continue;
+            analyzed.contains(source.playerEventId)) { continue; }
         final session = await (store as BookStore).findSession(sessionId);
-        if (session == null) return; // Deleted, never resurrect.
+        if (session == null) { return; } // Deleted, never resurrect.
         final player = session.timeline.whereType<ChatEntry>().where((e) =>
             e.id == source.playerEventId &&
             e.speaker == ChatSpeaker.player).toList();
