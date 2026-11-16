@@ -18,14 +18,29 @@ class _AppLogsPageState extends State<AppLogsPage> {
   AppLogLevel? _filter;
   String _search = '';
   bool _loading = false;
+  bool _loadFailed = false;
 
   @override
   void initState() { super.initState(); _refresh(); }
   Future<void> _refresh() async {
-    setState(() => _loading = true);
-    final entries = await _logger.entries();
-    if (!mounted) { return; }
-    setState(() { _entries = entries; _loading = false; });
+    setState(() {
+      _loading = true;
+      _loadFailed = false;
+    });
+    try {
+      final entries = await _logger.entries();
+      if (!mounted) return;
+      setState(() {
+        _entries = entries;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadFailed = true;
+      });
+    }
   }
   void _show(String message) {
     if (mounted) {
@@ -145,6 +160,24 @@ class _AppLogsPageState extends State<AppLogsPage> {
         const Text('Des opérations du journal ont échoué.',
             style: TextStyle(color: DomoliaColors.goldLight)),
       if (_loading) const LinearProgressIndicator(),
+      if (_loadFailed)
+        Padding(
+          padding: const EdgeInsets.all(DomoliaSpacing.field),
+          child: Column(children: [
+            const Text('Impossible de lire le journal local.'),
+            const SizedBox(height: DomoliaSpacing.compact),
+            OutlinedButton.icon(
+              onPressed: _refresh,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Réessayer'),
+            ),
+          ]),
+        ),
+      if (!_loading && !_loadFailed && filtered.isEmpty)
+        const Padding(
+          padding: EdgeInsets.all(DomoliaSpacing.field),
+          child: Text('Aucune entrée ne correspond aux filtres.'),
+        ),
       Expanded(child: ListView.builder(
         key: const ValueKey('logsList'), itemCount: filtered.length,
         itemBuilder: (context, index) {
