@@ -232,6 +232,8 @@ void main() {
     await _showApp(tester, store: storage);
     expect(find.text('Bibliothèque indisponible'), findsOneWidget);
     expect(find.text('Aucune aventure commencée'), findsNothing);
+    await tester.ensureVisible(find.byKey(const ValueKey('homeRetryLibrary')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('homeRetryLibrary')));
     await tester.pumpAndSettle();
     expect(find.text('Bibliothèque indisponible'), findsNothing);
@@ -265,7 +267,7 @@ void main() {
       scrollable: find.descendant(
         of: find.byKey(const ValueKey('bookTab-0')),
         matching: find.byType(Scrollable),
-      ),
+      ).first,
     );
     await tester.tap(find.byKey(const ValueKey('bookNsfw')));
     await tester.pump();
