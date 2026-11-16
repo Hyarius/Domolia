@@ -409,10 +409,10 @@ class _HomePageState extends State<HomePage> {
             configuration: LocalAiProvider.configurationFor(
                 _localModels.installedVariant!),
             maxOutputTokens: switch (task) {
-              AiNarrativeTask.narrator => 600,
-              AiNarrativeTask.jsonifier => 1200,
-              AiNarrativeTask.memory => 700,
-              AiNarrativeTask.optimizer => 600,
+              AiNarrativeTask.narrator => 320,
+              AiNarrativeTask.jsonifier => 700,
+              AiNarrativeTask.memory => 512,
+              AiNarrativeTask.optimizer => 320,
             },
           );
         }
@@ -450,7 +450,10 @@ class _HomePageState extends State<HomePage> {
                     final endpoint = await localEndpoint(AiNarrativeTask.memory);
                     return LiveMemoryAiEndpoint(endpoint.provider,
                         endpoint.configuration,
-                        maxTokens: endpoint.maxOutputTokens ?? 700);
+                        maxTokens: endpoint.maxOutputTokens ?? 512,
+                        contextBudget: _localProvider.budgetFor(
+                          _localModels.installedVariant!,
+                          endpoint.maxOutputTokens ?? 512));
                   }
                   final id = chosen == null || chosen == '#narrator'
                       ? await narratorProfileId() : chosen;
@@ -475,6 +478,11 @@ class _HomePageState extends State<HomePage> {
           initialOptimizedLore: session.optimizedLore,
           initialOptimizedLoreHash: session.optimizedLoreHash,
           isLocalContext: () => _localModels.enabled,
+          localBudgetFor: (outputTokens) =>
+              _localModels.enabled && _localModels.installedVariant != null
+                  ? _localProvider.budgetFor(
+                      _localModels.installedVariant!, outputTokens)
+                  : null,
           resolveConnection: () async => _localModels.enabled
               ? localEndpoint(AiNarrativeTask.narrator)
               : endpointForId(
