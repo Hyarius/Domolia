@@ -148,13 +148,15 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                     Wrap(spacing: 12, runSpacing: 12, children: [
                       FilledButton.icon(
                         key: const ValueKey('bookCreate'),
-                        onPressed: _create,
+                        onPressed: widget.library.initialized && widget.library.error == null
+                            ? _create : null,
                         icon: const Icon(Icons.add_rounded),
                         label: const Text('Créer un Livre'),
                       ),
                       OutlinedButton.icon(
                         key: const ValueKey('bookImport'),
-                        onPressed: _import,
+                        onPressed: widget.library.initialized && widget.library.error == null
+                            ? _import : null,
                         icon: const Icon(Icons.file_upload_outlined),
                         label: const Text('Importer JSON'),
                       ),
@@ -176,7 +178,28 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
               Expanded(
                 child: !widget.library.initialized
                     ? const Center(child: CircularProgressIndicator())
-                    : books.isEmpty
+                    : widget.library.error != null
+                        ? Center(child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.error_outline,
+                                  size: 46, color: DomoliaColors.goldDark),
+                                const SizedBox(height: DomoliaSpacing.field),
+                                Text(widget.library.error!,
+                                  textAlign: TextAlign.center),
+                                const SizedBox(height: DomoliaSpacing.field),
+                                OutlinedButton.icon(
+                                  key: const ValueKey('booksRetry'),
+                                  onPressed: widget.library.retry,
+                                  icon: const Icon(Icons.refresh_rounded),
+                                  label: const Text('Réessayer'),
+                                ),
+                              ],
+                            ),
+                          ))
+                        : books.isEmpty
                         ? Center(child: Padding(
                             padding: const EdgeInsets.all(24),
                             child: Column(
@@ -243,21 +266,21 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                                       IconButton(
                                         tooltip: 'Ouvrir ${book.title}',
                                         onPressed: () => widget.onOpen(book),
-                                        constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
+                                        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                                         padding: EdgeInsets.zero,
                                         icon: const Icon(Icons.tune_rounded),
                                       ),
                                       IconButton(
                                         tooltip: 'Exporter ${book.title}',
                                         onPressed: () => _export(book),
-                                        constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
+                                        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                                         padding: EdgeInsets.zero,
                                         icon: const Icon(Icons.file_download_outlined),
                                       ),
                                       IconButton(
                                         tooltip: 'Supprimer ${book.title}',
                                         onPressed: () => _delete(book),
-                                        constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
+                                        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                                         padding: EdgeInsets.zero,
                                         icon: const Icon(Icons.delete_outline),
                                       ),
