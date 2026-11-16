@@ -64,7 +64,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Configuration du narrateur'), findsOneWidget);
     expect(find.byKey(const ValueKey('narratorStyleField')), findsOneWidget);
-    expect(find.byKey(const ValueKey('narratorOpeningsField')), findsOneWidget);
     final initialStyle = tester.widget<TextField>(
       find.byKey(const ValueKey('narratorStyleField')),
     );
@@ -74,6 +73,12 @@ void main() {
       find.byKey(const ValueKey('narratorStyleField')),
       'Narration contemplative.',
     );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('narratorOpeningsField')),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.byKey(const ValueKey('narratorOpeningsField')), findsOneWidget);
     await tester.enterText(
       find.byKey(const ValueKey('narratorOpeningsField')),
       'Premier début\nSecond début',
