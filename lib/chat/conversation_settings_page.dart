@@ -21,6 +21,7 @@ class ConversationSettingsPage extends StatefulWidget {
     this.bookTitle, this.sessionTitle, required this.onBack,
     this.onExportBookJson, this.onLoadAiDiagnostics, this.onExportAiTrace,
     this.onPurgeAiDiagnostics, this.taskRouting,
+    this.showBackButton = true,
   });
   final BookLibraryController library;
   final AiConnectionController ai;
@@ -30,6 +31,7 @@ class ConversationSettingsPage extends StatefulWidget {
   final String? bookTitle;
   final String? sessionTitle;
   final VoidCallback onBack;
+  final bool showBackButton;
   /// Optional test adapter; production uses the Android file picker.
   final Future<void> Function(String fileName, Uint8List bytes)? onExportBookJson;
   /// Waits for queued SQLite diagnostic writes in production.
@@ -464,7 +466,8 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       padding: const EdgeInsets.all(22),
       children: [
         Row(children: [
-          IconButton(tooltip: 'Retour à la conversation',
+          if (widget.showBackButton)
+             IconButton(tooltip: 'Retour à la conversation',
               onPressed: widget.onBack, icon: const Icon(Icons.arrow_back)),
           const Expanded(child: Text('Paramètres de la conversation',
             style: TextStyle(color: DomoliaColors.goldLight,
