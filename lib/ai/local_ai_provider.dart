@@ -24,7 +24,6 @@ class LocalAiProvider implements AiChatProvider, AiStreamingChatProvider {
       LocalContextBudget(model: model, estimator: tokenEstimator,
           outputTokens: outputTokens.clamp(8, 1200));
   LlamaController? _runtime;
-  String? _loadedId;
   String? _loadedConfiguration;
   static const bool vulkanBackendBuilt =
       bool.fromEnvironment('DOMOLIA_VULKAN_BACKEND', defaultValue: false);
@@ -60,7 +59,6 @@ class LocalAiProvider implements AiChatProvider, AiStreamingChatProvider {
     if (_runtime != null) {
       await _runtime!.dispose();
       _runtime = null;
-      _loadedId = null;
       _loadedConfiguration = null;
     }
     var runtime = LlamaController();
@@ -130,7 +128,6 @@ class LocalAiProvider implements AiChatProvider, AiStreamingChatProvider {
         details: {'model': variant.id, 'threads': threads,
                   'gpuLayers': gpuLayers});
     _runtime = runtime;
-    _loadedId = models.installedId;
     _loadedConfiguration = signature;
   }
 
@@ -239,7 +236,6 @@ class LocalAiProvider implements AiChatProvider, AiStreamingChatProvider {
     await _queue;
     final runtime = _runtime;
     _runtime = null;
-    _loadedId = null;
     _loadedConfiguration = null;
     if (runtime != null) await runtime.dispose();
   }
