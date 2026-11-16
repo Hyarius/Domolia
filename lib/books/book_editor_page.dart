@@ -37,6 +37,7 @@ class BookEditorPageState extends State<BookEditorPage> {
   late BookDefinition _book;
   late final TextEditingController _title;
   late final TextEditingController _style;
+  late final TextEditingController _keywords;
   late final TextEditingController _openings;
   Timer? _saveDelay;
   Future<void> _saveTail = Future<void>.value();
@@ -51,6 +52,7 @@ class BookEditorPageState extends State<BookEditorPage> {
     _book = widget.book;
     _title = TextEditingController(text: _book.title);
     _style = TextEditingController(text: _book.narrativeStyle);
+    _keywords = TextEditingController(text: _book.styleKeywords.join(', '));
     _openings = TextEditingController(text: _book.openingMessages.join('\n'));
     _loadProfile();
   }
@@ -66,6 +68,7 @@ class BookEditorPageState extends State<BookEditorPage> {
     _saveDelay?.cancel();
     _title.dispose();
     _style.dispose();
+    _keywords.dispose();
     _openings.dispose();
     super.dispose();
   }
@@ -112,12 +115,30 @@ class BookEditorPageState extends State<BookEditorPage> {
     }
   }
 
+  List<String> _parsedKeywords() => _keywords.text.split(',')
+      .map((word) => word.trim())
+      .where((word) => word.isNotEmpty)
+      .toList(growable: false);
+
+  void _toggleStyleKeyword(String keyword) {
+    final current = _parsedKeywords();
+    if (current.any((word) => word.toLowerCase() == keyword.toLowerCase())) {
+      current.removeWhere((word) => word.toLowerCase() == keyword.toLowerCase());
+    } else {
+      current.add(keyword);
+    }
+    _keywords.text = current.join(', ');
+    setState(() {});
+    _queueSave();
+  }
+
   Future<bool> _save() async {
     _saveDelay?.cancel();
     final revision = _editRevision;
     final updated = _book.copyWith(
       title: _title.text.trim(),
       narrativeStyle: _style.text.trim(),
+      styleKeywords: _parsedKeywords(),
       openingMessages: _openings.text.split('\n')
           .map((line) => line.trim())
           .where((line) => line.isNotEmpty).toList(),
@@ -150,6 +171,7 @@ class BookEditorPageState extends State<BookEditorPage> {
     final next = _book.copyWith(
       title: _title.text.trim(),
       narrativeStyle: _style.text.trim(),
+      styleKeywords: _parsedKeywords(),
       openingMessages: _openings.text.split('\n')
           .map((line) => line.trim())
           .where((line) => line.isNotEmpty).toList(),
@@ -484,6 +506,43 @@ class BookEditorPageState extends State<BookEditorPage> {
       onChanged: (_) => _queueSave(),
     ),
     const SizedBox(height: DomoliaSpacing.section),
+    const Text('Mots-clés de style', style: TextStyle(
+      fontSize: 18, color: DomoliaColors.goldLight)),
+    const SizedBox(height: 8),
+    const Text('Choisissez des inspirations ou ajoutez vos propres mots-clés. '
+        'Ils complètent le style libre, sans imposer de format.'),
+    const SizedBox(height: 12),
+    Wrap(
+      spacing: 8, runSpacing: 4,
+      children: const <String>[
+        'Direct', 'Dialogué', 'Immersif',
+        'Poétique', 'Sombre', 'Humoristique',
+      ].map((word) => FilterChip(
+        key: ValueKey('bookStyleKeyword-$word'),
+        label: Text(word),
+        selected: _parsedKeywords().any(
+          (current) => current.toLowerCase() == word.toLowerCase()),
+        onSelected: (_) => _toggleStyleKeyword(word),
+      )).toList(),
+    ),
+    const SizedBox(height: 10),
+    TextField(
+      key: const ValueKey('bookStyleKeywords'),
+      controller: _keywords,
+      maxLength: 410,
+      decoration: const InputDecoration(
+        labelText: 'Mots-clés personnalisés',
+        hintText: 'Ex. : intimiste, réaliste, mystérieux',
+        helperText: 'Jusqu’à 10 mots-clés, séparés par des virgules '
+            '(40 caractères chacun).',
+        helperMaxLines: 2,
+      ),
+      onChanged: (_) {
+        setState(() {});
+        _queueSave();
+      },
+    ),
+    const SizedBox(height: DomoliaSpacing.section),
     Text('Niveau de détail : ${_book.detailLevel} / 5',
       style: const TextStyle(
         fontSize: 18, color: DomoliaColors.goldLight)),
@@ -495,17 +554,37 @@ class BookEditorPageState extends State<BookEditorPage> {
       onChanged: (value) {
         final updated = _book.copyWith(detailLevel: value.round());
         setState(() => _book = updated);
-        widget.library.save(updated).catchError((Object _) {
-          _show('Impossible de sauver le niveau de détail.');
-        });
+        _queueSave();
       },
     ),
     Text(BookDefinition.detailNames[_book.detailLevel - 1],
       style: const TextStyle(fontWeight: FontWeight.bold)),
     const SizedBox(height: 5),
     Text(BookDefinition.detailInstruction(_book.detailLevel)),
+    const SizedBox(height: DomoliaSpacing.section),
+    const Divider(),
+    const SizedBox(height: 12),
+    Text('Durée d’une réponse : ${_book.responseLength} / 5',
+      style: const TextStyle(
+        fontSize: 18, color: DomoliaColors.goldLight)),
+    const SizedBox(height: 8),
+    const Text('Contrôle combien l’histoire avance avant de vous '
+        'redonner la main. Indépendant du niveau de détail.'),
+    Slider(
+      key: const ValueKey('bookResponseLengthSlider'),
+      min: 1, max: 5, divisions: 4,
+      label: BookDefinition.responseLengthNames[_book.responseLength - 1],
+      value: _book.responseLength.toDouble(),
+      onChanged: (value) {
+        setState(() => _book = _book.copyWith(responseLength: value.round()));
+        _queueSave();
+      },
+    ),
+    Text(BookDefinition.responseLengthNames[_book.responseLength - 1],
+      style: const TextStyle(fontWeight: FontWeight.bold)),
+    const SizedBox(height: 5),
+    Text(BookDefinition.responseLengthInstructions[_book.responseLength - 1]),
     const SizedBox(height: 18),
-
   ];
 
   List<Widget> _systemTab() => [
