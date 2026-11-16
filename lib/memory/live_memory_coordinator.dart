@@ -110,7 +110,10 @@ class LiveMemoryCoordinator extends ChangeNotifier {
       final snapshots = store as NarrativeSnapshotStore;
       final records = await snapshots.listRawGenerations(sessionId);
       final analyzed = await store.analyzedMemoryTurns(sessionId);
-      for (final source in records) {
+      final candidates = records.where((source) =>
+          source.isStructured && !analyzed.contains(source.playerEventId))
+          .toList(growable: false);
+      for (final (index, source) in candidates.indexed) {
         if (_closed || !await isEnabled()) return;
         if (!source.isStructured || analyzed.contains(source.playerEventId)) {
           continue;
@@ -148,7 +151,9 @@ class LiveMemoryCoordinator extends ChangeNotifier {
           );
           if (_closed) return;
           await store.commitMemoryTurn(sessionId, source, operations);
-          await refresh();
+          // Only reload memory if a later pending turn needs these new facts.
+          // The finally block publishes the final projection once.
+          if (index + 1 < candidates.length) await refresh();
           AppLogger.debug(
             'Tour mémorisé',
             component: 'memory',
