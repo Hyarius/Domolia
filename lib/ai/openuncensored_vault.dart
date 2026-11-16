@@ -117,12 +117,16 @@ class PendingOuCheckout {
 }
 
 class OuVaultState {
-  const OuVaultState({this.keys = const [], this.activeKeyId, this.pending, this.mode = 'balanced', this.models = const {}});
+  const OuVaultState({this.keys = const [], this.activeKeyId, this.pending, this.mode = 'balanced', this.models = const {},
+    this.toolChecks = const {}});
   final List<StoredOuKey> keys;
   final String? activeKeyId;
   final PendingOuCheckout? pending;
   final String mode;
   final Map<String, String> models;
+  /// Cached probe results keyed by key fingerprint + model ID; never a secret.
+  /// Values: supported, unsupported, inconclusive.
+  final Map<String, String> toolChecks;
 
   StoredOuKey? find(String? id) {
     for (final key in keys) {
@@ -139,12 +143,14 @@ class OuVaultState {
     bool clearPending = false,
     String? mode,
     Map<String, String>? models,
+    Map<String, String>? toolChecks,
   }) => OuVaultState(
     keys: keys ?? this.keys,
     activeKeyId: clearActive ? null : activeKeyId ?? this.activeKeyId,
     pending: clearPending ? null : pending ?? this.pending,
     mode: mode ?? this.mode,
     models: models ?? this.models,
+    toolChecks: toolChecks ?? this.toolChecks,
   );
 
   Map<String, Object?> toJson() => {
@@ -153,6 +159,7 @@ class OuVaultState {
     'activeKeyId': activeKeyId,
     'mode': mode,
     'models': models,
+    'toolChecks': toolChecks,
     if (pending != null) 'pending': pending!.toJson(),
   };
 
@@ -170,8 +177,64 @@ class OuVaultState {
     if (active != null && !entries.any((item) => item.id == active)) {
       throw const FormatException('Clé active introuvable.');
     }
+    final checks = <String, String>{};
+    final cached = raw['toolChecks'];
+    if (cached is Map) {
+      for (final item in cached.entries) {
+        if (checks.length >= 100 || item.key is! String ||
+            item.value is! String ||
+            !RegExp(r'^[a-f0-9]{64}:.{1,200}\
+      mode: raw['mode'] is String ? raw['mode'] as String : 'balanced',
+      models: raw['models'] is Map ? Map<String, String>.from(raw['models'] as Map) : const {},
+      pending: raw['pending'] == null ? null :
+          PendingOuCheckout.fromJson(
+            Map<String, dynamic>.from(raw['pending'] as Map)),
+    );
+  }
+}
+
+abstract interface class OuVaultStore {
+  Future<OuVaultState> read();
+  Future<void> write(OuVaultState state);
+}
+
+class SecureOuVaultStore implements OuVaultStore {
+  SecureOuVaultStore({FlutterSecureStorage? storage,
+    String storageKey = _storageKey})
+      : _storage = storage ?? FlutterSecureStorage(),
+        _key = storageKey;
+  final FlutterSecureStorage _storage;
+  final String _key;
+  static const _storageKey = 'domolia.openuncensored.vault.v1';
+
+  @override
+  Future<OuVaultState> read() async {
+    final raw = await _storage.read(key: _key);
+    return raw == null ? const OuVaultState() :
+        OuVaultState.fromJson(jsonDecode(raw));
+  }
+
+  @override
+  Future<void> write(OuVaultState state) async {
+    final encoded = jsonEncode(state.toJson());
+    // A freshly claimed key is returned once. Do not report successful
+    // persistence without verifying that a subsequent read succeeds.
+    await _storage.write(key: _key, value: encoded);
+    final actual = await _storage.read(key: _key);
+    if (actual != encoded) {
+      throw const FormatException('Vérification du stockage sécurisé échouée.');
+    }
+  }
+}
+).hasMatch(item.key as String) ||
+            !{'supported', 'unsupported', 'inconclusive'}
+                .contains(item.value)) continue;
+        checks[item.key as String] = item.value as String;
+      }
+    }
     return OuVaultState(
       keys: entries, activeKeyId: active,
+      toolChecks: checks,
       mode: raw['mode'] is String ? raw['mode'] as String : 'balanced',
       models: raw['models'] is Map ? Map<String, String>.from(raw['models'] as Map) : const {},
       pending: raw['pending'] == null ? null :
