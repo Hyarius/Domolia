@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../ai/ai_provider.dart';
+import '../ai/local_context_budget.dart';
 import '../books/book_store.dart';
 import '../chat/chat_protocol.dart';
 import '../chat/raw_generation.dart';
@@ -12,10 +13,12 @@ class LiveMemoryAiEndpoint {
     this.provider,
     this.configuration, {
     this.maxTokens = 1024,
+    this.contextBudget,
   });
   final AiChatProvider provider;
   final AiConfiguration configuration;
   final int maxTokens;
+  final LocalContextBudget? contextBudget;
 }
 
 /// Session-scoped incremental extraction. Only SQLite-committed, structured
@@ -129,7 +132,8 @@ class LiveMemoryCoordinator extends ChangeNotifier {
         if (endpoint == null) return;
         final response = await endpoint.provider.complete(
           endpoint.configuration,
-          messages: _prompt(player.single.text, source),
+          messages: _prompt(player.single.text, source,
+              budget: endpoint.contextBudget),
           maxTokens: endpoint.maxTokens,
         );
         final operations = LiveMemoryOperation.parse(
@@ -179,8 +183,26 @@ class LiveMemoryCoordinator extends ChangeNotifier {
     }
   }
 
-  List<AiMessage> _prompt(String player, RawGeneration raw) {
-    final existing = context([player, raw.rawText], budget: 2900);
+  List<AiMessage> _prompt(String player, RawGeneration raw,
+      {LocalContextBudget? budget}) {
+    if (budget != null) {
+      // Keep the immutable RAW and literal quotes available to the extractor.
+      // Existing memory is optional and can be selected more narrowly.
+      for (var limit = 2900; limit >= 256; limit = (limit * 0.7).floor()) {
+        final candidate = _memoryPrompt(player, raw,
+            context([player, raw.rawText], budget: limit));
+        if (budget.fits(candidate)) return candidate;
+      }
+      final mandatory = _memoryPrompt(player, raw, '');
+      budget.requireFit(mandatory);
+      return mandatory;
+    }
+    return _memoryPrompt(player, raw,
+        context([player, raw.rawText], budget: 2900));
+  }
+
+  List<AiMessage> _memoryPrompt(String player, RawGeneration raw,
+      String existing) {
     return [
       const AiMessage(
         role: 'system',
