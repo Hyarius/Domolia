@@ -132,6 +132,15 @@ class ChatLineDecoder {
     final speaker = decoded['speaker'] as String;
     final text = (decoded['text'] as String).trim();
     final proposed = (decoded['name'] as String).trim();
+    final status = decoded['status'];
+    if (decoded.keys.any((key) =>
+            !const {'type', 'speaker', 'name', 'text', 'status'}.contains(key)) ||
+        (status != null && (speaker != 'character' || status is! String ||
+            status.trim().isEmpty || status.length > 60 ||
+            status.contains(RegExp(r'[\\r\\n]'))))) {
+      throw const ChatProtocolException(ChatProtocolProblem.invalidStructure,
+          'Métadonnées du message IA invalides.');
+    }
     if (text.isEmpty || text.length > 6000 || proposed.isEmpty || proposed.length > 50) {
       throw const ChatProtocolException(ChatProtocolProblem.invalidStructure,
           'Nom ou texte de message IA invalide.');
@@ -145,7 +154,8 @@ class ChatLineDecoder {
         proposed.toLowerCase() != 'vous' &&
         !proposed.contains(RegExp(r'[\r\n]'))) {
       _parsed++;
-      return ChatLine(speaker: ChatSpeaker.character, name: proposed, text: text);
+      return ChatLine(speaker: ChatSpeaker.character, name: proposed,
+          text: text, status: status is String ? status.trim() : null);
     }
     if (speaker == 'player' ||
         (speaker == 'character' &&
