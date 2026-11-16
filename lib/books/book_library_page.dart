@@ -260,10 +260,10 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                                         color: DomoliaColors.goldLight,
                                       )),
                                   ),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      IconButton(
+                                  Wrap(
+                                     alignment: WrapAlignment.center,
+                                     children: [
+                                       IconButton(
                                         tooltip: 'Ouvrir ${book.title}',
                                         onPressed: () => widget.onOpen(book),
                                         constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
