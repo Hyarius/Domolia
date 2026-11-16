@@ -185,7 +185,9 @@ class OuVaultState {
             item.value is! String ||
             !RegExp(r'^[a-f0-9]{64}:.{1,200}$').hasMatch(item.key as String) ||
             !{'supported', 'unsupported', 'inconclusive'}
-                .contains(item.value)) continue;
+                .contains(item.value)) {
+          continue;
+        }
         checks[item.key as String] = item.value as String;
       }
     }
