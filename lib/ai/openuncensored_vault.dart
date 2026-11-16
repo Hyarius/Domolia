@@ -183,9 +183,18 @@ class OuVaultState {
       for (final item in cached.entries) {
         if (checks.length >= 100 || item.key is! String ||
             item.value is! String ||
-            !RegExp(r'^[a-f0-9]{64}:.{1,200}\
+            !RegExp(r'^[a-f0-9]{64}:.{1,200}\$').hasMatch(item.key as String) ||
+            !{'supported', 'unsupported', 'inconclusive'}
+                .contains(item.value)) continue;
+        checks[item.key as String] = item.value as String;
+      }
+    }
+    return OuVaultState(
+      keys: entries, activeKeyId: active,
+      toolChecks: checks,
       mode: raw['mode'] is String ? raw['mode'] as String : 'balanced',
-      models: raw['models'] is Map ? Map<String, String>.from(raw['models'] as Map) : const {},
+      models: raw['models'] is Map
+          ? Map<String, String>.from(raw['models'] as Map) : const {},
       pending: raw['pending'] == null ? null :
           PendingOuCheckout.fromJson(
             Map<String, dynamic>.from(raw['pending'] as Map)),
