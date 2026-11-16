@@ -20,6 +20,8 @@ import 'books/book_library_controller.dart';
 import 'books/book_library_page.dart';
 import 'books/book_editor_page.dart';
 import 'books/book_store.dart';
+import 'memory/live_memory_coordinator.dart';
+import 'memory/live_memory_page.dart';
 import 'ai/ai_controller.dart';
 import 'ai/ai_task_routing.dart';
 import 'ai/ai_diagnostics.dart';
@@ -105,7 +107,7 @@ class DomoliaApp extends StatelessWidget {
   }
 }
 
-enum _Page { home, books, book, chat, about, settings, updates, ai, diagnostics, logs, conversationSettings }
+enum _Page { home, books, book, chat, about, settings, updates, ai, diagnostics, logs, conversationSettings, memory }
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -143,6 +145,7 @@ class _HomePageState extends State<HomePage> {
   late final bool _ownsCredits;
   late final bool _ownsAi;
   late NarrativeChatController _chat;
+  LiveMemoryCoordinator? _liveMemory;
   late final bool _ownsChat;
   late final NarratorSettingsController _narratorSettings;
   late final bool _ownsNarratorSettings;
@@ -202,6 +205,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     if (_ownsUpdates) _updates.dispose();
     if (_ownsChat) _chat.dispose();
+    _liveMemory?.dispose();
     if (_ownsNarratorSettings) _narratorSettings.dispose();
     if (_ownsBooks) {
       if (_books.store is SqliteBookStore) {
@@ -394,6 +398,32 @@ class _HomePageState extends State<HomePage> {
         }
 
         _chat.dispose();
+        _liveMemory?.dispose();
+        final storage = _books.store;
+        _liveMemory = storage is LiveMemoryStore &&
+                storage is NarrativeSnapshotStore
+            ? LiveMemoryCoordinator(
+                sessionId: session.id,
+                store: storage as LiveMemoryStore,
+                isEnabled: () async =>
+                    (await _books.session(session.id))?.memoryEnabled == true,
+                resolveConnection: () async {
+                  final current = await _books.session(session.id);
+                  if (current == null || !current.memoryEnabled) return null;
+                  final chosen = current.memoryProfileId ??
+                      _taskRouting.profileFor(AiNarrativeTask.memory);
+                  if (chosen == '#disabled') return null;
+                  final id = chosen == null || chosen == '#narrator'
+                      ? await narratorProfileId() : chosen;
+                  final endpoint = await endpointForId(
+                      id, AiNarrativeTask.memory);
+                  return LiveMemoryAiEndpoint(endpoint.provider,
+                      endpoint.configuration,
+                      maxTokens: endpoint.maxOutputTokens ?? 1024);
+                },
+              )
+            : null;
+        if (_liveMemory != null) await _liveMemory!.refresh();
         Future<void> writes = Future<void>.value();
         _awaitSessionWrites = () => writes;
         _chat = NarrativeChatController(
@@ -402,6 +432,7 @@ class _HomePageState extends State<HomePage> {
           narrator: book.narrator,
           loreProvider: () => _books.byId(book.id)?.lore ?? book.lore,
           diagnostics: _aiDiagnostics,
+          memory: _liveMemory,
           initialOptimizedLore: session.optimizedLore,
           initialOptimizedLoreHash: session.optimizedLoreHash,
           resolveConnection: () async =>
@@ -591,6 +622,11 @@ class _HomePageState extends State<HomePage> {
                 return _books.diagnostics(id);
               },
             )
+          : _page == _Page.memory && _liveMemory != null
+              ? LiveMemoryPage(
+                  memory: _liveMemory!,
+                  onBack: () => unawaited(_goBack()),
+                )
           : _page == _Page.conversationSettings &&
                   _activeSessionId != null && _selectedBookId != null
               ? ConversationSettingsPage(
@@ -599,6 +635,8 @@ class _HomePageState extends State<HomePage> {
                   ai: _ai,
                   chat: _chat,
                   taskRouting: _taskRouting,
+                  onOpenMemory: _liveMemory == null ? null :
+                      () => unawaited(_navigateTo(_Page.memory)),
                   bookId: _selectedBookId!,
                   sessionId: _activeSessionId!,
                   bookTitle: _activeBookTitle,
@@ -697,7 +735,8 @@ class _HomePageState extends State<HomePage> {
               leading: const Icon(Icons.library_books_outlined),
               title: const Text('Livres'),
               selected: _page == _Page.books || _page == _Page.book ||
-                  _page == _Page.chat || _page == _Page.conversationSettings,
+                  _page == _Page.chat || _page == _Page.conversationSettings ||
+                  _page == _Page.memory,
               selectedColor: DomoliaColors.goldLight,
               selectedTileColor: DomoliaColors.raisedSurface,
               onTap: () => _showPage(_Page.books),

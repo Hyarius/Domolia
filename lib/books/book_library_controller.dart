@@ -180,17 +180,27 @@ class BookLibraryController extends ChangeNotifier {
 
   Future<void> setSessionTaskProfile(
       String id, String task, String? profileId) async {
-    if (task != 'jsonifier' && task != 'optimizer') {
+    if (task != 'jsonifier' && task != 'optimizer' && task != 'memory') {
       throw ArgumentError.value(task, 'task');
     }
     final current = await store.findSession(id);
     if (current == null) throw StateError('Partie introuvable.');
-    final next = task == 'jsonifier'
-        ? current.copyWith(formatterProfileId: profileId,
-            clearFormatterProfile: profileId == null)
-        : current.copyWith(optimizerProfileId: profileId,
-            clearOptimizerProfile: profileId == null);
+    final next = switch (task) {
+      'jsonifier' => current.copyWith(formatterProfileId: profileId,
+          clearFormatterProfile: profileId == null),
+      'optimizer' => current.copyWith(optimizerProfileId: profileId,
+          clearOptimizerProfile: profileId == null),
+      _ => current.copyWith(memoryProfileId: profileId,
+          clearMemoryProfile: profileId == null),
+    };
     await store.putSession(next);
+    _notify();
+  }
+
+  Future<void> setSessionMemoryEnabled(String id, bool enabled) async {
+    final current = await store.findSession(id);
+    if (current == null) throw StateError('Partie introuvable.');
+    await store.putSession(current.copyWith(memoryEnabled: enabled));
     _notify();
   }
 

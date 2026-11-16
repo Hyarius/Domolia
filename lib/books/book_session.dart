@@ -14,6 +14,8 @@ class BookSession {
     this.aiProfileId,
     this.formatterProfileId,
     this.optimizerProfileId,
+    this.memoryProfileId,
+    this.memoryEnabled = true,
     this.toolCallingEnabled = true,
     this.generationOverrides = const {},
     this.optimizedLore,
@@ -30,6 +32,8 @@ class BookSession {
   /// Explicit per-Party overrides; null inherits the application task profile.
   final String? formatterProfileId;
   final String? optimizerProfileId;
+  final String? memoryProfileId;
+  final bool memoryEnabled;
   /// Per-Party opt-out; never overrides an incompatible profile.
   final bool toolCallingEnabled;
   /// Task-specific output/reasoning overrides; never part of a shared Book.
@@ -53,6 +57,9 @@ class BookSession {
     bool clearFormatterProfile = false,
     String? optimizerProfileId,
     bool clearOptimizerProfile = false,
+    String? memoryProfileId,
+    bool clearMemoryProfile = false,
+    bool? memoryEnabled,
     bool? toolCallingEnabled,
     Map<AiNarrativeTask, AiTaskGenerationOverride>? generationOverrides,
     String? optimizedLore,
@@ -68,6 +75,9 @@ class BookSession {
             ? null : formatterProfileId ?? this.formatterProfileId,
         optimizerProfileId: clearOptimizerProfile
             ? null : optimizerProfileId ?? this.optimizerProfileId,
+        memoryProfileId: clearMemoryProfile
+            ? null : memoryProfileId ?? this.memoryProfileId,
+        memoryEnabled: memoryEnabled ?? this.memoryEnabled,
         toolCallingEnabled: toolCallingEnabled ?? this.toolCallingEnabled,
         generationOverrides: generationOverrides ?? this.generationOverrides,
         optimizedLore: optimizedLore ?? this.optimizedLore,

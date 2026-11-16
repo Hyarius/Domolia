@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-/// Controls for the three IA calls, independent from credentials and models.
-enum AiNarrativeTask { narrator, jsonifier, optimizer }
+/// Controls for the narrative AI calls, independent from credentials and models.
+enum AiNarrativeTask { narrator, jsonifier, optimizer, memory }
 
 /// A task uses this configuration unless a Party overrides an individual field.
 class AiTaskGenerationSettings {
@@ -28,6 +28,7 @@ class AiTaskGenerationSettings {
         AiNarrativeTask.narrator => 8192,
         AiNarrativeTask.jsonifier => 4096,
         AiNarrativeTask.optimizer => 4096,
+        AiNarrativeTask.memory => 1024,
       });
 
   void validate() {
@@ -68,6 +69,7 @@ class AiTaskGenerationSettings {
       AiNarrativeTask.narrator => 'low',
       AiNarrativeTask.jsonifier => 'none',
       AiNarrativeTask.optimizer => 'low',
+      AiNarrativeTask.memory => 'none',
     };
   }
 

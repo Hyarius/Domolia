@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../ai/ai_provider.dart';
 import '../books/book_lore.dart';
+import '../memory/live_memory.dart';
 import 'chat_protocol.dart';
 import 'raw_generation.dart';
 
@@ -12,13 +13,40 @@ class NarrativeReferenceTools {
     required this.lore,
     required this.timeline,
     required this.rawGenerations,
+    this.memory,
+    this.memoryHistory,
   });
 
   final BookLore Function() lore;
   final List<ChatTimelineEvent> Function() timeline;
   final List<RawGeneration> Function() rawGenerations;
+  final List<LiveMemoryFact> Function()? memory;
+  final List<LiveMemoryFact> Function()? memoryHistory;
 
   static const definitions = <AiToolDefinition>[
+    AiToolDefinition('search_memory',
+        'Search sourced facts about this Party, not Book canon. Includes old details, relationships and uncertain reports.', {
+      'type': 'object', 'properties': {
+        'query': {'type': 'string'},
+        'category': {'type': 'string', 'enum': [
+          'all', 'character', 'place', 'object', 'event',
+          'relationship', 'commitment', 'state']},
+        'limit': {'type': 'integer', 'minimum': 1, 'maximum': 5},
+      }, 'required': ['query'],
+    }),
+    AiToolDefinition('get_memory_entry',
+        'Read a Party memory by its stable ID with certainty and source turn.', {
+      'type': 'object', 'properties': {
+        'id': {'type': 'string'},
+      }, 'required': ['id'],
+    }),
+    AiToolDefinition('get_event_history',
+        'Search retained past events and commitments for this Party.', {
+      'type': 'object', 'properties': {
+        'query': {'type': 'string'},
+        'limit': {'type': 'integer', 'minimum': 1, 'maximum': 5},
+      }, 'required': ['query'],
+    }),
     AiToolDefinition('search_lore',
         'Search Book canon: names, aliases, IDs and descriptions. Potential events have NOT necessarily happened.', {
       'type': 'object', 'properties': {
@@ -323,6 +351,58 @@ class NarrativeReferenceTools {
     });
   }
 
+  String _searchMemory(Map<String, dynamic> input,
+      {bool eventsOnly = false}) {
+    final query = _query(input);
+    final category = input['category'] ?? 'all';
+    if (category is! String || !{'all', 'character', 'place', 'object',
+          'event', 'relationship', 'commitment', 'state'}.contains(category)) {
+      throw const FormatException('Invalid memory category.');
+    }
+    final results = <(int, LiveMemoryFact)>[];
+    final records = eventsOnly
+        ? (memoryHistory?.call() ?? memory?.call())
+        : memory?.call();
+    for (final fact in records ?? const <LiveMemoryFact>[]) {
+      if (eventsOnly && fact.category != 'event' &&
+          fact.category != 'commitment' && fact.kind != 'state') { continue; }
+      if (!eventsOnly && category != 'all' && fact.category != category) { continue; }
+      final score = _score(
+          '${fact.label} ${fact.text} ${fact.entityId}', query);
+      if (score > 0) { results.add((score, fact)); }
+    }
+    results.sort((a, b) {
+      final byScore = b.$1.compareTo(a.$1);
+      return byScore != 0 ? byScore : a.$2.id.compareTo(b.$2.id);
+    });
+    return jsonEncode({
+      'source': 'active_party_live_memory',
+      'results': [
+        for (final (_, fact) in results.take(_limit(input)))
+          {'id': fact.id, 'category': fact.category,
+           'label': fact.label, 'text': fact.text,
+           'certainty': fact.certainty, 'visibility': fact.visibility,
+           'source_turn_id': fact.sourceTurnId},
+      ],
+    });
+  }
+
+  String _getMemory(Map<String, dynamic> input) {
+    final id = input['id'];
+    if (id is! String || id.isEmpty || id.length > 96) {
+      throw const FormatException('Invalid memory ID.');
+    }
+    for (final fact in memory?.call() ?? const <LiveMemoryFact>[]) {
+      if (fact.id == id) {
+        return jsonEncode({
+          'source': 'active_party_live_memory', 'entry': fact.toJson(),
+        });
+      }
+    }
+    return jsonEncode({'source': 'active_party_live_memory',
+      'error': 'entry_not_found'});
+  }
+
   /// Bad arguments and unknown tools become bounded technical results.
   String execute(String name, String arguments) {
     try {
@@ -334,6 +414,9 @@ class NarrativeReferenceTools {
         throw const FormatException('Expected JSON object');
       }
       final result = switch (name) {
+        'search_memory' => _searchMemory(value),
+        'get_memory_entry' => _getMemory(value),
+        'get_event_history' => _searchMemory(value, eventsOnly: true),
         'search_lore' => _searchLore(value),
         'get_lore_entry' => _getLore(value),
         'search_history' => _searchHistory(value),

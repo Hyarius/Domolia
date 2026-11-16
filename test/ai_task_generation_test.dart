@@ -15,7 +15,8 @@ void main() {
     for (final task in AiNarrativeTask.values) {
       final settings = AiTaskGenerationSettings.defaults(task);
       expect(settings.effectiveEffort(task, 'gpt-5.6-luna'),
-        task == AiNarrativeTask.jsonifier ? 'none' : 'low');
+        task == AiNarrativeTask.jsonifier || task == AiNarrativeTask.memory
+          ? 'none' : 'low');
       expect(settings.effectiveEffort(task, 'unknown-custom-model'), isNull);
       expect(settings.effectiveEffort(task, 'gpt-6-astra'), isNull);
     }

@@ -19,11 +19,13 @@ class AiTaskRouting extends ChangeNotifier {
   static const _narratorKey = 'aiTaskNarratorProfileId';
   static const _jsonifierKey = 'aiTaskJsonifierProfileId';
   static const _optimizerKey = 'aiTaskOptimizerProfileId';
+  static const _memoryKey = 'aiTaskMemoryProfileId';
   final Future<SharedPreferences> Function() _preferences;
   Future<void>? _loading;
   String? _narratorId;
   String? _jsonifierId;
   String? _optimizerId;
+  String? _memoryId;
   bool initialized = false;
   final Map<AiNarrativeTask, AiTaskGenerationSettings> _generation = {};
 
@@ -34,6 +36,7 @@ class AiTaskRouting extends ChangeNotifier {
     AiNarrativeTask.narrator => _narratorId,
     AiNarrativeTask.jsonifier => _jsonifierId,
     AiNarrativeTask.optimizer => _optimizerId,
+    AiNarrativeTask.memory => _memoryId,
   };
 
   Future<void> initialize() => _loading ??= _load();
@@ -44,6 +47,7 @@ class AiTaskRouting extends ChangeNotifier {
       _narratorId = prefs.getString(_narratorKey);
       _jsonifierId = prefs.getString(_jsonifierKey);
       _optimizerId = prefs.getString(_optimizerKey);
+      _memoryId = prefs.getString(_memoryKey);
       for (final task in AiNarrativeTask.values) {
         final raw = prefs.getString('aiTaskGeneration-${task.name}');
         if (raw != null) {
@@ -82,6 +86,7 @@ class AiTaskRouting extends ChangeNotifier {
       AiNarrativeTask.narrator => _narratorKey,
       AiNarrativeTask.jsonifier => _jsonifierKey,
       AiNarrativeTask.optimizer => _optimizerKey,
+      AiNarrativeTask.memory => _memoryKey,
     };
     final prefs = await _preferences();
     final successful = profileId == null
@@ -95,6 +100,8 @@ class AiTaskRouting extends ChangeNotifier {
         _jsonifierId = profileId;
       case AiNarrativeTask.optimizer:
         _optimizerId = profileId;
+      case AiNarrativeTask.memory:
+        _memoryId = profileId;
     }
     notifyListeners();
   }

@@ -1,0 +1,37 @@
+name: Live Memory checks
+
+on:
+  push:
+    branches: [feat/live-memory]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/memory/**'
+      - 'test/live_memory_*.dart'
+      - '.github/workflows/live-memory-checks.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Check formatting of new memory files
+        run: dart format --output=none --set-exit-if-changed lib/memory test/live_memory_test.dart test/live_memory_sqlite_test.dart test/live_memory_widget_test.dart
+      - name: Memory unit tests
+        timeout-minutes: 4
+        run: flutter test --reporter expanded test/live_memory_test.dart
+      - name: Memory SQLite tests
+        timeout-minutes: 4
+        run: flutter test --reporter expanded test/live_memory_sqlite_test.dart
+      - name: Memory widget tests
+        timeout-minutes: 4
+        run: flutter test --reporter expanded test/live_memory_widget_test.dart
