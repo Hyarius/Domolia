@@ -44,6 +44,9 @@ jobs:
       - name: Installer le pont Android de mise à jour
         run: python3 tool/configure_android_updates.py
 
+      - name: Configurer Android pour Ministral local
+        run: python3 tool/configure_android_ministral.py
+
       - name: Installer l'icône Android Domolia
         run: python3 tool/install_launcher_icon.py
 
