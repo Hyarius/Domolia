@@ -151,6 +151,60 @@ void main() {
     );
   });
 
+  test('same-named entities keep independent state facts', () {
+    LiveMemoryFact guard(String id, String location) {
+      return LiveMemoryFact.fromJson({
+        ...fact(
+          'state:$id:location',
+          location,
+          category: 'state',
+          field: 'location',
+          kind: 'state',
+        ).toJson(),
+        'entity': id,
+        'label': 'Garde',
+      });
+    }
+
+    final north = guard('north-guard', 'Le garde se tient à la porte nord.');
+    final south = guard('south-guard', 'Le garde se tient à la porte sud.');
+    final projected = LiveMemoryProjection.replay([
+      [operation(north)],
+      [operation(south)],
+    ], const []);
+
+    expect(projected.map((f) => f.id).toSet(), {north.id, south.id});
+  });
+
+  test('renaming an entity still deduplicates equivalent fields', () {
+    final original = LiveMemoryFact.fromJson({
+      ...fact(
+        'character:innkeeper:location-old',
+        'Derrière le comptoir',
+        field: 'location',
+      ).toJson(),
+      'entity': 'innkeeper',
+      'label': 'L’aubergiste',
+    });
+    final renamed = LiveMemoryFact.fromJson({
+      ...fact(
+        'character:innkeeper:location-new',
+        'Dans la cour',
+        field: 'location',
+        turn: 2,
+      ).toJson(),
+      'entity': 'innkeeper',
+      'label': 'Mirella',
+    });
+    final projected = LiveMemoryProjection.replay([
+      [operation(original)],
+      [operation(renamed)],
+    ], const []);
+
+    expect(projected, hasLength(1));
+    expect(projected.single.id, renamed.id);
+  });
+
   test('rumors are retained as unverified reports', () {
     final rumor = fact(
       'character:victor:rumor',

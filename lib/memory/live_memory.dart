@@ -287,7 +287,7 @@ class LiveMemoryProjection {
                 f.field == op.fact.field &&
                 f.kind != 'event' &&
                 op.fact.kind != 'event' &&
-                f.label.toLowerCase() == op.fact.label.toLowerCase(),
+                f.entityId.toLowerCase() == op.fact.entityId.toLowerCase(),
           );
           if (equivalent.isNotEmpty && equivalent.first.id != op.fact.id) {
             facts.remove(equivalent.first.id);
