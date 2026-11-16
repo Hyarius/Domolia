@@ -1,3 +1,5 @@
+import 'package:crypto/crypto.dart';
+import '../chat/raw_generation.dart';
 import 'dart:convert';
 
 /// A sourced assertion in one Party, never an instruction or a Book canon edit.
@@ -271,3 +273,8 @@ class LiveMemorySelector {
     return out.toString();
   }
 }
+
+String liveMemorySourceHash(RawGeneration generation) => sha256.convert(
+    utf8.encode('${generation.playerEventId}:'
+        '${generation.firstEventId}:${generation.lastEventId}:'
+        '${generation.rawText}')).toString();
