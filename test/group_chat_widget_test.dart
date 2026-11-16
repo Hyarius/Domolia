@@ -119,7 +119,7 @@ void main() {
 
   testWidgets('Une réponse longue reste lisible depuis son début', (tester) async {
     final provider = _Provider()
-      ..raw = List.generate(90, (i) => 'Paragraphe ${i + 1} : '
+      ..raw = List.generate(45, (i) => 'Paragraphe ${i + 1} : '
           'Le narrateur décrit soigneusement les lieux et les personnages.')
           .join('\n')
       ..formatGate = Completer<String>();
@@ -140,6 +140,7 @@ void main() {
         'speaker': 'narrator', 'name': 'Narrateur'},
     ]}));
     await tester.pumpAndSettle();
+    expect(chat.error, isNull);
     expect(chat.messages, hasLength(2));
     expect(scroll.position.maxScrollExtent, greaterThan(beforeReply));
     expect(scroll.offset, closeTo(beforeReply, 2));
