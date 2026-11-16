@@ -226,13 +226,17 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                         : GridView.builder(
                             key: const ValueKey('booksGrid'),
                             padding: const EdgeInsets.all(16),
-                            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 210,
-                              mainAxisSpacing: 16,
-                              crossAxisSpacing: 12,
-                              childAspectRatio: 0.59,
-                            ),
-                            itemCount: books.length,
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                               // Preserve full-sized action targets on narrow phones.
+                               crossAxisCount: MediaQuery.sizeOf(context).width < 385
+                                   ? 1
+                                   : ((MediaQuery.sizeOf(context).width - 20) ~/ 182),
+                               mainAxisSpacing: 16,
+                               crossAxisSpacing: 12,
+                               childAspectRatio: MediaQuery.sizeOf(context).width < 385
+                                   ? 0.86 : 0.59,
+                             ),
+                             itemCount: books.length,
                             itemBuilder: (context, index) {
                               final book = books[index];
                               return Card(
