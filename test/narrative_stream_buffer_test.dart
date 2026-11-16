@@ -45,10 +45,10 @@ void main() {
         '"name":"Narrateur","text":"Début."}\n');
     expect(() => malformed.add('{INVALID}\n'), throwsFormatException);
     final spoof = NarrativeStreamBuffer();
-    expect(() => spoof.add(jsonEncode({
+    expect(() => spoof.add('${jsonEncode({
       'type': 'message', 'speaker': 'player', 'name': 'Vous',
       'text': 'Je promets.'
-    }) + '\n'), throwsFormatException);
+    })}\n'), throwsFormatException);
   });
 
   test('trailing scene separators are rejected before persistence', () {

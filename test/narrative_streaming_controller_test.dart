@@ -11,9 +11,9 @@ const _config = AiConfiguration(
   baseUrl: defaultAiBaseUrl, model: defaultAiModel, apiKey: 'fake-key');
 
 String _line(String text, {String name = 'Narrateur',
-    String role = 'narrator'}) => jsonEncode({
+    String role = 'narrator'}) => '${jsonEncode({
   'type': 'message', 'speaker': role, 'name': name, 'text': text,
-}) + '\n';
+})}\n';
 
 class _FakeStream implements AiChatProvider, AiStreamingChatProvider {
   final updates = StreamController<AiStreamChunk>.broadcast(sync: true);
