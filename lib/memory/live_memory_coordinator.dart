@@ -36,6 +36,7 @@ class LiveMemoryCoordinator extends ChangeNotifier {
   List<LiveMemoryFact> _facts = const [];
   List<LiveMemoryFact> _history = const [];
   List<LiveMemoryFact> get facts => List.unmodifiable(_facts);
+
   /// Earlier states remain consultable without exposing manually removed facts.
   List<LiveMemoryFact> get history => List.unmodifiable(_history);
   Future<void>? _running;

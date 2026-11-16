@@ -25,10 +25,7 @@ jobs:
           cache: true
       - run: flutter pub get
       - name: Check formatting of new memory files
-        run: |
-          dart format lib/memory test/live_memory_test.dart test/live_memory_sqlite_test.dart test/live_memory_widget_test.dart
-          git diff -- lib/memory/live_memory_coordinator.dart test/live_memory_test.dart
-          git diff --exit-code -- lib/memory test/live_memory_test.dart test/live_memory_sqlite_test.dart test/live_memory_widget_test.dart
+        run: dart format --output=none --set-exit-if-changed lib/memory test/live_memory_test.dart test/live_memory_sqlite_test.dart test/live_memory_widget_test.dart
       - name: Memory unit tests
         timeout-minutes: 4
         run: flutter test --reporter expanded test/live_memory_test.dart
