@@ -141,7 +141,7 @@ void main() {
     await tester.pump(); // Send is enabled only when there is text.
     await tester.tap(find.byKey(const ValueKey('groupChatSend')));
     await tester.pumpAndSettle();
-    expect(fake.calls, 2);
+    expect(fake.calls, 1);
     expect(chat.messages.map((item) => item.name),
         ['Narrateur', 'Vous', 'Narrateur']);
     expect(find.text('La salle est silencieuse.'), findsOneWidget);

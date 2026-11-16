@@ -137,7 +137,7 @@ class ChatLineDecoder {
             !const {'type', 'speaker', 'name', 'text', 'status'}.contains(key)) ||
         (status != null && (speaker != 'character' || status is! String ||
             status.trim().isEmpty || status.length > 60 ||
-            status.contains(RegExp(r'[\\r\\n]'))))) {
+            status.contains(RegExp(r'[\r\n]'))))) {
       throw const ChatProtocolException(ChatProtocolProblem.invalidStructure,
           'Métadonnées du message IA invalides.');
     }

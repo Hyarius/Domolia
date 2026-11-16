@@ -96,7 +96,8 @@ void main() {
     expect(chat.messages, hasLength(1));
     expect(chat.previewEvents, hasLength(1));
     provider.chunks.add(const AiStreamChunk(text: ' s’ouvre."}\n'));
-    await provider.chunks.close();
+    // Flutter's fake clock needs a pump to deliver stream onDone.
+    unawaited(provider.chunks.close());
     await tester.pumpAndSettle();
     expect(find.text('La porte s’ouvre.'), findsOneWidget);
     expect(chat.messages, hasLength(2));

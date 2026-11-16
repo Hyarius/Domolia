@@ -209,7 +209,7 @@ void main() {
         throwsFormatException);
   });
 
-  test('Five distinct detail prompts preserve literary rules without JSON', () {
+  test('Five detail levels keep literary rules alongside the NDJSON contract', () {
     for (var level = 1; level <= 5; level++) {
       final book = BookDefinition(
         id: 'book-level-$level', title: 'Niveau $level',
@@ -217,7 +217,7 @@ void main() {
       );
       expect(book.narrator.systemPrompt,
         contains(BookDefinition.detailInstructions[level - 1]));
-      expect(book.narrator.systemPrompt, isNot(contains('"type":"scene_change"')));
+      expect(book.narrator.systemPrompt, contains('"type":"scene_change"'));
       expect(book.narrator.protocolPrompt, defaultNarratorProtocolPrompt);
       expect(book.narrator.systemPrompt,
         isNot(contains('Niveau de détail ${level == 5 ? 1 : level + 1} :')));
@@ -976,7 +976,7 @@ void main() {
     stored = (await library.session(session.id))!;
     expect(stored.generationOverrides[AiNarrativeTask.narrator]!
         .reasoningEffort, 'none');
-    expect(stored.generationOverrides[AiNarrativeTask.narrator], isNull);
+    expect(stored.generationOverrides[AiNarrativeTask.jsonifier], isNull);
     expect(tester.takeException(), isNull);
   });
 

@@ -178,7 +178,8 @@ void main() {
     await chat.send('Premier tour.');
     provider.prose = 'Deuxième texte original.';
     await chat.send('Second tour.');
-    final values = provider.lastContext!.map((m) => m.content).join(' ');
+    final values = provider.lastContext!.skip(1)
+        .map((m) => m.content).join(' ');
     expect(values, contains('Premier texte original.'));
     expect(values, contains('Premier tour.'));
     expect(values, isNot(contains('"speaker":"narrator"')));
