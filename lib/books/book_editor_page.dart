@@ -78,6 +78,19 @@ class BookEditorPageState extends State<BookEditorPage> {
     });
   }
 
+  // Every Book write uses the same queue. Persist a snapshot of the latest
+  // in-memory state so autosaves cannot overwrite lore, covers or settings.
+  Future<void> _persist(BookDefinition Function(BookDefinition) change) {
+    final next = change(_book);
+    final revision = ++_editRevision;
+    if (mounted) setState(() => _book = next);
+    final pending = _saveTail.then((_) => widget.library.save(next));
+    _saveTail = pending.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return pending.then((_) {
+      if (mounted) setState(() => _savedRevision = revision);
+    });
+  }
+
   /// The host asks before leaving. Pending edits are saved or explicitly discarded.
   Future<bool> prepareToLeave() async {
     _saveDelay?.cancel();
@@ -114,25 +127,17 @@ class BookEditorPageState extends State<BookEditorPage> {
 
   Future<bool> _save() async {
     _saveDelay?.cancel();
-    final revision = _editRevision;
-    final updated = _book.copyWith(
-      title: _title.text.trim(),
-      narrativeStyle: _style.text.trim(),
-      openingMessages: _openings.text.split('\n')
-          .map((line) => line.trim())
-          .where((line) => line.isNotEmpty).toList(),
-    );
-    // Serialize writes so a slower autosave cannot overwrite a newer edit.
-    final pending = _saveTail.then((_) => widget.library.save(updated));
-    _saveTail = pending.then<void>((_) {}, onError: (Object _) {});
+    final title = _title.text.trim();
+    final style = _style.text.trim();
+    final openings = _openings.text.split('\\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty).toList();
     try {
-      await pending;
-      if (mounted) {
-        setState(() {
-          _book = updated;
-          _savedRevision = revision;
-        });
-      }
+      await _persist((current) => current.copyWith(
+        title: title,
+        narrativeStyle: style,
+        openingMessages: openings,
+      ));
       return true;
     } on FormatException catch (error) {
       _show(error.message);
@@ -147,21 +152,17 @@ class BookEditorPageState extends State<BookEditorPage> {
 
   Future<void> _saveLore(BookLore lore) async {
     _saveDelay?.cancel();
-    final next = _book.copyWith(
-      title: _title.text.trim(),
-      narrativeStyle: _style.text.trim(),
-      openingMessages: _openings.text.split('\n')
-          .map((line) => line.trim())
-          .where((line) => line.isNotEmpty).toList(),
+    final title = _title.text.trim();
+    final style = _style.text.trim();
+    final openings = _openings.text.split('\\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty).toList();
+    await _persist((current) => current.copyWith(
+      title: title,
+      narrativeStyle: style,
+      openingMessages: openings,
       lore: lore,
-    );
-    await widget.library.save(next);
-    if (mounted) {
-      setState(() {
-        _book = next;
-        _savedRevision = _editRevision;
-      });
-    }
+    ));
   }
 
   Future<void> _chooseCover() async {
@@ -177,12 +178,10 @@ class BookEditorPageState extends State<BookEditorPage> {
         return;
       }
       final data = await BookCoverLoader.load(chosen.files.single);
-      final next = _book.copyWith(
-        coverBase64: data.base64, coverMime: data.mime,
-      );
       AppLogger.debug('Sauvegarde de la couverture', component: 'cover');
-      await widget.library.save(next);
-      if (mounted) setState(() => _book = next);
+      await _persist((current) => current.copyWith(
+        coverBase64: data.base64, coverMime: data.mime,
+      ));
       AppLogger.info('Couverture enregistrée', component: 'cover');
     } on FormatException catch (failure) {
       AppLogger.warning('Couverture rejetée', component: 'cover',
@@ -196,16 +195,16 @@ class BookEditorPageState extends State<BookEditorPage> {
   }
 
   Future<void> _toggleNsfw(bool enabled) async {
-    final nextTags = {..._book.tags};
-    if (enabled) {
-      nextTags.add('nsfw');
-    } else {
-      nextTags.remove('nsfw');
-    }
-    final next = _book.copyWith(tags: nextTags);
     try {
-      await widget.library.save(next);
-      if (mounted) setState(() => _book = next);
+      await _persist((current) {
+        final nextTags = {...current.tags};
+        if (enabled) {
+          nextTags.add('nsfw');
+        } else {
+          nextTags.remove('nsfw');
+        }
+        return current.copyWith(tags: nextTags);
+      });
     } catch (_) {
       _show('Impossible d’enregistrer le mode.');
     }
@@ -493,11 +492,12 @@ class BookEditorPageState extends State<BookEditorPage> {
       label: BookDefinition.detailNames[_book.detailLevel - 1],
       value: _book.detailLevel.toDouble(),
       onChanged: (value) {
-        final updated = _book.copyWith(detailLevel: value.round());
-        setState(() => _book = updated);
-        widget.library.save(updated).catchError((Object _) {
-          _show('Impossible de sauver le niveau de détail.');
-        });
+        final level = value.round();
+        if (level == _book.detailLevel) return;
+        unawaited(_persist((current) =>
+          current.copyWith(detailLevel: level)).catchError((Object _) {
+            _show('Impossible de sauver le niveau de détail.');
+          }));
       },
     ),
     Text(BookDefinition.detailNames[_book.detailLevel - 1],
