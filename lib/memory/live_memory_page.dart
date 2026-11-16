@@ -6,9 +6,7 @@ import 'live_memory_coordinator.dart';
 
 /// A Party-only reader/editor. It does not expose Book canon authoring.
 class LiveMemoryPage extends StatefulWidget {
-  const LiveMemoryPage({
-    super.key, required this.memory, required this.onBack,
-  });
+  const LiveMemoryPage({super.key, required this.memory, required this.onBack});
 
   final LiveMemoryCoordinator memory;
   final VoidCallback onBack;
@@ -42,13 +40,20 @@ class _LiveMemoryPageState extends State<LiveMemoryPage> {
   }
 
   void _changed() {
-    if (mounted) { setState(() {}); }
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _load() async {
     try {
       await widget.memory.refresh();
-      if (mounted) { setState(() { _loading = false; _error = null; }); }
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = null;
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -67,8 +72,7 @@ class _LiveMemoryPageState extends State<LiveMemoryPage> {
 
   void _notice(String text) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
   Future<void> _run(Future<void> Function() action) async {
@@ -96,15 +100,19 @@ class _LiveMemoryPageState extends State<LiveMemoryPage> {
           maxLines: 5,
           decoration: const InputDecoration(
             labelText: 'Fait corrigé',
-            helperText: 'La correction sera conservée lors des retours arrière.',
+            helperText:
+                'La correction sera conservée lors des retours arrière.',
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context),
-              child: const Text('Annuler')),
-          FilledButton(onPressed: () =>
-              Navigator.pop(context, input.text.trim()),
-              child: const Text('Enregistrer')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, input.text.trim()),
+            child: const Text('Enregistrer'),
+          ),
         ],
       ),
     );
@@ -119,13 +127,19 @@ class _LiveMemoryPageState extends State<LiveMemoryPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Supprimer ce souvenir ?'),
-        content: const Text('Une suppression manuelle restera effective '
-            'même si la mémoire est reconstruite.'),
+        content: const Text(
+          'Une suppression manuelle restera effective '
+          'même si la mémoire est reconstruite.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annuler')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Supprimer')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Supprimer'),
+          ),
         ],
       ),
     );
@@ -137,14 +151,20 @@ class _LiveMemoryPageState extends State<LiveMemoryPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Réanalyser la Partie ?'),
-        content: const Text('Cette opération relit les tours RAW validés '
-            'et entraîne de nouveaux appels IA payants. Les corrections, '
-            'protections et suppressions manuelles seront conservées.'),
+        content: const Text(
+          'Cette opération relit les tours RAW validés '
+          'et entraîne de nouveaux appels IA payants. Les corrections, '
+          'protections et suppressions manuelles seront conservées.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annuler')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Réanalyser')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Réanalyser'),
+          ),
         ],
       ),
     );
@@ -155,49 +175,69 @@ class _LiveMemoryPageState extends State<LiveMemoryPage> {
     child: ExpansionTile(
       key: ValueKey('memoryFact-${fact.id}'),
       title: Text(fact.label),
-      subtitle: Text(fact.text, maxLines: 2,
-          overflow: TextOverflow.ellipsis),
-      leading: Icon(fact.pinned ? Icons.push_pin : Icons.bookmark_outline,
-          color: DomoliaColors.gold),
+      subtitle: Text(fact.text, maxLines: 2, overflow: TextOverflow.ellipsis),
+      leading: Icon(
+        fact.pinned ? Icons.push_pin : Icons.bookmark_outline,
+        color: DomoliaColors.gold,
+      ),
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(fact.text),
               const SizedBox(height: 8),
-              Text('Statut : ${fact.certainty} · ${fact.kind} · '
-                  '${fact.visibility}',
-                  style: const TextStyle(color: DomoliaColors.muted)),
-              Text('Source : tour ${fact.sourceTurnId} '
-                  '(${fact.sourceSide})',
-                  style: const TextStyle(color: DomoliaColors.muted)),
-              Text('« ${fact.sourceQuote} »',
-                  style: const TextStyle(color: DomoliaColors.muted)),
+              Text(
+                'Statut : ${fact.certainty} · ${fact.kind} · '
+                '${fact.visibility}',
+                style: const TextStyle(color: DomoliaColors.muted),
+              ),
+              Text(
+                'Source : tour ${fact.sourceTurnId} '
+                '(${fact.sourceSide})',
+                style: const TextStyle(color: DomoliaColors.muted),
+              ),
+              Text(
+                '« ${fact.sourceQuote} »',
+                style: const TextStyle(color: DomoliaColors.muted),
+              ),
               if (fact.loreId != null)
-                Text('Référence canonique : ${fact.loreId}',
-                    style: const TextStyle(color: DomoliaColors.muted)),
-              Wrap(spacing: 8, runSpacing: 6, children: [
-                TextButton.icon(
-                  onPressed: _working ? null :
-                      () => _run(() => widget.memory.overrideFact(fact,
-                        pinned: !fact.pinned)),
-                  icon: Icon(fact.pinned
-                      ? Icons.lock_open : Icons.lock_outline),
-                  label: Text(fact.pinned ? 'Déprotéger' : 'Protéger'),
+                Text(
+                  'Référence canonique : ${fact.loreId}',
+                  style: const TextStyle(color: DomoliaColors.muted),
                 ),
-                TextButton.icon(
-                  key: ValueKey('memoryEdit-${fact.id}'),
-                  onPressed: _working ? null : () => _edit(fact),
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Corriger'),
-                ),
-                TextButton.icon(
-                  onPressed: _working ? null : () => _remove(fact),
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('Supprimer'),
-                ),
-              ]),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  TextButton.icon(
+                    onPressed: _working
+                        ? null
+                        : () => _run(
+                            () => widget.memory.overrideFact(
+                              fact,
+                              pinned: !fact.pinned,
+                            ),
+                          ),
+                    icon: Icon(
+                      fact.pinned ? Icons.lock_open : Icons.lock_outline,
+                    ),
+                    label: Text(fact.pinned ? 'Déprotéger' : 'Protéger'),
+                  ),
+                  TextButton.icon(
+                    key: ValueKey('memoryEdit-${fact.id}'),
+                    onPressed: _working ? null : () => _edit(fact),
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Corriger'),
+                  ),
+                  TextButton.icon(
+                    onPressed: _working ? null : () => _remove(fact),
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Supprimer'),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -220,51 +260,75 @@ class _LiveMemoryPageState extends State<LiveMemoryPage> {
       if (_filter != 'all' && fact.certainty != _filter) return false;
       final needle = _query.toLowerCase();
       return '${fact.label} ${fact.text} ${fact.category} '
-          '${fact.entityId}'.toLowerCase().contains(needle);
+              '${fact.entityId}'
+          .toLowerCase()
+          .contains(needle);
     }).toList();
     return SafeArea(
       child: ListView(
         key: const ValueKey('liveMemoryPage'),
         padding: const EdgeInsets.all(20),
         children: [
-          Row(children: [
-            IconButton(onPressed: widget.onBack,
-                icon: const Icon(Icons.arrow_back)),
-            const Expanded(child: Text('Mémoire de la Partie',
-                style: TextStyle(fontSize: 21,
-                    color: DomoliaColors.goldLight))),
-          ]),
+          Row(
+            children: [
+              IconButton(
+                onPressed: widget.onBack,
+                icon: const Icon(Icons.arrow_back),
+              ),
+              const Expanded(
+                child: Text(
+                  'Mémoire de la Partie',
+                  style: TextStyle(
+                    fontSize: 21,
+                    color: DomoliaColors.goldLight,
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
-          const Text('Souvenirs de cette aventure uniquement. '
-              'Le Lore du Livre demeure canonique.',
-              style: TextStyle(color: DomoliaColors.muted)),
+          const Text(
+            'Souvenirs de cette aventure uniquement. '
+            'Le Lore du Livre demeure canonique.',
+            style: TextStyle(color: DomoliaColors.muted),
+          ),
           const SizedBox(height: 16),
-          Text(widget.memory.processing ? 'Extraction en cours…' :
-              widget.memory.pendingCount == 0
+          Text(
+            widget.memory.processing
+                ? 'Extraction en cours…'
+                : widget.memory.pendingCount == 0
                 ? 'Mémoire à jour'
                 : '${widget.memory.pendingCount} tour(s) à analyser',
-              key: const ValueKey('memoryStatus')),
+            key: const ValueKey('memoryStatus'),
+          ),
           if (widget.memory.error != null)
-            Text(widget.memory.error!,
-                style: const TextStyle(color: DomoliaColors.goldLight)),
+            Text(
+              widget.memory.error!,
+              style: const TextStyle(color: DomoliaColors.goldLight),
+            ),
           if (_error != null) Text(_error!),
           if (_loading) const LinearProgressIndicator(),
           const SizedBox(height: 12),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            OutlinedButton.icon(
-              key: const ValueKey('memoryRetry'),
-              onPressed: _working ? null :
-                () => _run(widget.memory.analyzePending),
-              icon: const Icon(Icons.sync),
-              label: const Text('Analyser les tours en attente'),
-            ),
-            OutlinedButton.icon(
-              key: const ValueKey('memoryRebuild'),
-              onPressed: _working ? null : _rebuild,
-              icon: const Icon(Icons.restart_alt),
-              label: const Text('Reconstruire'),
-            ),
-          ]),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                key: const ValueKey('memoryRetry'),
+                onPressed: _working
+                    ? null
+                    : () => _run(widget.memory.analyzePending),
+                icon: const Icon(Icons.sync),
+                label: const Text('Analyser les tours en attente'),
+              ),
+              OutlinedButton.icon(
+                key: const ValueKey('memoryRebuild'),
+                onPressed: _working ? null : _rebuild,
+                icon: const Icon(Icons.restart_alt),
+                label: const Text('Reconstruire'),
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
           TextField(
             key: const ValueKey('memorySearch'),
@@ -291,19 +355,23 @@ class _LiveMemoryPageState extends State<LiveMemoryPage> {
           ),
           const SizedBox(height: 16),
           if (!_loading && facts.isEmpty)
-            const Text('Aucun souvenir correspondant.',
-                key: ValueKey('memoryEmpty')),
+            const Text(
+              'Aucun souvenir correspondant.',
+              key: ValueKey('memoryEmpty'),
+            ),
           for (final category in categories.entries)
             if (facts.any((f) => f.category == category.key))
               ExpansionTile(
                 key: ValueKey('memoryCategory-${category.key}'),
                 initiallyExpanded: category.key == 'state',
                 title: Text(category.value),
-                subtitle: Text('${facts.where((f) =>
-                    f.category == category.key).length} souvenirs'),
+                subtitle: Text(
+                  '${facts.where((f) => f.category == category.key).length} souvenirs',
+                ),
                 children: [
-                  for (final fact in facts.where((f) =>
-                      f.category == category.key))
+                  for (final fact in facts.where(
+                    (f) => f.category == category.key,
+                  ))
                     _factTile(fact),
                 ],
               ),

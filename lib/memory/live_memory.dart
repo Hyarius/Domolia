@@ -1,5 +1,7 @@
 import 'package:crypto/crypto.dart';
+
 import '../chat/raw_generation.dart';
+
 import 'dart:convert';
 
 /// A sourced assertion in one Party, never an instruction or a Book canon edit.
@@ -41,26 +43,49 @@ class LiveMemoryFact {
   final bool manual;
 
   Map<String, dynamic> toJson() => {
-    'id': id, 'category': category, 'entity': entityId, 'label': label,
-    'field': field, 'text': text, 'kind': kind, 'certainty': certainty,
-    'visibility': visibility, 'importance': importance,
-    'sourceTurnId': sourceTurnId, 'sourceSide': sourceSide,
-    'sourceQuote': sourceQuote, if (loreId != null) 'loreId': loreId,
-    'pinned': pinned, 'manual': manual,
+    'id': id,
+    'category': category,
+    'entity': entityId,
+    'label': label,
+    'field': field,
+    'text': text,
+    'kind': kind,
+    'certainty': certainty,
+    'visibility': visibility,
+    'importance': importance,
+    'sourceTurnId': sourceTurnId,
+    'sourceSide': sourceSide,
+    'sourceQuote': sourceQuote,
+    if (loreId != null) 'loreId': loreId,
+    'pinned': pinned,
+    'manual': manual,
   };
 
-  LiveMemoryFact copyWith({String? text, String? certainty,
-      bool? pinned, bool? manual, String? sourceSide, String? sourceQuote}) =>
-      LiveMemoryFact(
-        id: id, category: category, entityId: entityId, label: label,
-        field: field, text: text ?? this.text, kind: kind,
-        certainty: certainty ?? this.certainty, visibility: visibility,
-        importance: importance, sourceTurnId: sourceTurnId,
-        sourceSide: sourceSide ?? this.sourceSide,
-        sourceQuote: sourceQuote ?? this.sourceQuote,
-        loreId: loreId, pinned: pinned ?? this.pinned,
-        manual: manual ?? this.manual,
-      );
+  LiveMemoryFact copyWith({
+    String? text,
+    String? certainty,
+    bool? pinned,
+    bool? manual,
+    String? sourceSide,
+    String? sourceQuote,
+  }) => LiveMemoryFact(
+    id: id,
+    category: category,
+    entityId: entityId,
+    label: label,
+    field: field,
+    text: text ?? this.text,
+    kind: kind,
+    certainty: certainty ?? this.certainty,
+    visibility: visibility,
+    importance: importance,
+    sourceTurnId: sourceTurnId,
+    sourceSide: sourceSide ?? this.sourceSide,
+    sourceQuote: sourceQuote ?? this.sourceQuote,
+    loreId: loreId,
+    pinned: pinned ?? this.pinned,
+    manual: manual ?? this.manual,
+  );
 
   static LiveMemoryFact fromJson(Object? value) {
     if (value is! Map<String, dynamic>) {
@@ -73,6 +98,7 @@ class LiveMemoryFact {
       }
       return v;
     }
+
     final id = s('id', max: 96);
     if (!RegExp(r'^[a-z0-9][a-z0-9:_-]{2,95}$').hasMatch(id)) {
       throw const FormatException('Invalid memory ID.');
@@ -82,8 +108,15 @@ class LiveMemoryFact {
     final certainty = s('certainty', max: 16);
     final visibility = s('visibility', max: 16);
     final side = s('sourceSide', max: 16);
-    if (!{'character', 'place', 'object', 'event', 'relationship',
-      'commitment', 'state'}.contains(category) ||
+    if (!{
+          'character',
+          'place',
+          'object',
+          'event',
+          'relationship',
+          'commitment',
+          'state',
+        }.contains(category) ||
         !{'stable', 'state', 'event'}.contains(kind) ||
         !{'confirmed', 'reported', 'uncertain'}.contains(certainty) ||
         !{'player', 'narrator'}.contains(visibility) ||
@@ -92,8 +125,11 @@ class LiveMemoryFact {
     }
     final importance = value['importance'];
     final turn = value['sourceTurnId'];
-    if (importance is! int || importance < 1 || importance > 5 ||
-        turn is! int || turn < 0) {
+    if (importance is! int ||
+        importance < 1 ||
+        importance > 5 ||
+        turn is! int ||
+        turn < 0) {
       throw const FormatException('Invalid memory importance or source.');
     }
     final lore = value['loreId'];
@@ -101,13 +137,21 @@ class LiveMemoryFact {
       throw const FormatException('Invalid canonical reference.');
     }
     return LiveMemoryFact(
-      id: id, category: category, entityId: s('entity', max: 96),
-      label: s('label', max: 100), field: s('field', max: 80),
-      text: s('text'), kind: kind, certainty: certainty,
-      visibility: visibility, importance: importance,
-      sourceTurnId: turn, sourceSide: side,
+      id: id,
+      category: category,
+      entityId: s('entity', max: 96),
+      label: s('label', max: 100),
+      field: s('field', max: 80),
+      text: s('text'),
+      kind: kind,
+      certainty: certainty,
+      visibility: visibility,
+      importance: importance,
+      sourceTurnId: turn,
+      sourceSide: side,
       sourceQuote: s('sourceQuote', max: 320),
-      loreId: lore as String?, pinned: value['pinned'] == true,
+      loreId: lore as String?,
+      pinned: value['pinned'] == true,
       manual: value['manual'] == true,
     );
   }
@@ -122,7 +166,8 @@ class LiveMemoryOperation {
 
   Map<String, dynamic> toJson() => {'action': action, 'fact': fact.toJson()};
 
-  static List<LiveMemoryOperation> parse(String response, {
+  static List<LiveMemoryOperation> parse(
+    String response, {
     required int playerEventId,
     required String playerText,
     required String validatedRaw,
@@ -132,7 +177,8 @@ class LiveMemoryOperation {
     }
     final parsed = jsonDecode(response);
     if (parsed is! Map<String, dynamic> ||
-        parsed.length != 1 || parsed['operations'] is! List) {
+        parsed.length != 1 ||
+        parsed['operations'] is! List) {
       throw const FormatException('Expected strict memory operations JSON.');
     }
     final ops = parsed['operations'] as List;
@@ -143,10 +189,22 @@ class LiveMemoryOperation {
     final seen = <String>{};
     for (final value in ops) {
       if (value is! Map<String, dynamic> ||
-          value.keys.toSet().difference({'action', 'id', 'category',
-            'entity', 'label', 'field', 'text', 'kind', 'certainty',
-            'visibility', 'importance', 'sourceSide', 'quote',
-            'loreId'}).isNotEmpty ||
+          value.keys.toSet().difference({
+            'action',
+            'id',
+            'category',
+            'entity',
+            'label',
+            'field',
+            'text',
+            'kind',
+            'certainty',
+            'visibility',
+            'importance',
+            'sourceSide',
+            'quote',
+            'loreId',
+          }).isNotEmpty ||
           value['action'] is! String) {
         throw const FormatException('Malformed memory operation.');
       }
@@ -157,15 +215,23 @@ class LiveMemoryOperation {
       final side = value['sourceSide'];
       final quote = value['quote'];
       if (side != 'raw' && side != 'player' ||
-          quote is! String || quote.length < 3 || quote.length > 320 ||
+          quote is! String ||
+          quote.length < 3 ||
+          quote.length > 320 ||
           !(side == 'raw' ? validatedRaw : playerText).contains(quote)) {
         throw const FormatException('Unverifiable memory source quote.');
       }
       // Parse and validate all classifications before applying any operation.
-      final fact = LiveMemoryFact.fromJson({
-        ...value, 'sourceTurnId': playerEventId,
-        'sourceSide': side, 'sourceQuote': quote,
-      }..remove('action')..remove('quote'));
+      final fact = LiveMemoryFact.fromJson(
+        {
+            ...value,
+            'sourceTurnId': playerEventId,
+            'sourceSide': side,
+            'sourceQuote': quote,
+          }
+          ..remove('action')
+          ..remove('quote'),
+      );
       if (!seen.add(fact.id)) {
         throw const FormatException('Duplicate memory operation ID.');
       }
@@ -204,8 +270,9 @@ class LiveMemoryOverride {
 
 class LiveMemoryProjection {
   static List<LiveMemoryFact> replay(
-      Iterable<List<LiveMemoryOperation>> turns,
-      Iterable<LiveMemoryOverride> overrides) {
+    Iterable<List<LiveMemoryOperation>> turns,
+    Iterable<LiveMemoryOverride> overrides,
+  ) {
     final facts = <String, LiveMemoryFact>{};
     for (final ops in turns) {
       for (final op in ops) {
@@ -214,11 +281,14 @@ class LiveMemoryProjection {
         } else {
           // Stable IDs are required; near-identical assertions from different
           // spellings of a name share an established category+field.
-          final equivalent = facts.values.where((f) =>
-              f.category == op.fact.category &&
-              f.field == op.fact.field &&
-              f.kind != 'event' && op.fact.kind != 'event' &&
-              f.label.toLowerCase() == op.fact.label.toLowerCase());
+          final equivalent = facts.values.where(
+            (f) =>
+                f.category == op.fact.category &&
+                f.field == op.fact.field &&
+                f.kind != 'event' &&
+                op.fact.kind != 'event' &&
+                f.label.toLowerCase() == op.fact.label.toLowerCase(),
+          );
           if (equivalent.isNotEmpty && equivalent.first.id != op.fact.id) {
             facts.remove(equivalent.first.id);
           }
@@ -241,9 +311,11 @@ class LiveMemoryProjection {
 class LiveMemorySelector {
   const LiveMemorySelector({this.maxCharacters = 3600});
   final int maxCharacters;
-  static Set<String> words(String input) => RegExp(r'[a-z0-9]{3,}')
-      .allMatches(input.toLowerCase())
-      .map((m) => m.group(0)!).toSet();
+  static Set<String> words(String input) =>
+      RegExp(r'[a-z0-9]{3,}')
+          .allMatches(input.toLowerCase())
+          .map((m) => m.group(0)!)
+          .toSet();
 
   String build(Iterable<LiveMemoryFact> facts, Iterable<String> recent) {
     final query = words(recent.join(' '));
@@ -251,11 +323,15 @@ class LiveMemorySelector {
     for (final fact in facts) {
       final keys = words('${fact.label} ${fact.entityId} ${fact.text}');
       final hits = keys.intersection(query).length;
-      final active = fact.category == 'state' ||
+      final active =
+          fact.category == 'state' ||
           fact.category == 'commitment' ||
           fact.kind == 'state';
-      final score = fact.importance * 4 + hits * 12 +
-          (active ? 18 : 0) + (fact.pinned ? 12 : 0);
+      final score =
+          fact.importance * 4 +
+          hits * 12 +
+          (active ? 18 : 0) +
+          (fact.pinned ? 12 : 0);
       ranked.add((score, fact));
     }
     ranked.sort((a, b) {
@@ -264,7 +340,8 @@ class LiveMemorySelector {
     });
     final out = StringBuffer();
     for (final (_, fact) in ranked) {
-      final line = '[${fact.category}/${fact.kind}; ${fact.certainty}; '
+      final line =
+          '[${fact.category}/${fact.kind}; ${fact.certainty}; '
           '${fact.visibility}; source: tour ${fact.sourceTurnId}] '
           '${fact.label} — ${fact.text}\n';
       if (out.length + line.length > maxCharacters) continue;
@@ -274,7 +351,12 @@ class LiveMemorySelector {
   }
 }
 
-String liveMemorySourceHash(RawGeneration generation) => sha256.convert(
-    utf8.encode('${generation.playerEventId}:'
+String liveMemorySourceHash(RawGeneration generation) => sha256
+    .convert(
+      utf8.encode(
+        '${generation.playerEventId}:'
         '${generation.firstEventId}:${generation.lastEventId}:'
-        '${generation.rawText}')).toString();
+        '${generation.rawText}',
+      ),
+    )
+    .toString();

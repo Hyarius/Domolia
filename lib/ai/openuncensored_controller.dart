@@ -65,16 +65,21 @@ class OuCreditsController extends ChangeNotifier {
       final added = List<StoredOuKey>.of(state.keys);
       var activeId = state.activeKeyId;
       for (final profile in ai.profiles) {
-        if (profile.baseUrl.replaceFirst(RegExp(r'/+$'), '') != defaultAiBaseUrl ||
+        if (profile.baseUrl.replaceFirst(RegExp(r'/+$'), '') !=
+                defaultAiBaseUrl ||
             !validOpenUncensoredKey(profile.apiKey)) {
           continue;
         }
         final id = ouKeyId(profile.apiKey);
         if (!added.any((item) => item.id == id)) {
-          added.add(StoredOuKey(
-            id: id, secret: profile.apiKey, addedAt: DateTime.now().toUtc(),
-            name: profile.name,
-          ));
+          added.add(
+            StoredOuKey(
+              id: id,
+              secret: profile.apiKey,
+              addedAt: DateTime.now().toUtc(),
+              name: profile.name,
+            ),
+          );
         }
         if (activeId == null && ai.selectedProfileId == profile.id) {
           activeId = id;
@@ -91,19 +96,25 @@ class OuCreditsController extends ChangeNotifier {
       // preparing its managed AI profiles. Repair that partial setup on boot.
       final selected = state.find(state.activeKeyId);
       if (selected != null) {
-        final managed = ai.profiles.where((profile) =>
-            profile.id == AiConnectionController.ouNarratorProfileId).toList();
+        final managed = ai.profiles
+            .where(
+              (profile) =>
+                  profile.id == AiConnectionController.ouNarratorProfileId,
+            )
+            .toList();
         if (managed.isEmpty ||
             managed.first.apiKey != selected.secret ||
             routing.profileFor(AiNarrativeTask.narrator) !=
                 AiConnectionController.ouNarratorProfileId) {
           if (!await _configure(state)) {
-            error = 'Clé conservée, mais configuration du narrateur à reprendre.';
+            error =
+                'Clé conservée, mais configuration du narrateur à reprendre.';
           }
         }
       }
     } catch (_) {
-      error = 'Le coffre sécurisé est indisponible. Aucune clé n’a été supprimée.';
+      error =
+          'Le coffre sécurisé est indisponible. Aucune clé n’a été supprimée.';
     } finally {
       ready = true;
       _notify();
@@ -126,7 +137,8 @@ class OuCreditsController extends ChangeNotifier {
     try {
       if (!_vaultReady) {
         throw const OpenUncensoredFailure(
-          'Le coffre sécurisé ne peut pas être lu. Modifications suspendues.');
+          'Le coffre sécurisé ne peut pas être lu. Modifications suspendues.',
+        );
       }
       return await action();
     } on OpenUncensoredFailure catch (failure) {
@@ -166,7 +178,9 @@ class OuCreditsController extends ChangeNotifier {
     final sorted = _catalogue.where((model) => model.available).toList()
       ..sort((a, b) => _price(a).compareTo(_price(b)));
     final cheap = sorted.isEmpty ? defaultAiModel : sorted.first.id;
-    final toolCandidates = sorted.where((model) => model.toolCompatible).toList();
+    final toolCandidates = sorted
+        .where((model) => model.toolCompatible)
+        .toList();
     final narratorPool = toolCandidates.isNotEmpty ? toolCandidates : sorted;
     String ranked() {
       for (final name in _recommended) {
@@ -174,17 +188,15 @@ class OuCreditsController extends ChangeNotifier {
       }
       return narratorPool.isEmpty ? defaultAiModel : narratorPool.first.id;
     }
+
     final narrator = switch (mode) {
-      OuQuality.economical => narratorPool.isEmpty ? defaultAiModel : narratorPool.first.id,
+      OuQuality.economical =>
+        narratorPool.isEmpty ? defaultAiModel : narratorPool.first.id,
       OuQuality.balanced => ranked(),
       OuQuality.quality => ranked(),
       OuQuality.advanced => _state.models['narrator'] ?? ranked(),
     };
-    return {
-      'narrator': narrator,
-      'jsonifier': cheap,
-      'optimizer': cheap,
-    };
+    return {'narrator': narrator, 'jsonifier': cheap, 'optimizer': cheap};
   }
 
   double _price(OuModel model) =>
@@ -194,15 +206,16 @@ class OuCreditsController extends ChangeNotifier {
   Future<bool> _configure(OuVaultState snapshot) async {
     final key = snapshot.find(snapshot.activeKeyId);
     if (key == null) return true;
-    final models = snapshot.models.isEmpty ?
-        _chooseModels(OuQuality.balanced) : snapshot.models;
+    final models = snapshot.models.isEmpty
+        ? _chooseModels(OuQuality.balanced)
+        : snapshot.models;
     final narratorModel = models['narrator'] ?? defaultAiModel;
-    final knownNarrator = _catalogue.where(
-        (model) => model.id == narratorModel).toList();
+    final knownNarrator = _catalogue
+        .where((model) => model.id == narratorModel)
+        .toList();
     final narratorToolsSupported = knownNarrator.isEmpty
         ? null
-        : knownNarrator.any((model) =>
-            model.available && model.toolCompatible);
+        : knownNarrator.any((model) => model.available && model.toolCompatible);
     final applied = await ai.configureOpenUncensored(
       key.secret,
       narratorModel: narratorModel,
@@ -212,123 +225,185 @@ class OuCreditsController extends ChangeNotifier {
     );
     if (!applied) return false;
     await routing.setProfile(
-      AiNarrativeTask.narrator, AiConnectionController.ouNarratorProfileId);
+      AiNarrativeTask.narrator,
+      AiConnectionController.ouNarratorProfileId,
+    );
     await routing.setProfile(
-      AiNarrativeTask.jsonifier, AiConnectionController.ouJsonifierProfileId);
+      AiNarrativeTask.jsonifier,
+      AiConnectionController.ouJsonifierProfileId,
+    );
     await routing.setProfile(
       AiNarrativeTask.optimizer,
-      snapshot.mode == OuQuality.economical.name ? '#disabled' :
-          AiConnectionController.ouOptimizerProfileId);
+      snapshot.mode == OuQuality.economical.name
+          ? '#disabled'
+          : AiConnectionController.ouOptimizerProfileId,
+    );
     return true;
   }
 
-  Future<bool> refresh(String id) async => await _run(() async {
-    final key = _state.find(id);
-    if (key == null) {
-      throw const OpenUncensoredFailure('Clé introuvable dans l’historique.');
-    }
-    final balance = await api.balance(key.secret);
-    await _write(_state.copyWith(keys: [
-      for (final item in _state.keys)
-        item.id == id ?
-          item.copyWith(balance: balance, checked: DateTime.now().toUtc()) : item,
-    ]));
-    notice = 'Solde mis à jour.';
-    return true;
-  }) ?? false;
+  Future<bool> refresh(String id) async =>
+      await _run(() async {
+        final key = _state.find(id);
+        if (key == null) {
+          throw const OpenUncensoredFailure(
+            'Clé introuvable dans l’historique.',
+          );
+        }
+        final balance = await api.balance(key.secret);
+        await _write(
+          _state.copyWith(
+            keys: [
+              for (final item in _state.keys)
+                item.id == id
+                    ? item.copyWith(
+                        balance: balance,
+                        checked: DateTime.now().toUtc(),
+                      )
+                    : item,
+            ],
+          ),
+        );
+        notice = 'Solde mis à jour.';
+        return true;
+      }) ??
+      false;
 
   Future<bool> importKey(String value, {String name = ''}) async =>
       await _run(() async {
-    final key = value.trim();
-    if (!validOpenUncensoredKey(key)) {
-      throw const OpenUncensoredFailure('Format de clé OpenUncensored invalide.');
-    }
-    final balance = await api.balance(key);
-    if (_catalogue.isEmpty) {
-      try { _catalogue = await api.models(); } catch (_) { /* Use documented fallback. */ }
-    }
-    final id = ouKeyId(key);
-    final existing = _state.find(id);
-    final record = (existing ?? StoredOuKey(
-      id: id, secret: key, addedAt: DateTime.now().toUtc(),
-      name: name.trim(),
-    )).copyWith(balance: balance, checked: DateTime.now().toUtc());
-    final snapshot = _state.copyWith(
-      keys: [
-        for (final item in _state.keys)
-          if (item.id != id) item,
-        record,
-      ],
-      activeKeyId: id,
-      models: _state.models.isEmpty ? _chooseModels(quality) : _state.models,
-    );
-    // Persist first. If activating a managed profile fails, the key remains
-    // recoverable from the encrypted history.
-    await _write(snapshot);
-    if (!await _configure(snapshot)) {
-      throw const OpenUncensoredFailure('Clé conservée, mais activation IA impossible.');
-    }
-    notice = 'Clé validée et activée. Les anciens crédits restent sur leurs clés.';
-    return true;
-  }) ?? false;
+        final key = value.trim();
+        if (!validOpenUncensoredKey(key)) {
+          throw const OpenUncensoredFailure(
+            'Format de clé OpenUncensored invalide.',
+          );
+        }
+        final balance = await api.balance(key);
+        if (_catalogue.isEmpty) {
+          try {
+            _catalogue = await api.models();
+          } catch (_) {
+            /* Use documented fallback. */
+          }
+        }
+        final id = ouKeyId(key);
+        final existing = _state.find(id);
+        final record =
+            (existing ??
+                    StoredOuKey(
+                      id: id,
+                      secret: key,
+                      addedAt: DateTime.now().toUtc(),
+                      name: name.trim(),
+                    ))
+                .copyWith(balance: balance, checked: DateTime.now().toUtc());
+        final snapshot = _state.copyWith(
+          keys: [
+            for (final item in _state.keys)
+              if (item.id != id) item,
+            record,
+          ],
+          activeKeyId: id,
+          models: _state.models.isEmpty
+              ? _chooseModels(quality)
+              : _state.models,
+        );
+        // Persist first. If activating a managed profile fails, the key remains
+        // recoverable from the encrypted history.
+        await _write(snapshot);
+        if (!await _configure(snapshot)) {
+          throw const OpenUncensoredFailure(
+            'Clé conservée, mais activation IA impossible.',
+          );
+        }
+        notice = 'Clé validée et activée. Les anciens crédits restent sur leurs clés.';
+        return true;
+      }) ??
+      false;
 
-  Future<bool> activate(String id) async => await _run(() async {
-    final key = _state.find(id);
-    if (key == null) throw const OpenUncensoredFailure('Clé inconnue.');
-    final balance = await api.balance(key.secret);
-    final next = _state.copyWith(
-      keys: [
-        for (final item in _state.keys)
-          item.id == id ?
-            item.copyWith(balance: balance, checked: DateTime.now().toUtc()) : item,
-      ],
-      activeKeyId: id,
-      models: _state.models.isEmpty ? _chooseModels(quality) : _state.models,
-    );
-    await _write(next);
-    if (!await _configure(next)) {
-      throw const OpenUncensoredFailure('Clé enregistrée, activation IA impossible.');
-    }
-    notice = 'Clé active remplacée. Aucun crédit n’a été transféré.';
-    return true;
-  }) ?? false;
+  Future<bool> activate(String id) async =>
+      await _run(() async {
+        final key = _state.find(id);
+        if (key == null) throw const OpenUncensoredFailure('Clé inconnue.');
+        final balance = await api.balance(key.secret);
+        final next = _state.copyWith(
+          keys: [
+            for (final item in _state.keys)
+              item.id == id
+                  ? item.copyWith(
+                      balance: balance,
+                      checked: DateTime.now().toUtc(),
+                    )
+                  : item,
+          ],
+          activeKeyId: id,
+          models: _state.models.isEmpty
+              ? _chooseModels(quality)
+              : _state.models,
+        );
+        await _write(next);
+        if (!await _configure(next)) {
+          throw const OpenUncensoredFailure(
+            'Clé enregistrée, activation IA impossible.',
+          );
+        }
+        notice = 'Clé active remplacée. Aucun crédit n’a été transféré.';
+        return true;
+      }) ??
+      false;
 
-  Future<bool> rename(String id, String value) async => await _run(() async {
-    final name = value.trim();
-    if (name.length > 48 || name.contains(RegExp(r'[\r\n]'))) {
-      throw const OpenUncensoredFailure('Nom de clé invalide.');
-    }
-    if (_state.find(id) == null) return false;
-    await _write(_state.copyWith(keys: [
-      for (final item in _state.keys)
-        item.id == id ? item.copyWith(name: name) : item,
-    ]));
-    return true;
-  }) ?? false;
+  Future<bool> rename(String id, String value) async =>
+      await _run(() async {
+        final name = value.trim();
+        if (name.length > 48 || name.contains(RegExp(r'[\r\n]'))) {
+          throw const OpenUncensoredFailure('Nom de clé invalide.');
+        }
+        if (_state.find(id) == null) return false;
+        await _write(
+          _state.copyWith(
+            keys: [
+              for (final item in _state.keys)
+                item.id == id ? item.copyWith(name: name) : item,
+            ],
+          ),
+        );
+        return true;
+      }) ??
+      false;
 
   /// Returns the provider URL only after saving the claim token, so a process
   /// restart during Stripe Checkout cannot orphan the purchase.
   Future<Uri?> startCheckout(int cents, {String? topUpKeyId}) async =>
       await _run(() async {
-    if (_state.pending != null) {
-      throw const OpenUncensoredFailure('Terminez ou abandonnez le paiement en cours.');
-    }
-    final target = topUpKeyId == null ? null : _state.find(topUpKeyId);
-    if (topUpKeyId != null && target == null) {
-      throw const OpenUncensoredFailure('Clé à recharger introuvable.');
-    }
-    final session = await api.checkout(
-      cents: cents, topUpKey: target?.secret);
-    await _write(_state.copyWith(pending: PendingOuCheckout(
-      sessionId: session.sessionId, claimToken: session.claimToken,
-      paymentUrl: session.paymentUrl, cents: cents,
-      targetKeyId: target?.id, startedAt: DateTime.now().toUtc(),
-    )));
-    notice = 'Session enregistrée. Terminez le paiement chez Stripe.';
-    return session.paymentUrl;
-  });
+        if (_state.pending != null) {
+          throw const OpenUncensoredFailure(
+            'Terminez ou abandonnez le paiement en cours.',
+          );
+        }
+        final target = topUpKeyId == null ? null : _state.find(topUpKeyId);
+        if (topUpKeyId != null && target == null) {
+          throw const OpenUncensoredFailure('Clé à recharger introuvable.');
+        }
+        final session = await api.checkout(
+          cents: cents,
+          topUpKey: target?.secret,
+        );
+        await _write(
+          _state.copyWith(
+            pending: PendingOuCheckout(
+              sessionId: session.sessionId,
+              claimToken: session.claimToken,
+              paymentUrl: session.paymentUrl,
+              cents: cents,
+              targetKeyId: target?.id,
+              startedAt: DateTime.now().toUtc(),
+            ),
+          ),
+        );
+        notice = 'Session enregistrée. Terminez le paiement chez Stripe.';
+        return session.paymentUrl;
+      });
 
-  Future<OuCheckoutStatus?> checkPending() async => await _run<OuCheckoutStatus?>(() async {
+  Future<OuCheckoutStatus?>
+  checkPending() async => await _run<OuCheckoutStatus?>(() async {
     final session = _state.pending;
     if (session == null) return null;
     final result = await api.check(session.sessionId, session.claimToken);
@@ -351,17 +426,26 @@ class OuCreditsController extends ChangeNotifier {
       // selection changed while the Stripe page was open.
       final target = _state.find(session.targetKeyId);
       if (target == null) {
-        throw const OpenUncensoredFailure('Recharge confirmée : clé cible introuvable.');
+        throw const OpenUncensoredFailure(
+          'Recharge confirmée : clé cible introuvable.',
+        );
       }
       await _write(_state.copyWith(clearPending: true));
       try {
         final balance = await api.balance(target.secret);
-        await _write(_state.copyWith(keys: [
-          for (final item in _state.keys)
-            item.id == target.id ?
-              item.copyWith(balance: balance, checked: DateTime.now().toUtc()) :
-              item,
-        ]));
+        await _write(
+          _state.copyWith(
+            keys: [
+              for (final item in _state.keys)
+                item.id == target.id
+                    ? item.copyWith(
+                        balance: balance,
+                        checked: DateTime.now().toUtc(),
+                      )
+                    : item,
+            ],
+          ),
+        );
       } catch (_) {
         // Paid confirmation remains authoritative; cached balance is stale.
       }
@@ -371,13 +455,14 @@ class OuCreditsController extends ChangeNotifier {
     final newKey = result.apiKey;
     if (newKey == null || !validOpenUncensoredKey(newKey)) {
       throw const OpenUncensoredFailure(
-        'Paiement confirmé, mais aucune clé récupérable. Contactez le fournisseur.');
+        'Paiement confirmé, mais aucune clé récupérable. Contactez le fournisseur.',
+      );
     }
     final id = ouKeyId(newKey);
     final old = _state.find(id);
-    final created = old ?? StoredOuKey(
-      id: id, secret: newKey, addedAt: DateTime.now().toUtc(),
-    );
+    final created =
+        old ??
+        StoredOuKey(id: id, secret: newKey, addedAt: DateTime.now().toUtc());
     final next = _state.copyWith(
       keys: [..._state.keys.where((item) => item.id != id), created],
       activeKeyId: id,
@@ -392,66 +477,97 @@ class OuCreditsController extends ChangeNotifier {
       // secure write fails. It must never be sent to logs or diagnostics.
       _emergencyKey = newKey;
       throw const OpenUncensoredFailure(
-        'Paiement confirmé : sauvegarde impossible. Copiez immédiatement la clé de secours.');
+        'Paiement confirmé : sauvegarde impossible. Copiez immédiatement la clé de secours.',
+      );
     }
     if (_catalogue.isEmpty) {
-      try { _catalogue = await api.models(); } catch (_) { /* Offline fallback. */ }
+      try {
+        _catalogue = await api.models();
+      } catch (_) {
+        /* Offline fallback. */
+      }
     }
     if (!await _configure(next)) {
       throw const OpenUncensoredFailure(
-        'Clé sauvegardée dans l’historique, mais configuration IA indisponible.');
+        'Clé sauvegardée dans l’historique, mais configuration IA indisponible.',
+      );
     }
     try {
       final balance = await api.balance(newKey);
-      await _write(_state.copyWith(keys: [
-        for (final item in _state.keys)
-          item.id == id ? item.copyWith(balance: balance,
-            checked: DateTime.now().toUtc()) : item,
-      ]));
-    } catch (_) { /* Verified key remains durably stored. */ }
+      await _write(
+        _state.copyWith(
+          keys: [
+            for (final item in _state.keys)
+              item.id == id
+                  ? item.copyWith(
+                      balance: balance,
+                      checked: DateTime.now().toUtc(),
+                    )
+                  : item,
+          ],
+        ),
+      );
+    } catch (_) {
+      /* Verified key remains durably stored. */
+    }
     notice = 'Paiement confirmé et clé sauvegardée.';
     return result.status;
   });
 
   /// Suspend monitoring, but NEVER delete a claim token that might still
   /// unlock a one-time new key. Expired sessions are cleared by checkPending.
-  Future<bool> abandonPending() async => await _run(() async {
-    if (_state.pending == null) return true;
-    notice = 'Vérifications suspendues. La session et son jeton de récupération '
-        'restent enregistrés jusqu’à expiration ou confirmation.';
-    return true;
-  }) ?? false;
+  Future<bool> abandonPending() async =>
+      await _run(() async {
+        if (_state.pending == null) return true;
+        notice =
+            'Vérifications suspendues. La session et son jeton de récupération '
+            'restent enregistrés jusqu’à expiration ou confirmation.';
+        return true;
+      }) ??
+      false;
 
-  Future<bool> setPreset(OuQuality mode) async => await _run(() async {
-    if (mode == OuQuality.advanced) return false;
-    final catalogue = await api.models();
-    _catalogue = catalogue;
-    if (catalogue.isEmpty) {
-      throw const OpenUncensoredFailure('Catalogue indisponible.');
-    }
-    final next = _state.copyWith(mode: mode.name, models: _chooseModels(mode));
-    await _write(next);
-    if (!await _configure(next)) return false;
-    notice = 'Préréglage ${mode.name} appliqué.';
-    return true;
-  }) ?? false;
+  Future<bool> setPreset(OuQuality mode) async =>
+      await _run(() async {
+        if (mode == OuQuality.advanced) return false;
+        final catalogue = await api.models();
+        _catalogue = catalogue;
+        if (catalogue.isEmpty) {
+          throw const OpenUncensoredFailure('Catalogue indisponible.');
+        }
+        final next = _state.copyWith(
+          mode: mode.name,
+          models: _chooseModels(mode),
+        );
+        await _write(next);
+        if (!await _configure(next)) return false;
+        notice = 'Préréglage ${mode.name} appliqué.';
+        return true;
+      }) ??
+      false;
 
-  Future<bool> setAdvanced(Map<String, String> models) async => await _run(() async {
-    if (_catalogue.isEmpty) _catalogue = await api.models();
-    for (final task in ['narrator', 'jsonifier', 'optimizer']) {
-      final requested = models[task];
-      if (requested == null ||
-          !_catalogue.any((model) => model.id == requested && model.available)) {
-        throw const OpenUncensoredFailure('Modèle de tâche indisponible.');
-      }
-    }
-    // Tool compatibility is verified independently from model selection.
-    // A missing catalogue flag cannot make the entire model list unusable.
-    final next = _state.copyWith(mode: OuQuality.advanced.name, models: models);
-    await _write(next);
-    if (!await _configure(next)) return false;
-    return true;
-  }) ?? false;
+  Future<bool> setAdvanced(Map<String, String> models) async =>
+      await _run(() async {
+        if (_catalogue.isEmpty) _catalogue = await api.models();
+        for (final task in ['narrator', 'jsonifier', 'optimizer']) {
+          final requested = models[task];
+          if (requested == null ||
+              !_catalogue.any(
+                (model) => model.id == requested && model.available,
+              )) {
+            throw const OpenUncensoredFailure('Modèle de tâche indisponible.');
+          }
+        }
+        // Tool compatibility is verified independently from model selection.
+        // A missing catalogue flag cannot make the entire model list unusable.
+        final next = _state.copyWith(
+          mode: OuQuality.advanced.name,
+          models: models,
+        );
+        await _write(next);
+        if (!await _configure(next)) return false;
+        return true;
+      }) ??
+      false;
 
   /// Only call after an explicit confirmation from the user.
   String? revealKey(String id) => _state.find(id)?.secret;

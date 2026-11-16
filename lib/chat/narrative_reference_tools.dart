@@ -22,62 +22,110 @@ class NarrativeReferenceTools {
   final List<LiveMemoryFact> Function()? memory;
 
   static const definitions = <AiToolDefinition>[
-    AiToolDefinition('search_memory',
-        'Search sourced facts about this Party, not Book canon. Includes old details, relationships and uncertain reports.', {
-      'type': 'object', 'properties': {
-        'query': {'type': 'string'},
-        'category': {'type': 'string', 'enum': [
-          'all', 'character', 'place', 'object', 'event',
-          'relationship', 'commitment', 'state']},
-        'limit': {'type': 'integer', 'minimum': 1, 'maximum': 5},
-      }, 'required': ['query'],
-    }),
-    AiToolDefinition('get_memory_entry',
-        'Read a Party memory by its stable ID with certainty and source turn.', {
-      'type': 'object', 'properties': {
-        'id': {'type': 'string'},
-      }, 'required': ['id'],
-    }),
-    AiToolDefinition('get_event_history',
-        'Search retained past events and commitments for this Party.', {
-      'type': 'object', 'properties': {
-        'query': {'type': 'string'},
-        'limit': {'type': 'integer', 'minimum': 1, 'maximum': 5},
-      }, 'required': ['query'],
-    }),
-    AiToolDefinition('search_lore',
-        'Search Book canon: names, aliases, IDs and descriptions. Potential events have NOT necessarily happened.', {
-      'type': 'object', 'properties': {
-        'query': {'type': 'string'},
-        'category': {'type': 'string',
-          'enum': ['character', 'place', 'scenario', 'event', 'all']},
-        'limit': {'type': 'integer', 'minimum': 1, 'maximum': 5},
-      }, 'required': ['query'],
-    }),
-    AiToolDefinition('get_lore_entry',
-        'Retrieve a canonical entry including secrets, relationships and unverified conditions.', {
-      'type': 'object', 'properties': {
-        'category': {'type': 'string',
-          'enum': ['character', 'place', 'scenario', 'event']},
-        'id': {'type': 'string'},
-      }, 'required': ['category', 'id'],
-    }),
-    AiToolDefinition('search_history',
-        'Search all turns in THIS Party, including player messages, compact summaries and original RAW.', {
-      'type': 'object', 'properties': {
-        'query': {'type': 'string'},
-        'limit': {'type': 'integer', 'minimum': 1, 'maximum': 5},
-      }, 'required': ['query'],
-    }),
-    AiToolDefinition('get_history_excerpt',
-        'Read original RAW from an old turn by player_event_id or a timeline event_id; count at most 3.', {
-      'type': 'object', 'properties': {
-        'player_event_id': {'type': 'integer'},
-        'event_id': {'type': 'integer'},
-        'count': {'type': 'integer', 'minimum': 1, 'maximum': 3},
-        'raw_offset': {'type': 'integer', 'minimum': 0, 'maximum': 131072},
+    AiToolDefinition(
+      'search_memory',
+      'Search sourced facts about this Party, not Book canon. Includes old details, relationships and uncertain reports.',
+      {
+        'type': 'object',
+        'properties': {
+          'query': {'type': 'string'},
+          'category': {
+            'type': 'string',
+            'enum': [
+              'all',
+              'character',
+              'place',
+              'object',
+              'event',
+              'relationship',
+              'commitment',
+              'state',
+            ],
+          },
+          'limit': {'type': 'integer', 'minimum': 1, 'maximum': 5},
+        },
+        'required': ['query'],
       },
-    }),
+    ),
+    AiToolDefinition(
+      'get_memory_entry',
+      'Read a Party memory by its stable ID with certainty and source turn.',
+      {
+        'type': 'object',
+        'properties': {
+          'id': {'type': 'string'},
+        },
+        'required': ['id'],
+      },
+    ),
+    AiToolDefinition(
+      'get_event_history',
+      'Search retained past events and commitments for this Party.',
+      {
+        'type': 'object',
+        'properties': {
+          'query': {'type': 'string'},
+          'limit': {'type': 'integer', 'minimum': 1, 'maximum': 5},
+        },
+        'required': ['query'],
+      },
+    ),
+    AiToolDefinition(
+      'search_lore',
+      'Search Book canon: names, aliases, IDs and descriptions. Potential events have NOT necessarily happened.',
+      {
+        'type': 'object',
+        'properties': {
+          'query': {'type': 'string'},
+          'category': {
+            'type': 'string',
+            'enum': ['character', 'place', 'scenario', 'event', 'all'],
+          },
+          'limit': {'type': 'integer', 'minimum': 1, 'maximum': 5},
+        },
+        'required': ['query'],
+      },
+    ),
+    AiToolDefinition(
+      'get_lore_entry',
+      'Retrieve a canonical entry including secrets, relationships and unverified conditions.',
+      {
+        'type': 'object',
+        'properties': {
+          'category': {
+            'type': 'string',
+            'enum': ['character', 'place', 'scenario', 'event'],
+          },
+          'id': {'type': 'string'},
+        },
+        'required': ['category', 'id'],
+      },
+    ),
+    AiToolDefinition(
+      'search_history',
+      'Search all turns in THIS Party, including player messages, compact summaries and original RAW.',
+      {
+        'type': 'object',
+        'properties': {
+          'query': {'type': 'string'},
+          'limit': {'type': 'integer', 'minimum': 1, 'maximum': 5},
+        },
+        'required': ['query'],
+      },
+    ),
+    AiToolDefinition(
+      'get_history_excerpt',
+      'Read original RAW from an old turn by player_event_id or a timeline event_id; count at most 3.',
+      {
+        'type': 'object',
+        'properties': {
+          'player_event_id': {'type': 'integer'},
+          'event_id': {'type': 'integer'},
+          'count': {'type': 'integer', 'minimum': 1, 'maximum': 3},
+          'raw_offset': {'type': 'integer', 'minimum': 0, 'maximum': 131072},
+        },
+      },
+    ),
   ];
 
   static String _fold(String s) {
@@ -93,12 +141,17 @@ class NarrativeReferenceTools {
   }
 
   static List<String> _words(String query) =>
-      RegExp(r'[a-z0-9]{2,}').allMatches(_fold(query))
-          .map((m) => m.group(0)!).toSet().toList();
+      RegExp(r'[a-z0-9]{2,}')
+          .allMatches(_fold(query))
+          .map((m) => m.group(0)!)
+          .toSet()
+          .toList();
 
   static String _query(Map<String, dynamic> input) {
     final q = input['query'];
-    if (q is! String || q.trim().length < 2 || q.length > 160 ||
+    if (q is! String ||
+        q.trim().length < 2 ||
+        q.length > 160 ||
         _words(q).isEmpty) {
       throw const FormatException('Invalid search query (2-160 characters)');
     }
@@ -115,9 +168,14 @@ class NarrativeReferenceTools {
 
   static String _category(Map<String, dynamic> input, {bool all = false}) {
     final category = input['category'] ?? (all ? 'all' : null);
-    if (category is! String || !{
-      'character', 'place', 'scenario', 'event', if (all) 'all',
-    }.contains(category)) {
+    if (category is! String ||
+        !{
+          'character',
+          'place',
+          'scenario',
+          'event',
+          if (all) 'all',
+        }.contains(category)) {
       throw const FormatException('Invalid Lore category');
     }
     return category;
@@ -128,7 +186,8 @@ class NarrativeReferenceTools {
     final terms = _words(query);
     final hits = terms.where(haystack.contains).length;
     if (hits == 0) return 0;
-    return hits * 5 + (hits == terms.length ? 10 : 0) +
+    return hits * 5 +
+        (hits == terms.length ? 10 : 0) +
         (haystack.contains(_fold(query)) ? 12 : 0);
   }
 
@@ -138,10 +197,14 @@ class NarrativeReferenceTools {
     var index = 0;
     for (final term in terms) {
       final at = folded.indexOf(term);
-      if (at != -1) { index = at; break; }
+      if (at != -1) {
+        index = at;
+        break;
+      }
     }
     final start = (index - 45).clamp(0, text.length - size).toInt();
-    return (start > 0 ? '…' : '') + text.substring(start, start + size) +
+    return (start > 0 ? '…' : '') +
+        text.substring(start, start + size) +
         (start + size < text.length ? '…' : '');
   }
 
@@ -171,15 +234,15 @@ class NarrativeReferenceTools {
 
   static dynamic _short(dynamic value) {
     if (value is String) {
-      return value.length <= 800 ? value : '${value.substring(0, 800)}… [abrégé]';
+      return value.length <= 800
+          ? value
+          : '${value.substring(0, 800)}… [abrégé]';
     }
     if (value is List) {
       return value.take(40).map(_short).toList();
     }
     if (value is Map) {
-      return {
-        for (final e in value.entries) e.key.toString(): _short(e.value),
-      };
+      return {for (final e in value.entries) e.key.toString(): _short(e.value)};
     }
     return value;
   }
@@ -188,8 +251,13 @@ class NarrativeReferenceTools {
     final query = _query(input);
     final results = <(int, String, LoreRecord)>[];
     for (final (type, item) in _entries(_category(input, all: true))) {
-      final searchable = [item.id, item.name, ...item.aliases,
-        ...item.tags, item.description].join(' ');
+      final searchable = [
+        item.id,
+        item.name,
+        ...item.aliases,
+        ...item.tags,
+        item.description,
+      ].join(' ');
       final score = _score(searchable, query);
       if (score != 0) results.add((score, type, item));
     }
@@ -202,7 +270,9 @@ class NarrativeReferenceTools {
       'results': [
         for (final (_, type, item) in results.take(_limit(input)))
           {
-            'category': type, 'id': item.id, 'name': item.name,
+            'category': type,
+            'id': item.id,
+            'name': item.name,
             'description': _excerpt(item.description, query, size: 180),
             if (type == 'event') 'status': 'potential_not_verified',
           },
@@ -226,7 +296,8 @@ class NarrativeReferenceTools {
         _ => <String, dynamic>{},
       };
       return jsonEncode({
-        'source': 'book_canon', 'category': type,
+        'source': 'book_canon',
+        'category': type,
         'status': type == 'event' ? 'potential_not_verified' : 'canonical',
         if (type == 'event') 'conditionsVerified': false,
         'entry': _short(data),
@@ -257,6 +328,7 @@ class NarrativeReferenceTools {
         ].join('\n'),
       ));
     }
+
     for (final event in timeline()) {
       if (event is ChatEntry && event.speaker == ChatSpeaker.player) {
         flush();
@@ -276,8 +348,12 @@ class NarrativeReferenceTools {
     for (final turn in _turns()) {
       final score = _score(turn.text, query);
       if (score > 0) {
-        results.add((score, turn.player.id,
-            turn.player.text, _excerpt(turn.text, query)));
+        results.add((
+          score,
+          turn.player.id,
+          turn.player.text,
+          _excerpt(turn.text, query),
+        ));
       }
     }
     results.sort((a, b) {
@@ -302,8 +378,14 @@ class NarrativeReferenceTools {
     final id = input['player_event_id'] ?? input['event_id'];
     final count = input['count'] ?? 1;
     final rawOffset = input['raw_offset'] ?? 0;
-    if (id is! int || id < 0 || count is! int || count < 1 || count > 3 ||
-        rawOffset is! int || rawOffset < 0 || rawOffset > 131072) {
+    if (id is! int ||
+        id < 0 ||
+        count is! int ||
+        count < 1 ||
+        count > 3 ||
+        rawOffset is! int ||
+        rawOffset < 0 ||
+        rawOffset > 131072) {
       throw const FormatException('Invalid turn ID or count (maximum 3)');
     }
     final turns = _turns();
@@ -334,11 +416,14 @@ class NarrativeReferenceTools {
               'raw_offset': rawOffset,
               'raw_original': t.raw!.rawText.substring(
                 rawOffset.clamp(0, t.raw!.rawText.length),
-                (rawOffset + (count == 1 ? 4500 : 1250))
-                    .clamp(0, t.raw!.rawText.length),
+                (rawOffset + (count == 1 ? 4500 : 1250)).clamp(
+                  0,
+                  t.raw!.rawText.length,
+                ),
               ),
-              'raw_truncated': rawOffset +
-                  (count == 1 ? 4500 : 1250) < t.raw!.rawText.length,
+              'raw_truncated':
+                  rawOffset + (count == 1 ? 4500 : 1250) <
+                  t.raw!.rawText.length,
             },
             if (t.raw?.compactText != null)
               'compact': _short(t.raw!.compactText),
@@ -349,22 +434,39 @@ class NarrativeReferenceTools {
     });
   }
 
-  String _searchMemory(Map<String, dynamic> input,
-      {bool eventsOnly = false}) {
+  String _searchMemory(Map<String, dynamic> input, {bool eventsOnly = false}) {
     final query = _query(input);
     final category = input['category'] ?? 'all';
-    if (category is! String || !{'all', 'character', 'place', 'object',
-          'event', 'relationship', 'commitment', 'state'}.contains(category)) {
+    if (category is! String ||
+        !{
+          'all',
+          'character',
+          'place',
+          'object',
+          'event',
+          'relationship',
+          'commitment',
+          'state',
+        }.contains(category)) {
       throw const FormatException('Invalid memory category.');
     }
     final results = <(int, LiveMemoryFact)>[];
     for (final fact in memory?.call() ?? const <LiveMemoryFact>[]) {
-      if (eventsOnly && fact.category != 'event' &&
-          fact.category != 'commitment') { continue; }
-      if (!eventsOnly && category != 'all' && fact.category != category) { continue; }
+      if (eventsOnly &&
+          fact.category != 'event' &&
+          fact.category != 'commitment') {
+        continue;
+      }
+      if (!eventsOnly && category != 'all' && fact.category != category) {
+        continue;
+      }
       final score = _score(
-          '${fact.label} ${fact.text} ${fact.entityId}', query);
-      if (score > 0) { results.add((score, fact)); }
+        '${fact.label} ${fact.text} ${fact.entityId}',
+        query,
+      );
+      if (score > 0) {
+        results.add((score, fact));
+      }
     }
     results.sort((a, b) {
       final byScore = b.$1.compareTo(a.$1);
@@ -374,10 +476,15 @@ class NarrativeReferenceTools {
       'source': 'active_party_live_memory',
       'results': [
         for (final (_, fact) in results.take(_limit(input)))
-          {'id': fact.id, 'category': fact.category,
-           'label': fact.label, 'text': fact.text,
-           'certainty': fact.certainty, 'visibility': fact.visibility,
-           'source_turn_id': fact.sourceTurnId},
+          {
+            'id': fact.id,
+            'category': fact.category,
+            'label': fact.label,
+            'text': fact.text,
+            'certainty': fact.certainty,
+            'visibility': fact.visibility,
+            'source_turn_id': fact.sourceTurnId,
+          },
       ],
     });
   }
@@ -390,12 +497,15 @@ class NarrativeReferenceTools {
     for (final fact in memory?.call() ?? const <LiveMemoryFact>[]) {
       if (fact.id == id) {
         return jsonEncode({
-          'source': 'active_party_live_memory', 'entry': fact.toJson(),
+          'source': 'active_party_live_memory',
+          'entry': fact.toJson(),
         });
       }
     }
-    return jsonEncode({'source': 'active_party_live_memory',
-      'error': 'entry_not_found'});
+    return jsonEncode({
+      'source': 'active_party_live_memory',
+      'error': 'entry_not_found',
+    });
   }
 
   /// Bad arguments and unknown tools become bounded technical results.
@@ -419,12 +529,17 @@ class NarrativeReferenceTools {
         _ => jsonEncode({'error': 'unknown_tool'}),
       };
       if (result.length > 6000) {
-        return jsonEncode({'error': 'result_exceeds_budget',
-          'message': 'Refine the query or request a smaller excerpt'});
+        return jsonEncode({
+          'error': 'result_exceeds_budget',
+          'message': 'Refine the query or request a smaller excerpt',
+        });
       }
       return result;
     } on FormatException catch (failure) {
-      return jsonEncode({'error': 'invalid_arguments', 'message': failure.message});
+      return jsonEncode({
+        'error': 'invalid_arguments',
+        'message': failure.message,
+      });
     } catch (_) {
       return jsonEncode({'error': 'lookup_failed'});
     }

@@ -1,4 +1,5 @@
 import '../chat/raw_generation.dart';
+
 import 'package:flutter/foundation.dart';
 
 import '../ai/ai_diagnostics.dart';
@@ -53,16 +54,24 @@ class BookLibraryController extends ChangeNotifier {
       _books
         ..clear()
         ..addAll(await store.listBooks());
-      legacyAvailable = legacyNarrator != null &&
+      legacyAvailable =
+          legacyNarrator != null &&
           byId('legacy-narrator-v1') == null &&
           await legacyNarrator!.read() != null;
       initialized = true;
       error = null;
-      AppLogger.info('Bibliothèque chargée', component: 'books',
-        details: {'bookCount': _books.length});
+      AppLogger.info(
+        'Bibliothèque chargée',
+        component: 'books',
+        details: {'bookCount': _books.length},
+      );
     } catch (failure, stackTrace) {
-      AppLogger.error('Lecture de la bibliothèque impossible', component: 'books',
-          error: failure, stackTrace: stackTrace);
+      AppLogger.error(
+        'Lecture de la bibliothèque impossible',
+        component: 'books',
+        error: failure,
+        stackTrace: stackTrace,
+      );
       error = 'Impossible de lire la bibliothèque locale.';
       initialized = true;
     } finally {
@@ -81,13 +90,20 @@ class BookLibraryController extends ChangeNotifier {
     try {
       await store.putBook(book);
     } catch (failure, stackTrace) {
-      AppLogger.error('Sauvegarde du Livre échouée', component: 'books',
-          error: failure, stackTrace: stackTrace,
-          details: {'coverBytes': book.coverBase64?.length ?? 0});
+      AppLogger.error(
+        'Sauvegarde du Livre échouée',
+        component: 'books',
+        error: failure,
+        stackTrace: stackTrace,
+        details: {'coverBytes': book.coverBase64?.length ?? 0},
+      );
       rethrow;
     }
-    AppLogger.debug('Livre sauvegardé', component: 'books',
-        details: {'hasCover': book.coverBase64 != null});
+    AppLogger.debug(
+      'Livre sauvegardé',
+      component: 'books',
+      details: {'hasCover': book.coverBase64 != null},
+    );
     final index = _books.indexWhere((item) => item.id == book.id);
     if (index < 0) {
       _books.insert(0, book);
@@ -146,7 +162,8 @@ class BookLibraryController extends ChangeNotifier {
     _notify();
   }
 
-  Future<List<BookSession>> sessions(String bookId) => store.listSessions(bookId);
+  Future<List<BookSession>> sessions(String bookId) =>
+      store.listSessions(bookId);
 
   /// Most recently changed sessions across all books; never loads their text
   /// into the home screen's displayed metadata.
@@ -156,8 +173,10 @@ class BookLibraryController extends ChangeNotifier {
     for (final book in _books) {
       results.addAll(await store.listSessions(book.id));
     }
-    results.sort((a, b) => (b.updatedAtUtc ?? DateTime.fromMillisecondsSinceEpoch(0))
-        .compareTo(a.updatedAtUtc ?? DateTime.fromMillisecondsSinceEpoch(0)));
+    results.sort(
+      (a, b) => (b.updatedAtUtc ?? DateTime.fromMillisecondsSinceEpoch(0))
+          .compareTo(a.updatedAtUtc ?? DateTime.fromMillisecondsSinceEpoch(0)),
+    );
     return results.take(limit).toList(growable: false);
   }
 
@@ -165,10 +184,17 @@ class BookLibraryController extends ChangeNotifier {
     final current = await store.findSession(id);
     if (current == null) throw StateError('Partie introuvable.');
     // Unlike timeline autosaves, putSession also updates the profile field.
-    await store.putSession(current.copyWith(
-      aiProfileId: profileId, clearAiProfile: profileId == null));
-    AppLogger.info('Profil IA de Partie modifié', component: 'books',
-        details: {'hasOverride': profileId != null});
+    await store.putSession(
+      current.copyWith(
+        aiProfileId: profileId,
+        clearAiProfile: profileId == null,
+      ),
+    );
+    AppLogger.info(
+      'Profil IA de Partie modifié',
+      component: 'books',
+      details: {'hasOverride': profileId != null},
+    );
   }
 
   Future<void> setSessionToolCallingEnabled(String id, bool enabled) async {
@@ -179,19 +205,28 @@ class BookLibraryController extends ChangeNotifier {
   }
 
   Future<void> setSessionTaskProfile(
-      String id, String task, String? profileId) async {
+    String id,
+    String task,
+    String? profileId,
+  ) async {
     if (task != 'jsonifier' && task != 'optimizer' && task != 'memory') {
       throw ArgumentError.value(task, 'task');
     }
     final current = await store.findSession(id);
     if (current == null) throw StateError('Partie introuvable.');
     final next = switch (task) {
-      'jsonifier' => current.copyWith(formatterProfileId: profileId,
-          clearFormatterProfile: profileId == null),
-      'optimizer' => current.copyWith(optimizerProfileId: profileId,
-          clearOptimizerProfile: profileId == null),
-      _ => current.copyWith(memoryProfileId: profileId,
-          clearMemoryProfile: profileId == null),
+      'jsonifier' => current.copyWith(
+        formatterProfileId: profileId,
+        clearFormatterProfile: profileId == null,
+      ),
+      'optimizer' => current.copyWith(
+        optimizerProfileId: profileId,
+        clearOptimizerProfile: profileId == null,
+      ),
+      _ => current.copyWith(
+        memoryProfileId: profileId,
+        clearMemoryProfile: profileId == null,
+      ),
     };
     await store.putSession(next);
     _notify();
@@ -204,13 +239,17 @@ class BookLibraryController extends ChangeNotifier {
     _notify();
   }
 
-  Future<void> setSessionGenerationOverride(String sessionId,
-      AiNarrativeTask task, AiTaskGenerationOverride override) async {
+  Future<void> setSessionGenerationOverride(
+    String sessionId,
+    AiNarrativeTask task,
+    AiTaskGenerationOverride override,
+  ) async {
     override.validate();
     final current = await store.findSession(sessionId);
     if (current == null) throw StateError('Partie introuvable.');
     final next = Map<AiNarrativeTask, AiTaskGenerationOverride>.of(
-        current.generationOverrides);
+      current.generationOverrides,
+    );
     if (override.isEmpty) {
       next.remove(task);
     } else {
@@ -221,15 +260,18 @@ class BookLibraryController extends ChangeNotifier {
   }
 
   Future<void> saveOptimizedLore(
-      String id, String loreHash, String compactLore) async {
+    String id,
+    String loreHash,
+    String compactLore,
+  ) async {
     if (_deletedSessions.contains(id)) {
       throw StateError('Partie supprimée.');
     }
     final current = await store.findSession(id);
     if (current == null) throw StateError('Partie introuvable.');
-    await store.putSession(current.copyWith(
-      optimizedLore: compactLore, optimizedLoreHash: loreHash,
-    ));
+    await store.putSession(
+      current.copyWith(optimizedLore: compactLore, optimizedLoreHash: loreHash),
+    );
   }
 
   Future<String?> profileForSession(String id, String bookId) async {
@@ -237,10 +279,10 @@ class BookLibraryController extends ChangeNotifier {
     return part?.aiProfileId ?? await store.profileIdForBook(bookId);
   }
 
-
   Future<BookSession> newSession(BookDefinition book) async {
     final session = BookSession(
-      id: BookSession.freshId(), bookId: book.id,
+      id: BookSession.freshId(),
+      bookId: book.id,
       title: 'Partie du ${DateTime.now().day}/${DateTime.now().month}',
     );
     await store.putSession(session);
@@ -253,8 +295,11 @@ class BookLibraryController extends ChangeNotifier {
   Future<void> saveSession(BookSession session) async {
     if (_deletedSessions.contains(session.id)) return;
     await store.updateSession(session);
-    AppLogger.trace('Historique de Partie sauvegardé', component: 'books',
-        details: {'eventCount': session.timeline.length});
+    AppLogger.trace(
+      'Historique de Partie sauvegardé',
+      component: 'books',
+      details: {'eventCount': session.timeline.length},
+    );
   }
 
   Future<void> deleteSession(String id) async {
@@ -263,8 +308,12 @@ class BookLibraryController extends ChangeNotifier {
       await store.deleteSession(id);
       AppLogger.info('Partie supprimée', component: 'books');
     } catch (failure, stackTrace) {
-      AppLogger.error('Suppression de Partie échouée', component: 'books',
-          error: failure, stackTrace: stackTrace);
+      AppLogger.error(
+        'Suppression de Partie échouée',
+        component: 'books',
+        error: failure,
+        stackTrace: stackTrace,
+      );
       _deletedSessions.remove(id);
       rethrow;
     }
@@ -272,17 +321,21 @@ class BookLibraryController extends ChangeNotifier {
 
   Future<List<RawGeneration>> rawGenerations(String sessionId) =>
       store is NarrativeSnapshotStore
-          ? (store as NarrativeSnapshotStore).listRawGenerations(sessionId)
-          : Future.value(const []);
+      ? (store as NarrativeSnapshotStore).listRawGenerations(sessionId)
+      : Future.value(const []);
 
   Future<void> saveSessionState(
-      BookSession session, List<RawGeneration> generations) async {
+    BookSession session,
+    List<RawGeneration> generations,
+  ) async {
     if (_deletedSessions.contains(session.id)) {
       throw StateError('Partie supprimée.');
     }
     if (store is NarrativeSnapshotStore) {
-      await (store as NarrativeSnapshotStore)
-          .saveNarrativeSnapshot(session, generations);
+      await (store as NarrativeSnapshotStore).saveNarrativeSnapshot(
+        session,
+        generations,
+      );
     } else {
       await store.updateSession(session);
     }
@@ -292,8 +345,9 @@ class BookLibraryController extends ChangeNotifier {
       store.listDiagnostics(sessionId);
 
   Future<void> saveDiagnostic(
-      StoredAiDiagnostic diagnostic, int retentionLimit) =>
-      store.putDiagnostic(diagnostic, retentionLimit);
+    StoredAiDiagnostic diagnostic,
+    int retentionLimit,
+  ) => store.putDiagnostic(diagnostic, retentionLimit);
 
   Future<void> clearDiagnostics(String sessionId) =>
       store.clearDiagnostics(sessionId);

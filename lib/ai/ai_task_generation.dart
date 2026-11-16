@@ -12,27 +12,36 @@ class AiTaskGenerationSettings {
 
   static const minTokens = 128;
   static const maxTokens = 32768;
-  static const tokenChoices = <int>[
-    512, 1024, 2400, 4096, 8192, 16384, 32768,
-  ];
+  static const tokenChoices = <int>[512, 1024, 2400, 4096, 8192, 16384, 32768];
+
   /// "auto" uses the Luna preset; "provider" omits the API field.
   static const reasoningChoices = <String>[
-    'auto', 'provider', 'none', 'low', 'medium', 'high', 'xhigh', 'max',
+    'auto',
+    'provider',
+    'none',
+    'low',
+    'medium',
+    'high',
+    'xhigh',
+    'max',
   ];
 
   final int maxOutputTokens;
   final String reasoningEffort;
 
   static AiTaskGenerationSettings defaults(AiNarrativeTask task) =>
-      AiTaskGenerationSettings(maxOutputTokens: switch (task) {
-        AiNarrativeTask.narrator => 8192,
-        AiNarrativeTask.jsonifier => 4096,
-        AiNarrativeTask.optimizer => 4096,
-        AiNarrativeTask.memory => 1024,
-      });
+      AiTaskGenerationSettings(
+        maxOutputTokens: switch (task) {
+          AiNarrativeTask.narrator => 8192,
+          AiNarrativeTask.jsonifier => 4096,
+          AiNarrativeTask.optimizer => 4096,
+          AiNarrativeTask.memory => 1024,
+        },
+      );
 
   void validate() {
-    if (maxOutputTokens < minTokens || maxOutputTokens > maxTokens ||
+    if (maxOutputTokens < minTokens ||
+        maxOutputTokens > maxTokens ||
         !reasoningChoices.contains(reasoningEffort)) {
       throw const FormatException('Paramètres de génération IA invalides.');
     }
@@ -95,17 +104,21 @@ class AiTaskGenerationOverride {
     bool clearReasoningEffort = false,
   }) => AiTaskGenerationOverride(
     maxOutputTokens: clearMaxOutputTokens
-        ? null : maxOutputTokens ?? this.maxOutputTokens,
+        ? null
+        : maxOutputTokens ?? this.maxOutputTokens,
     reasoningEffort: clearReasoningEffort
-        ? null : reasoningEffort ?? this.reasoningEffort,
+        ? null
+        : reasoningEffort ?? this.reasoningEffort,
   );
 
   void validate() {
     if (maxOutputTokens != null &&
-        (maxOutputTokens! < AiTaskGenerationSettings.minTokens ||
-         maxOutputTokens! > AiTaskGenerationSettings.maxTokens) ||
+            (maxOutputTokens! < AiTaskGenerationSettings.minTokens ||
+                maxOutputTokens! > AiTaskGenerationSettings.maxTokens) ||
         reasoningEffort != null &&
-            !AiTaskGenerationSettings.reasoningChoices.contains(reasoningEffort)) {
+            !AiTaskGenerationSettings.reasoningChoices.contains(
+              reasoningEffort,
+            )) {
       throw const FormatException('Surcharge de génération IA invalide.');
     }
   }
@@ -117,10 +130,12 @@ class AiTaskGenerationOverride {
 
   factory AiTaskGenerationOverride.fromJson(Object? value) {
     if (value is! Map<String, dynamic> ||
-        value.keys.any((k) =>
-            k != 'maxOutputTokens' && k != 'reasoningEffort') ||
+        value.keys.any(
+          (k) => k != 'maxOutputTokens' && k != 'reasoningEffort',
+        ) ||
         value['maxOutputTokens'] != null && value['maxOutputTokens'] is! int ||
-        value['reasoningEffort'] != null && value['reasoningEffort'] is! String) {
+        value['reasoningEffort'] != null &&
+            value['reasoningEffort'] is! String) {
       throw const FormatException('Surcharge de génération IA invalide.');
     }
     final result = AiTaskGenerationOverride(
