@@ -106,21 +106,22 @@ class LocalContextPacker {
     required Iterable<ChatEntry> previous,
   }) {
     final parts = const Jsonifier().partsForPrompt(raw);
-    List<AiMessage> assemble(List<String> prior) => [
-      const AiMessage(role: 'system', content: jsonifierSystemPrompt),
-      AiMessage(role: 'user', content:
-          (prior.isEmpty ? '' : 'Contexte précédent (ne pas convertir) :\n'
-              + prior.join('\n') + '\n\n')
-          + 'Parties RAW à classifier (texte JSON échappé, '
-              'numéros fournis par Dart) :\n' + parts),
-    ];
+    List<AiMessage> assemble(List<String> prior) {
+      final earlier = prior.isEmpty ? '' :
+          'Contexte précédent (ne pas convertir) :\n${prior.join("\n")}\n\n';
+      return [
+        const AiMessage(role: 'system', content: jsonifierSystemPrompt),
+        AiMessage(role: 'user', content:
+            '$earlier'
+            'Parties RAW à classifier (texte JSON échappé, '
+            'numéros fournis par Dart) :\n$parts'),
+      ];
+    }
     // Never truncate source parts: numbering/offsets must match original RAW.
     budget.requireFit(assemble(const []));
     final relevant = <String>[];
     for (final event in previous.toList().reversed) {
-      final line = event.name +
-          (event.status == null ? '' : ' (' + event.status! + ')') +
-          ' : ' + event.text;
+      final line = '${event.name}${event.status == null ? "" : " (${event.status})"} : ${event.text}';
       final next = [line, ...relevant];
       if (!budget.fits(assemble(next))) break;
       relevant.insert(0, line);

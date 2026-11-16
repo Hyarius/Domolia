@@ -183,26 +183,38 @@ class LiveMemoryCoordinator extends ChangeNotifier {
     }
   }
 
-  List<AiMessage> _prompt(String player, RawGeneration raw,
-      {LocalContextBudget? budget}) {
+  List<AiMessage> _prompt(
+    String player,
+    RawGeneration raw, {
+    LocalContextBudget? budget,
+  }) {
     if (budget != null) {
       // Keep the immutable RAW and literal quotes available to the extractor.
       // Existing memory is optional and can be selected more narrowly.
       for (var limit = 2900; limit >= 256; limit = (limit * 0.7).floor()) {
-        final candidate = _memoryPrompt(player, raw,
-            context([player, raw.rawText], budget: limit));
+        final candidate = _memoryPrompt(
+          player,
+          raw,
+          context([player, raw.rawText], budget: limit),
+        );
         if (budget.fits(candidate)) return candidate;
       }
       final mandatory = _memoryPrompt(player, raw, '');
       budget.requireFit(mandatory);
       return mandatory;
     }
-    return _memoryPrompt(player, raw,
-        context([player, raw.rawText], budget: 2900));
+    return _memoryPrompt(
+      player,
+      raw,
+      context([player, raw.rawText], budget: 2900),
+    );
   }
 
-  List<AiMessage> _memoryPrompt(String player, RawGeneration raw,
-      String existing) {
+  List<AiMessage> _memoryPrompt(
+    String player,
+    RawGeneration raw,
+    String existing,
+  ) {
     return [
       const AiMessage(
         role: 'system',
