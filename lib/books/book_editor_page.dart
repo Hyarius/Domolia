@@ -129,7 +129,7 @@ class BookEditorPageState extends State<BookEditorPage> {
     _saveDelay?.cancel();
     final title = _title.text.trim();
     final style = _style.text.trim();
-    final openings = _openings.text.split('\\n')
+    final openings = _openings.text.split('\n')
         .map((line) => line.trim())
         .where((line) => line.isNotEmpty).toList();
     try {
@@ -154,7 +154,7 @@ class BookEditorPageState extends State<BookEditorPage> {
     _saveDelay?.cancel();
     final title = _title.text.trim();
     final style = _style.text.trim();
-    final openings = _openings.text.split('\\n')
+    final openings = _openings.text.split('\n')
         .map((line) => line.trim())
         .where((line) => line.isNotEmpty).toList();
     await _persist((current) => current.copyWith(
