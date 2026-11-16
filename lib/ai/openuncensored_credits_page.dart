@@ -446,6 +446,7 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
             AiNarrativeTask.narrator => 'Narrateur RAW',
             AiNarrativeTask.jsonifier => 'JSONificateur',
             AiNarrativeTask.optimizer => 'Optimiseur de Lore',
+            AiNarrativeTask.memory => 'Extracteur de mémoire',
           }),
           items: [
             for (final count in AiTaskGenerationSettings.tokenChoices)
