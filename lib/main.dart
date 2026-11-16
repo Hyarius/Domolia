@@ -403,7 +403,8 @@ class _HomePageState extends State<HomePage> {
         final storage = _books.store;
         Future<void> writes = Future<void>.value();
         _awaitSessionWrites = () => writes;
-        final usageStore = storage is AiUsageStore ? storage : null;
+        final AiUsageStore? usageStore =
+            storage is AiUsageStore ? storage as AiUsageStore : null;
         void captureExchange(AiExchange exchange) {
           // The usage ledger is separate from bounded, purgeable diagnostics.
           // A tool round is one billed LLM request, not another fee per tool.
