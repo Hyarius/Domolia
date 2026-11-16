@@ -349,21 +349,27 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
           child: Text('Chargez le catalogue pour afficher les modèles disponibles.')),
         for (final task in ['narrator', 'jsonifier', 'optimizer'])
           Builder(builder: (context) {
-            final eligible = options.where((model) =>
-                task != 'narrator' || model.toolCompatible).toList();
+            // Unknown metadata is NOT evidence of incompatibility.
+            // The user may select a model and test tools separately.
+            final eligible = options.where((model) => model.available).toList();
             final selected = _advanced[task];
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
               child: eligible.isEmpty ?
                 Text(task == 'narrator'
-                  ? 'Aucun narrateur déclaré compatible tool calling par le catalogue.'
+                  ? 'Aucun narrateur disponible dans le catalogue.'
                   : 'Aucun modèle disponible pour $task')
                 : DropdownButtonFormField<String>(
                     key: ValueKey('ouAdvanced-$task-${selected ?? ""}'),
                     initialValue: eligible.any((m) => m.id == selected)
                         ? selected : null,
                     isExpanded: true,
-                    decoration: InputDecoration(labelText: switch (task) {
+                    decoration: InputDecoration(
+                      helperText: task == 'narrator'
+                        ? 'Compatibilité outils non garantie : testez '
+                          'le profil IA avant activation.'
+                        : null,
+                      labelText: switch (task) {
                       'narrator' => 'Narrateur RAW',
                       'jsonifier' => 'JSONificateur',
                       _ => 'Optimiseur de Lore',
