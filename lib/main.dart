@@ -834,9 +834,14 @@ class _HomePageState extends State<HomePage> {
                     fontWeight: FontWeight.bold)),
                   const SizedBox(height: DomoliaSpacing.compact),
                   if (_recentLoading)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: DomoliaSpacing.section),
-                      child: Center(child: CircularProgressIndicator()),
+                    const _DomoliaPanel(
+                      child: Row(children: [
+                        Icon(Icons.hourglass_empty_rounded,
+                          color: DomoliaColors.gold),
+                        SizedBox(width: DomoliaSpacing.field),
+                        Expanded(child: Text('Chargement de vos Parties...',
+                          style: TextStyle(color: DomoliaColors.cream))),
+                      ]),
                     )
                   else if (_recentError != null)
                     _DomoliaPanel(
