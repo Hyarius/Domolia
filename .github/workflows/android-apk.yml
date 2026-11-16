@@ -53,6 +53,12 @@ jobs:
       - name: Installer les dépendances
         run: flutter pub get
 
+      - name: Activer Vulkan pour llama.cpp Android
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvulkan-dev glslc spirv-headers
+          python3 tool/enable_android_llama_vulkan.py
+
       - name: Analyse statique
         run: flutter analyze
 
@@ -110,7 +116,7 @@ jobs:
       # Sans clé durable, Flutter utilise ici la clé debug éphémère du runner.
       - name: Compiler l'APK debug (pull requests)
         if: github.event_name == 'pull_request'
-        run: flutter build apk --debug --build-number="${{ github.run_number }}"
+        run: flutter build apk --debug --build-number="${{ github.run_number }}" --dart-define=DOMOLIA_VULKAN_BACKEND=true
 
       - name: Compiler l'APK release (branches et tags)
         if: github.event_name != 'pull_request'
@@ -129,6 +135,7 @@ jobs:
           flutter build apk --release \
             --build-name="$version" \
             --build-number="${GITHUB_RUN_NUMBER}" \
+            --dart-define="DOMOLIA_VULKAN_BACKEND=true" \
             --dart-define="DOMOLIA_UPDATE_CHANNEL=$channel" \
             --dart-define="DOMOLIA_PAYMENT_SANDBOX=$sandbox"
 
