@@ -6,6 +6,11 @@ import 'package:domolia/chat/chat_controller.dart';
 import 'package:domolia/chat/chat_protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+String streamed(String text) => '${jsonEncode({
+  'type': 'message', 'speaker': 'narrator',
+  'name': 'Narrateur', 'text': text,
+})}\n';
+
 const config = AiConfiguration(
   baseUrl: defaultAiBaseUrl, model: defaultAiModel, apiKey: 'fake',
 );
@@ -36,7 +41,7 @@ class FakeToolProvider implements AiChatProvider, AiToolCallingChatProvider {
       ]});
     }
     narratorFallbacks++;
-    return raw;
+    return streamed(raw);
   }
 
   @override
@@ -59,7 +64,7 @@ class FakeToolProvider implements AiChatProvider, AiToolCallingChatProvider {
           argumentsDelta: '"médaillon ancien"}');
       yield const AiToolStreamChunk(finishReason: 'tool_calls');
     } else {
-      yield AiToolStreamChunk(text: raw);
+      yield AiToolStreamChunk(text: streamed(raw));
       yield const AiToolStreamChunk(finishReason: 'stop');
     }
     yield const AiToolStreamChunk(promptTokens: 100, completionTokens: 20);
@@ -100,7 +105,7 @@ void main() {
     expect(technical.content, contains('médaillon'));
     expect(resumed.where((m) => m.role == 'assistant' &&
         m.calls.isNotEmpty).single.calls.single.name, 'search_history');
-    expect(provider.formatterCalls, 1);
+    expect(provider.formatterCalls, 0);
     expect(chat.rawGenerations.last.rawText, provider.raw);
     expect(chat.messages.any((m) => m.text.contains('search_history')), false);
     expect(chat.error, isNull);
@@ -111,16 +116,16 @@ void main() {
     provider.requests.add(const []);
     await chat.send('Que vois-tu ?');
     expect(provider.requests, hasLength(2));
-    expect(provider.formatterCalls, 1);
+    expect(provider.formatterCalls, 0);
     expect(chat.rawGenerations.single.rawText, provider.raw);
   });
 
-  test('Explicit unsupported tools fallback to normal narrator and formatter', () async {
+  test('Explicit unsupported tools fallback to one-pass narrator', () async {
     provider.rejectTools = true;
     await chat.send('Bonjour');
     expect(provider.requests, hasLength(1));
     expect(provider.narratorFallbacks, 1);
-    expect(provider.formatterCalls, 1);
+    expect(provider.formatterCalls, 0);
     expect(chat.rawGenerations.single.rawText, provider.raw);
     expect(chat.error, isNull);
   });
@@ -133,7 +138,7 @@ void main() {
     expect(chat.error, isNotNull);
   });
 
-  test('Disabling tools preserves the classic RAW→JSONifier path', () async {
+  test('Disabling tools still uses a single structured narrative request', () async {
     chat.dispose();
     chat = NarrativeChatController(
       provider: provider, configuration: () => config,
@@ -145,7 +150,7 @@ void main() {
     await chat.send('Bonjour');
     expect(provider.requests, isEmpty);
     expect(provider.narratorFallbacks, 1);
-    expect(provider.formatterCalls, 1);
+    expect(provider.formatterCalls, 0);
   });
 
   test('Tool consultation loop is bounded and finishes with tools disabled', () async {
