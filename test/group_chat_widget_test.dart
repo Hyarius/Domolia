@@ -58,6 +58,7 @@ Future<void> showChat(WidgetTester tester, NarrativeChatController chat) async {
 
 Future<void> enter(WidgetTester tester, String text) async {
   await tester.enterText(find.byKey(const ValueKey('groupChatInput')), text);
+  await tester.pump(); // Rebuild the input-dependent Send action.
   await tester.tap(find.byKey(const ValueKey('groupChatSend')));
   await tester.pump();
 }
@@ -90,6 +91,90 @@ void main() {
     expect(find.byKey(const ValueKey('chatWritingIndicator')), findsNothing);
     expect(find.text(provider.raw), findsOneWidget);
     expect(chat.preview, isNull);
+  });
+
+  testWidgets('Long AI reply does not force transcript to its end',
+      (tester) async {
+    final provider = _Provider()
+      ..raw = List.generate(45, (index) =>
+          'Paragraphe $index : une longue description du monde.').join(' ')
+      ..rawGate = Completer<String>();
+    final chat = NarrativeChatController(
+      provider: provider, configuration: () => config,
+    );
+    addTearDown(chat.dispose);
+    await showChat(tester, chat);
+    await enter(tester, 'Je découvre ce lieu.');
+    await tester.pump(const Duration(milliseconds: 250));
+    final transcript = tester.widget<ListView>(
+        find.byKey(const ValueKey('groupChatTranscript')));
+    final scroll = transcript.controller!;
+    final before = scroll.offset;
+    provider.rawGate!.complete(provider.raw);
+    await tester.pumpAndSettle();
+    expect(chat.messages.last.text, provider.raw);
+    expect(scroll.position.maxScrollExtent, greaterThan(before));
+    expect(scroll.offset, lessThan(scroll.position.maxScrollExtent));
+  });
+
+  testWidgets('Une réponse longue reste lisible depuis son début', (tester) async {
+    final provider = _Provider()
+      ..raw = List.generate(45, (i) => 'Paragraphe ${i + 1} : '
+          'Le narrateur décrit soigneusement les lieux et les personnages.')
+          .join('\n')
+      ..formatGate = Completer<String>();
+    final chat = NarrativeChatController(
+      provider: provider, configuration: () => config,
+    );
+    addTearDown(chat.dispose);
+    await showChat(tester, chat);
+    await enter(tester, 'Je regarde autour de moi.');
+    final transcript = tester.widget<ListView>(
+      find.byKey(const ValueKey('groupChatTranscript')));
+    final scroll = transcript.controller!;
+    await tester.pump(const Duration(milliseconds: 250));
+    final beforeReply = scroll.offset;
+
+    provider.formatGate!.complete(jsonEncode({'events': [
+      {'type': 'message', 'start': 0, 'end': provider.raw.length,
+        'speaker': 'narrator', 'name': 'Narrateur'},
+    ]}));
+    await tester.pumpAndSettle();
+    expect(chat.error, isNull);
+    expect(chat.messages, hasLength(2));
+    expect(scroll.position.maxScrollExtent, greaterThan(beforeReply));
+    expect(scroll.offset, closeTo(beforeReply, 2));
+    expect(find.byKey(const ValueKey('chatWritingIndicator')), findsNothing);
+  });
+
+  testWidgets('Long AI answer does not scroll to its end', (tester) async {
+    final provider = _Provider()
+      ..raw = List.filled(90, 'Une phrase du narrateur.').join(' ')
+      ..rawGate = Completer<String>()
+      ..formatGate = Completer<String>();
+    final chat = NarrativeChatController(
+      provider: provider, configuration: () => config,
+    );
+    addTearDown(chat.dispose);
+    await showChat(tester, chat);
+    await enter(tester, 'Je regarde autour de moi.');
+    final scroll = tester.state<ScrollableState>(
+      find.descendant(
+        of: find.byKey(const ValueKey('groupChatTranscript')),
+        matching: find.byType(Scrollable),
+      ),
+    ).position;
+    final before = scroll.pixels;
+    provider.rawGate!.complete(provider.raw);
+    await tester.pump(const Duration(milliseconds: 50));
+    provider.formatGate!.complete(jsonEncode({'events': [
+      {'type': 'message', 'start': 0, 'end': provider.raw.length,
+        'speaker': 'narrator', 'name': 'Narrateur'},
+    ]}));
+    await tester.pumpAndSettle();
+    expect(scroll.maxScrollExtent, greaterThan(before));
+    expect(scroll.pixels, closeTo(before, 1));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Scene break and three segments appear in one committed frame',

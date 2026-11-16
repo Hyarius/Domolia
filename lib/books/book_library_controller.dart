@@ -38,6 +38,16 @@ class BookLibraryController extends ChangeNotifier {
 
   Future<void> initialize() => _loading ??= _load();
 
+  /// Explicit retry after local storage fails; an earlier failed Future
+  /// must not prevent the library from being loaded again.
+  Future<void> retry() async {
+    _loading = null;
+    error = null;
+    initialized = false;
+    _notify();
+    await initialize();
+  }
+
   Future<void> _load() async {
     try {
       _books
@@ -47,6 +57,7 @@ class BookLibraryController extends ChangeNotifier {
           byId('legacy-narrator-v1') == null &&
           await legacyNarrator!.read() != null;
       initialized = true;
+      error = null;
       AppLogger.info('Bibliothèque chargée', component: 'books',
         details: {'bookCount': _books.length});
     } catch (failure, stackTrace) {

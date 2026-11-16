@@ -21,6 +21,7 @@ class ConversationSettingsPage extends StatefulWidget {
     this.bookTitle, this.sessionTitle, required this.onBack,
     this.onExportBookJson, this.onLoadAiDiagnostics, this.onExportAiTrace,
     this.onPurgeAiDiagnostics, this.taskRouting,
+    this.showBackButton = true,
   });
   final BookLibraryController library;
   final AiConnectionController ai;
@@ -30,6 +31,7 @@ class ConversationSettingsPage extends StatefulWidget {
   final String? bookTitle;
   final String? sessionTitle;
   final VoidCallback onBack;
+  final bool showBackButton;
   /// Optional test adapter; production uses the Android file picker.
   final Future<void> Function(String fileName, Uint8List bytes)? onExportBookJson;
   /// Waits for queued SQLite diagnostic writes in production.
@@ -51,6 +53,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   int _cachedLoreCharacters = 0;
   Map<AiNarrativeTask, AiTaskGenerationOverride> _generationOverrides = {};
   bool _loaded = false;
+  bool _loadFailed = false;
   bool _saving = false;
 
   @override
@@ -71,11 +74,15 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           _cachedLoreCharacters = session?.optimizedLore?.length ?? 0;
           _generationOverrides = Map.of(session?.generationOverrides ?? {});
           _loaded = true;
+          _loadFailed = false;
         });
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _loaded = true);
+        setState(() {
+          _loaded = true;
+          _loadFailed = true;
+        });
         _notify('Impossible de charger les paramètres de cette Partie.');
       }
     }
@@ -464,7 +471,8 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       padding: const EdgeInsets.all(22),
       children: [
         Row(children: [
-          IconButton(tooltip: 'Retour à la conversation',
+          if (widget.showBackButton)
+             IconButton(tooltip: 'Retour à la conversation',
               onPressed: widget.onBack, icon: const Icon(Icons.arrow_back)),
           const Expanded(child: Text('Paramètres de la conversation',
             style: TextStyle(color: DomoliaColors.goldLight,
@@ -473,7 +481,30 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
         const SizedBox(height: 24),
         const Text('Connexion IA', style: TextStyle(
             color: DomoliaColors.goldLight, fontSize: 18)),
-        if (!_loaded) const LinearProgressIndicator()
+        if (!_loaded)
+          const LinearProgressIndicator()
+        else if (_loadFailed)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: DomoliaSpacing.field),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('Les réglages de cette Partie sont indisponibles. '
+                  'Aucune modification ne sera appliquée.',
+                  style: TextStyle(color: DomoliaColors.cream)),
+                const SizedBox(height: DomoliaSpacing.field),
+                OutlinedButton.icon(
+                  key: const ValueKey('conversationSettingsRetry'),
+                  onPressed: () {
+                    setState(() => _loaded = false);
+                    _load();
+                  },
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Réessayer'),
+                ),
+              ],
+            ),
+          )
         else AnimatedBuilder(
           animation: widget.ai,
           builder: (context, _) {

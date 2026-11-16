@@ -30,15 +30,18 @@ class BookEditorPage extends StatefulWidget {
   final Future<void> Function(BookDefinition book, BookSession session) onPlay;
 
   @override
-  State<BookEditorPage> createState() => _BookEditorPageState();
+  State<BookEditorPage> createState() => BookEditorPageState();
 }
 
-class _BookEditorPageState extends State<BookEditorPage> {
+class BookEditorPageState extends State<BookEditorPage> {
   late BookDefinition _book;
   late final TextEditingController _title;
   late final TextEditingController _style;
   late final TextEditingController _openings;
   Timer? _saveDelay;
+  Future<void> _saveTail = Future<void>.value();
+  int _editRevision = 0;
+  int _savedRevision = 0;
   String? _profileId;
   int _tab = 0;
 
@@ -68,8 +71,52 @@ class _BookEditorPageState extends State<BookEditorPage> {
   }
 
   void _queueSave() {
+    _editRevision++;
     _saveDelay?.cancel();
-    _saveDelay = Timer(const Duration(milliseconds: 500), _save);
+    _saveDelay = Timer(const Duration(milliseconds: 500), () {
+      _save();
+    });
+  }
+
+  // Every Book write uses the same queue. Persist a snapshot of the latest
+  // in-memory state so autosaves cannot overwrite lore, covers or settings.
+  Future<void> _persist(BookDefinition Function(BookDefinition) change) {
+    final next = change(_book);
+    final revision = ++_editRevision;
+    if (mounted) setState(() => _book = next);
+    final pending = _saveTail.then((_) => widget.library.save(next));
+    _saveTail = pending.then<void>((_) {}, onError: (Object error, StackTrace stackTrace) {});
+    return pending.then((_) {
+      if (mounted) setState(() => _savedRevision = revision);
+    });
+  }
+
+  /// The host asks before leaving. Pending edits are saved or explicitly discarded.
+  Future<bool> prepareToLeave() async {
+    _saveDelay?.cancel();
+    await _saveTail;
+    if (_savedRevision == _editRevision) return true;
+    if (await _save() && _savedRevision == _editRevision) return true;
+    if (!mounted) return false;
+    return await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Modifications non enregistrées'),
+        content: const Text(
+          'Impossible d’enregistrer les dernières modifications. '
+          'Voulez-vous quitter sans les conserver ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Rester'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Quitter sans enregistrer'),
+          ),
+        ],
+      ),
+    ) ?? false;
   }
 
   void _show(String text) {
@@ -79,16 +126,18 @@ class _BookEditorPageState extends State<BookEditorPage> {
   }
 
   Future<bool> _save() async {
+    _saveDelay?.cancel();
+    final title = _title.text.trim();
+    final style = _style.text.trim();
+    final openings = _openings.text.split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty).toList();
     try {
-      final updated = _book.copyWith(
-        title: _title.text.trim(),
-        narrativeStyle: _style.text.trim(),
-        openingMessages: _openings.text.split('\n')
-            .map((line) => line.trim())
-            .where((line) => line.isNotEmpty).toList(),
-      );
-      await widget.library.save(updated);
-      if (mounted) setState(() => _book = updated);
+      await _persist((current) => current.copyWith(
+        title: title,
+        narrativeStyle: style,
+        openingMessages: openings,
+      ));
       return true;
     } on FormatException catch (error) {
       _show(error.message);
@@ -103,16 +152,17 @@ class _BookEditorPageState extends State<BookEditorPage> {
 
   Future<void> _saveLore(BookLore lore) async {
     _saveDelay?.cancel();
-    final next = _book.copyWith(
-      title: _title.text.trim(),
-      narrativeStyle: _style.text.trim(),
-      openingMessages: _openings.text.split('\n')
-          .map((line) => line.trim())
-          .where((line) => line.isNotEmpty).toList(),
+    final title = _title.text.trim();
+    final style = _style.text.trim();
+    final openings = _openings.text.split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty).toList();
+    await _persist((current) => current.copyWith(
+      title: title,
+      narrativeStyle: style,
+      openingMessages: openings,
       lore: lore,
-    );
-    await widget.library.save(next);
-    if (mounted) setState(() => _book = next);
+    ));
   }
 
   Future<void> _chooseCover() async {
@@ -128,12 +178,10 @@ class _BookEditorPageState extends State<BookEditorPage> {
         return;
       }
       final data = await BookCoverLoader.load(chosen.files.single);
-      final next = _book.copyWith(
-        coverBase64: data.base64, coverMime: data.mime,
-      );
       AppLogger.debug('Sauvegarde de la couverture', component: 'cover');
-      await widget.library.save(next);
-      if (mounted) setState(() => _book = next);
+      await _persist((current) => current.copyWith(
+        coverBase64: data.base64, coverMime: data.mime,
+      ));
       AppLogger.info('Couverture enregistrée', component: 'cover');
     } on FormatException catch (failure) {
       AppLogger.warning('Couverture rejetée', component: 'cover',
@@ -147,16 +195,16 @@ class _BookEditorPageState extends State<BookEditorPage> {
   }
 
   Future<void> _toggleNsfw(bool enabled) async {
-    final nextTags = {..._book.tags};
-    if (enabled) {
-      nextTags.add('nsfw');
-    } else {
-      nextTags.remove('nsfw');
-    }
-    final next = _book.copyWith(tags: nextTags);
     try {
-      await widget.library.save(next);
-      if (mounted) setState(() => _book = next);
+      await _persist((current) {
+        final nextTags = {...current.tags};
+        if (enabled) {
+          nextTags.add('nsfw');
+        } else {
+          nextTags.remove('nsfw');
+        }
+        return current.copyWith(tags: nextTags);
+      });
     } catch (_) {
       _show('Impossible d’enregistrer le mode.');
     }
@@ -331,7 +379,9 @@ class _BookEditorPageState extends State<BookEditorPage> {
                 ))),
               TextButton.icon(
                 key: const ValueKey('bookSave'),
-                onPressed: _save,
+                onPressed: () async {
+                  if (await _save()) _show('Livre enregistré.');
+                },
                 icon: const Icon(Icons.save_outlined),
                 label: const Text('Sauver'),
               ),
@@ -407,11 +457,6 @@ class _BookEditorPageState extends State<BookEditorPage> {
       label: const Text('Choisir une image locale'),
     ),
     const SizedBox(height: DomoliaSpacing.compact),
-    OutlinedButton.icon(
-      onPressed: null,
-      icon: Icon(Icons.auto_awesome_outlined),
-      label: Text('Générer une couverture — à venir'),
-    ),
     const SizedBox(height: DomoliaSpacing.section),
     SwitchListTile(
       key: const ValueKey('bookNsfw'),
@@ -447,11 +492,12 @@ class _BookEditorPageState extends State<BookEditorPage> {
       label: BookDefinition.detailNames[_book.detailLevel - 1],
       value: _book.detailLevel.toDouble(),
       onChanged: (value) {
-        final updated = _book.copyWith(detailLevel: value.round());
-        setState(() => _book = updated);
-        widget.library.save(updated).catchError((Object _) {
-          _show('Impossible de sauver le niveau de détail.');
-        });
+        final level = value.round();
+        if (level == _book.detailLevel) return;
+        unawaited(_persist((current) =>
+          current.copyWith(detailLevel: level)).catchError((Object _) {
+            _show('Impossible de sauver le niveau de détail.');
+          }));
       },
     ),
     Text(BookDefinition.detailNames[_book.detailLevel - 1],
@@ -459,9 +505,7 @@ class _BookEditorPageState extends State<BookEditorPage> {
     const SizedBox(height: 5),
     Text(BookDefinition.detailInstruction(_book.detailLevel)),
     const SizedBox(height: 18),
-    const Text(
-      'Le protocole technique NDJSON est géré par Domolia et non éditable.',
-      style: TextStyle(color: DomoliaColors.muted)),
+
   ];
 
   List<Widget> _systemTab() => [
