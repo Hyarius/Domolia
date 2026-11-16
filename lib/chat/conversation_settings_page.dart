@@ -20,7 +20,7 @@ class ConversationSettingsPage extends StatefulWidget {
     required this.chat, required this.bookId, required this.sessionId,
     this.bookTitle, this.sessionTitle, required this.onBack,
     this.onExportBookJson, this.onLoadAiDiagnostics, this.onExportAiTrace,
-    this.onPurgeAiDiagnostics, this.taskRouting,
+    this.onPurgeAiDiagnostics, this.taskRouting, this.onOpenMemory,
     this.showBackButton = true,
   });
   final BookLibraryController library;
@@ -40,6 +40,7 @@ class ConversationSettingsPage extends StatefulWidget {
   final Future<void> Function(String fileName, Uint8List bytes)? onExportAiTrace;
   final Future<void> Function()? onPurgeAiDiagnostics;
   final AiTaskRouting? taskRouting;
+  final VoidCallback? onOpenMemory;
   @override
   State<ConversationSettingsPage> createState() => _ConversationSettingsPageState();
 }
@@ -48,6 +49,8 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   String? _selected;
   String? _formatterProfile;
   String? _optimizerProfile;
+  String? _memoryProfile;
+  bool _memoryEnabled = true;
   String? _inheritedNarratorProfile;
   bool _toolCallingEnabled = true;
   int _cachedLoreCharacters = 0;
@@ -69,6 +72,8 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           _selected = session?.aiProfileId;
           _formatterProfile = session?.formatterProfileId;
           _optimizerProfile = session?.optimizerProfileId;
+          _memoryProfile = session?.memoryProfileId;
+          _memoryEnabled = session?.memoryEnabled ?? true;
           _toolCallingEnabled = session?.toolCallingEnabled ?? true;
           _inheritedNarratorProfile = bookProfile;
           _cachedLoreCharacters = session?.optimizedLore?.length ?? 0;
@@ -123,6 +128,19 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     }
   }
 
+  Future<void> _setMemoryEnabled(bool enabled) async {
+    if (_saving || widget.chat.busy) return;
+    setState(() => _saving = true);
+    try {
+      await widget.library.setSessionMemoryEnabled(widget.sessionId, enabled);
+      if (mounted) setState(() => _memoryEnabled = enabled);
+    } catch (_) {
+      _notify('Impossible de modifier l’extraction automatique.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   Future<void> _setTaskProfile(String task, String? value) async {
     if (_saving || widget.chat.busy) return;
     setState(() => _saving = true);
@@ -135,8 +153,10 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
         setState(() {
           if (task == 'jsonifier') {
             _formatterProfile = selected;
-          } else {
+          } else if (task == 'optimizer') {
             _optimizerProfile = selected;
+          } else {
+            _memoryProfile = selected;
           }
         });
       }
@@ -182,6 +202,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       AiNarrativeTask.narrator => 'Narrateur RAW',
       AiNarrativeTask.jsonifier => 'JSONificateur',
       AiNarrativeTask.optimizer => 'Optimiseur de Lore',
+      AiNarrativeTask.memory => 'Extraction mémoire',
     };
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SizedBox(height: DomoliaSpacing.compact),
@@ -561,6 +582,31 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                     ),
                   ],
                 ),
+                const SizedBox(height: DomoliaSpacing.field),
+                SwitchListTile(
+                  key: const ValueKey('conversationMemoryEnabled'),
+                  title: const Text('Mémoire automatique'),
+                  subtitle: const Text('Une extraction IA supplémentaire '
+                      'peut être facturée après chaque tour validé. '
+                      'Désactiver ne supprime pas les souvenirs.'),
+                  value: _memoryEnabled,
+                  onChanged: _saving || widget.chat.busy
+                      ? null : _setMemoryEnabled,
+                ),
+                const SizedBox(height: DomoliaSpacing.field),
+                _taskProfileField(
+                  task: 'memory',
+                  label: 'Mémoire — profil de cette Partie',
+                  value: _memoryProfile,
+                  profiles: profiles,
+                  inheritedLabel: 'Même IA que le narrateur (défaut)',
+                  additional: const [
+                    DropdownMenuItem(value: '#disabled',
+                        child: Text('Désactiver cette tâche')),
+                    DropdownMenuItem(value: '#narrator',
+                        child: Text('Même IA que le narrateur')),
+                  ],
+                ),
                 const SizedBox(height: 12),
                 Builder(builder: (context) {
                   final inherited = widget.taskRouting?.profileFor(
@@ -623,6 +669,18 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
               ],
             );
           },
+        ),
+        const SizedBox(height: DomoliaSpacing.section),
+        const Divider(),
+        const SizedBox(height: DomoliaSpacing.compact),
+        const Text('Mémoire narrative', style: TextStyle(
+            color: DomoliaColors.goldLight, fontSize: 18)),
+        const SizedBox(height: DomoliaSpacing.field),
+        OutlinedButton.icon(
+          key: const ValueKey('conversationOpenMemory'),
+          onPressed: widget.onOpenMemory,
+          icon: const Icon(Icons.auto_stories_outlined),
+          label: const Text('Consulter et corriger la mémoire'),
         ),
         const SizedBox(height: DomoliaSpacing.section),
         const Divider(),
