@@ -44,6 +44,9 @@ jobs:
       - name: Installer le pont Android de mise à jour
         run: python3 tool/configure_android_updates.py
 
+      - name: Préparer Android pour l'inférence locale
+        run: python3 tool/configure_android_local_ai.py
+
       - name: Installer l'icône Android Domolia
         run: python3 tool/install_launcher_icon.py
 
