@@ -220,6 +220,43 @@ void main() {
     expect(find.text('Mes Parties'), findsOneWidget);
   });
 
+  testWidgets('Retour protège un Livre dont la sauvegarde a échoué',
+      (tester) async {
+    await _showApp(tester);
+    await tester.tap(find.byKey(const ValueKey('homeBooks')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('book-novel')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('bookTitle')), '');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('appBack')));
+    await tester.pumpAndSettle();
+    expect(find.text('Modifications non enregistrées'), findsOneWidget);
+    await tester.tap(find.text('Rester'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('bookTabs')), findsOneWidget);
+  });
+
+  testWidgets('Retour ferme le clavier avant de quitter les mises à jour',
+      (tester) async {
+    await _showApp(tester);
+    await _drawerItem(tester, 'Paramètres');
+    await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
+    await tester.pumpAndSettle();
+    tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.tap(find.byType(TextField).first);
+    await tester.pump();
+    await _systemBack(tester);
+    expect(find.byKey(const ValueKey('appBack')), findsOneWidget);
+    expect(find.text('Mises à jour'), findsWidgets);
+    expect(FocusManager.instance.primaryFocus?.hasFocus, isNot(true));
+    tester.view.resetViewInsets();
+    await tester.pump();
+    await _systemBack(tester);
+    expect(find.widgetWithText(ListTile, 'Crédits IA'), findsOneWidget);
+  });
+
   testWidgets('Paramètres, crédits, mises à jour et dialogue',
       (tester) async {
     await _showApp(tester);
