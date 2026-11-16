@@ -130,6 +130,30 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
     ) ?? false;
   }
 
+  Future<void> _probeNarrator(String modelId) async {
+    if (widget.sandbox != null) return;
+    final accepted = await _confirm('Tester le Tool Calling ?',
+      'Un court appel IA sera envoyé à OpenUncensored avec la clé active '
+      'et pourra consommer des crédits. Aucun outil réel ne sera exécuté. '
+      'Un résultat sans appel de fonction reste « non concluant ».');
+    if (!accepted || !mounted) return;
+    await widget.controller.testToolCalling(modelId);
+  }
+
+  String _toolStatus(String modelId) {
+    final result = widget.controller.probeFor(modelId);
+    if (result == OuToolProbeOutcome.inconclusive) {
+      return 'Test effectué : non concluant. La compatibilité reste inconnue.';
+    }
+    final suffix = result == null ? ' (catalogue)' : ' (test réel)';
+    return switch (widget.controller.toolSupportFor(modelId)) {
+      OuToolSupport.supported => 'Tool Calling compatible$suffix.',
+      OuToolSupport.unsupported => 'Tool Calling incompatible$suffix.',
+      OuToolSupport.unknown =>
+          'Compatibilité inconnue : modèle utilisable sans outils.',
+    };
+  }
+
   Future<void> _payment({String? target}) async {
     if (kIsWeb) return;
     final url = await widget.controller.startCheckout(_amount, topUpKeyId: target);
@@ -349,34 +373,55 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
           child: Text('Chargez le catalogue pour afficher les modèles disponibles.')),
         for (final task in ['narrator', 'jsonifier', 'optimizer'])
           Builder(builder: (context) {
-            final eligible = options.where((model) =>
-                task != 'narrator' || model.toolCompatible).toList();
+            final eligible = options;
             final selected = _advanced[task];
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
               child: eligible.isEmpty ?
-                Text(task == 'narrator'
-                  ? 'Aucun narrateur déclaré compatible tool calling par le catalogue.'
-                  : 'Aucun modèle disponible pour $task')
-                : DropdownButtonFormField<String>(
-                    key: ValueKey('ouAdvanced-$task-${selected ?? ""}'),
-                    initialValue: eligible.any((m) => m.id == selected)
-                        ? selected : null,
-                    isExpanded: true,
-                    decoration: InputDecoration(labelText: switch (task) {
-                      'narrator' => 'Narrateur RAW',
-                      'jsonifier' => 'JSONificateur',
-                      _ => 'Optimiseur de Lore',
-                    }),
-                    items: [
-                      for (final model in eligible)
-                        DropdownMenuItem(value: model.id,
-                          child: Text(model.id, overflow: TextOverflow.ellipsis)),
+                Text('Aucun modèle disponible pour $task')
+                : Column(crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      key: ValueKey('ouAdvanced-$task-${selected ?? ""}'),
+                      initialValue: eligible.any((m) => m.id == selected)
+                          ? selected : null,
+                      isExpanded: true,
+                      decoration: InputDecoration(labelText: switch (task) {
+                        'narrator' => 'Narrateur RAW',
+                        'jsonifier' => 'JSONificateur',
+                        _ => 'Optimiseur de Lore',
+                      }),
+                      items: [
+                        for (final model in eligible)
+                          DropdownMenuItem(value: model.id,
+                            child: Text(model.id,
+                                overflow: TextOverflow.ellipsis)),
+                      ],
+                      onChanged: !enabled ? null : (id) {
+                        if (id != null) setState(() => _advanced[task] = id);
+                      },
+                    ),
+                    if (task == 'narrator' && selected != null &&
+                        eligible.any((m) => m.id == selected)) ...[
+                      const SizedBox(height: DomoliaSpacing.compact),
+                      Text(_toolStatus(selected),
+                        key: const ValueKey('ouToolStatus'),
+                        style: const TextStyle(color: DomoliaColors.muted)),
+                      const SizedBox(height: DomoliaSpacing.compact),
+                      OutlinedButton.icon(
+                        key: const ValueKey('ouToolProbe'),
+                        onPressed: !enabled || widget.sandbox != null
+                            ? null : () => _probeNarrator(selected),
+                        icon: const Icon(Icons.science_outlined),
+                        label: const Text('Tester le Tool Calling'),
+                      ),
+                      const Text('Test facultatif et potentiellement facturé. '
+                        'Un modèle non vérifié reste disponible pour '
+                        'la narration classique.',
+                        style: TextStyle(color: DomoliaColors.muted)),
                     ],
-                    onChanged: !enabled ? null : (id) {
-                      if (id != null) setState(() => _advanced[task] = id);
-                    },
-                  ),
+                  ],
+                ),
             );
           }),
         const SizedBox(height: DomoliaSpacing.field),
