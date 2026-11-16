@@ -1,10 +1,7 @@
-import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
 import '../ai/ai_provider.dart';
-import '../books/book_session.dart';
 import '../books/book_store.dart';
 import '../chat/chat_protocol.dart';
 import '../chat/raw_generation.dart';
@@ -97,7 +94,7 @@ class LiveMemoryCoordinator extends ChangeNotifier {
         final player = session.timeline.whereType<ChatEntry>().where((e) =>
             e.id == source.playerEventId &&
             e.speaker == ChatSpeaker.player).toList();
-        if (player.length != 1) continue;
+        if (player.length != 1) { continue; }
         final endpoint = await resolveConnection();
         if (endpoint == null) return;
         final response = await endpoint.provider.complete(
