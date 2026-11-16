@@ -60,6 +60,7 @@ class NarrativeChatController extends ChangeNotifier {
     this.narratorRecentBudget = 16000,
     this.hybridRecentBudget = 7000,
     this.memoryContextBudget = 3600,
+    this.isLocalContext,
     this.onTimelineChanged,
     this.memory,
     this.onPersistState,
@@ -88,6 +89,9 @@ class NarrativeChatController extends ChangeNotifier {
   final int narratorRecentBudget;
   final int hybridRecentBudget;
   final int memoryContextBudget;
+  /// Evaluated per turn so switching local mode without reopening a Party
+  /// still uses a prompt that fits the phone's small context window.
+  final bool Function()? isLocalContext;
   final AiExchangeRecorder? diagnostics;
   final LiveMemoryCoordinator? memory;
   final void Function(AiExchange exchange)? onExchangeCaptured;
@@ -381,6 +385,7 @@ class NarrativeChatController extends ChangeNotifier {
   /// Compact narration replaces that turn's RAW when available; RAW is the fallback.
   /// Legacy sessions without RAW fall back to their structured history.
   List<AiMessage> buildNarratorContext({bool hybrid = false}) {
+    final local = isLocalContext?.call() ?? false;
     final history = <AiMessage>[];
     final raws = {for (final r in _generations)
       if (r.isStructured) r.playerEventId: r};
@@ -417,7 +422,7 @@ class NarrativeChatController extends ChangeNotifier {
     var used = 0;
     for (final entry in history.reversed) {
       if (used + entry.content.length >
-          (hybrid ? hybridRecentBudget : narratorRecentBudget) &&
+          (local ? 4200 : hybrid ? hybridRecentBudget : narratorRecentBudget) &&
           selected.isNotEmpty) {
         break;
       }
@@ -426,7 +431,7 @@ class NarrativeChatController extends ChangeNotifier {
     }
     final lore = loreProvider?.call();
     final optimizer = const LoreContextOptimizer();
-    final compact = lore != null &&
+    final compact = !local && lore != null &&
         _optimizedHash == optimizer.sourceHash(lore) &&
         _optimizedLore != null && _optimizedLore!.isNotEmpty;
     final loreContext = lore == null ? '' : compact
@@ -436,10 +441,11 @@ class NarrativeChatController extends ChangeNotifier {
           'Ne décide aucune action du joueur.\\n'
           '${_optimizedLore!}'
         : LoreContextBuilder(
-            maxCharacters: loreContextBudget,
+            maxCharacters: local ? 3000 : loreContextBudget,
           ).build(lore, selected.reversed.map((entry) => entry.content));
     final memories = memory?.context(
-      selected.map((m) => m.content), budget: memoryContextBudget) ?? '';
+      selected.map((m) => m.content),
+      budget: local ? 1100 : memoryContextBudget) ?? '';
     return [
       AiMessage(role: 'system', content: [
         (narratorProvider?.call() ?? narrator).systemPrompt,

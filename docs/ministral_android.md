@@ -11,7 +11,7 @@ Elle ne reprend pas les commits expérimentaux de la PR #23, fermée sans fusion
 4. L'installation active le narrateur local ; un interrupteur permet de revenir à l'IA distante. La connexion internet n'est requise que pour télécharger le modèle, pas pour l'inférence.
 5. Utiliser « Tester la narration sur ce téléphone », puis lancer le Livre de benchmark. Mesurer les temps, les crashs, la qualité et la cohérence.
 
-Le seul appel réseau de ce mode est le **téléchargement explicite du GGUF** officiel sur `huggingface.co/mistralai`. Ni le narrateur, ni le JSONificateur, ni l'extracteur de mémoire n'appellent une API payante tant que le mode local est actif. **Un échec ne déclenche pas de fallback distant.**
+Dans le **pipeline narratif local**, le seul téléchargement nécessaire est le GGUF officiel sur `huggingface.co/mistralai`. Les autres fonctions de l'application (mises à jour, crédits) peuvent encore utiliser le réseau indépendamment. Ni le narrateur, ni le JSONificateur, ni l'extracteur de mémoire n'appellent une API payante tant que le mode local est actif. **Un échec ne déclenche pas de fallback distant.**
 
 ## Limites et points de validation
 

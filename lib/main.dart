@@ -469,9 +469,7 @@ class _HomePageState extends State<HomePage> {
           memory: _liveMemory,
           initialOptimizedLore: session.optimizedLore,
           initialOptimizedLoreHash: session.optimizedLoreHash,
-          loreContextBudget: _ministralModels.enabled ? 3000 : 8000,
-          narratorRecentBudget: _ministralModels.enabled ? 4200 : 16000,
-          memoryContextBudget: _ministralModels.enabled ? 1100 : 3600,
+          isLocalContext: () => _ministralModels.enabled,
           resolveConnection: () async => _ministralModels.enabled
               ? localEndpoint(AiNarrativeTask.narrator)
               : endpointForId(
