@@ -118,7 +118,7 @@ class BookEditorPageState extends State<BookEditorPage> {
   List<String> _parsedKeywords() => _keywords.text.split(',')
       .map((word) => word.trim())
       .where((word) => word.isNotEmpty)
-      .toList(growable: false);
+      .toList();
 
   void _toggleStyleKeyword(String keyword) {
     final current = _parsedKeywords();
