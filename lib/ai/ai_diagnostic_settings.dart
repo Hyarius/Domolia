@@ -29,11 +29,13 @@ class AiDiagnosticsSettingsPage extends StatefulWidget {
   const AiDiagnosticsSettingsPage({
     super.key,
     required this.onBack,
+    this.showBackButton = true,
     required this.onPrune,
     this.preferences = const AiDiagnosticsRetentionPreferences(),
   });
 
   final VoidCallback onBack;
+  final bool showBackButton;
   final Future<void> Function(int limit) onPrune;
   final AiDiagnosticsRetentionPreferences preferences;
 
@@ -87,12 +89,14 @@ class _AiDiagnosticsSettingsPageState extends State<AiDiagnosticsSettingsPage> {
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          TextButton.icon(
-            onPressed: widget.onBack,
-            icon: const Icon(Icons.arrow_back),
-            label: const Text('Retour aux paramètres'),
-          ),
-          const SizedBox(height: 12),
+          if (widget.showBackButton) ...[
+            TextButton.icon(
+              onPressed: widget.onBack,
+              icon: const Icon(Icons.arrow_back),
+              label: const Text('Retour aux paramètres'),
+            ),
+            const SizedBox(height: 12),
+          ],
           const Text('Diagnostics IA', style: TextStyle(
             color: DomoliaColors.goldLight,
             fontSize: 25,
