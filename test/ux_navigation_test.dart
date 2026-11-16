@@ -250,7 +250,8 @@ void main() {
     await _systemBack(tester);
     expect(find.byKey(const ValueKey('appBack')), findsOneWidget);
     expect(find.text('Mises à jour'), findsWidgets);
-    expect(FocusManager.instance.primaryFocus?.hasFocus, isNot(true));
+    expect(tester.widget<EditableText>(
+      find.byType(EditableText).first).focusNode.hasFocus, isFalse);
     tester.view.resetViewInsets();
     await tester.pump();
     await _systemBack(tester);
