@@ -1,4 +1,6 @@
 import '../chat/raw_generation.dart';
+import '../memory/live_memory.dart';
+import 'dart:convert';
 import '../ai/ai_task_generation.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
@@ -37,7 +39,18 @@ abstract interface class NarrativeSnapshotStore {
       BookSession session, List<RawGeneration> generations);
 }
 
-class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
+/// Optional Party-only memory persistence protocol for real and fake stores.
+abstract interface class LiveMemoryStore {
+  Future<List<List<LiveMemoryOperation>>> loadMemoryTurns(String sessionId);
+  Future<List<LiveMemoryOverride>> loadMemoryOverrides(String sessionId);
+  Future<void> commitMemoryTurn(String sessionId, RawGeneration source,
+      List<LiveMemoryOperation> operations);
+  Future<void> saveMemoryOverride(String sessionId, LiveMemoryOverride value);
+  Future<void> clearGeneratedMemory(String sessionId);
+  Future<Set<int>> analyzedMemoryTurns(String sessionId);
+}
+
+class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemoryStore {
   SqliteBookStore({DatabaseFactory? factory, this.databasePath})
       : _factoryOverride = factory;
 
@@ -67,6 +80,123 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
       'PRIMARY KEY(session_id, player_event_id), '
       'FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE)',
     );
+  }
+
+  static Future<void> _createMemoryTables(Database db) async {
+    await db.execute(
+      'CREATE TABLE live_memory_turns ('
+      'session_id TEXT NOT NULL, player_event_id INTEGER NOT NULL, '
+      'source_hash TEXT NOT NULL, operations_json TEXT NOT NULL, '
+      'created_at INTEGER NOT NULL, '
+      'PRIMARY KEY(session_id, player_event_id), '
+      'FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE)',
+    );
+    await db.execute(
+      'CREATE TABLE live_memory_overrides ('
+      'session_id TEXT NOT NULL, fact_id TEXT NOT NULL, '
+      'payload_json TEXT, deleted INTEGER NOT NULL DEFAULT 0, '
+      'PRIMARY KEY(session_id, fact_id), '
+      'FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE)',
+    );
+  }
+
+  @override
+  Future<Set<int>> analyzedMemoryTurns(String sessionId) async {
+    final rows = await (await database).query('live_memory_turns',
+      columns: ['player_event_id'], where: 'session_id = ?',
+      whereArgs: [sessionId]);
+    return {for (final row in rows) row['player_event_id'] as int};
+  }
+
+  @override
+  Future<List<List<LiveMemoryOperation>>> loadMemoryTurns(
+      String sessionId) async {
+    final rows = await (await database).query('live_memory_turns',
+      where: 'session_id = ?', whereArgs: [sessionId],
+      orderBy: 'player_event_id ASC');
+    return [
+      for (final row in rows)
+        LiveMemoryOperation.decodeSaved(row['operations_json'] as String),
+    ];
+  }
+
+  @override
+  Future<List<LiveMemoryOverride>> loadMemoryOverrides(
+      String sessionId) async {
+    final rows = await (await database).query('live_memory_overrides',
+      where: 'session_id = ?', whereArgs: [sessionId]);
+    return [
+      for (final row in rows)
+        LiveMemoryOverride(row['fact_id'] as String,
+          deleted: row['deleted'] == 1,
+          fact: row['payload_json'] == null ? null :
+            LiveMemoryFact.fromJson(
+              jsonDecode(row['payload_json'] as String))),
+    ];
+  }
+
+  /// Re-check the durable, structured RAW source INSIDE the transaction.
+  /// A delayed extractor can never resurrect a rewound or deleted turn.
+  @override
+  Future<void> commitMemoryTurn(String sessionId, RawGeneration source,
+      List<LiveMemoryOperation> operations) async {
+    if (!source.isStructured || operations.length > 24) {
+      throw StateError('Unvalidated memory source.');
+    }
+    final db = await database;
+    await db.transaction((txn) async {
+      final sessions = await txn.query('sessions', columns: ['id'],
+          where: 'id = ?', whereArgs: [sessionId], limit: 1);
+      final raws = await txn.query('raw_generations',
+          where: 'session_id = ? AND player_event_id = ?',
+          whereArgs: [sessionId, source.playerEventId], limit: 1);
+      if (sessions.isEmpty || raws.isEmpty) {
+        throw StateError('Memory source or Party no longer exists.');
+      }
+      final row = raws.single;
+      final persisted = RawGeneration(
+        playerEventId: source.playerEventId,
+        rawText: row['raw_text'] as String,
+        firstEventId: row['first_event_id'] as int?,
+        lastEventId: row['last_event_id'] as int?,
+      );
+      if (!persisted.isStructured ||
+          liveMemorySourceHash(source) != liveMemorySourceHash(persisted) ||
+          operations.any((op) =>
+              op.fact.sourceTurnId != source.playerEventId)) {
+        throw StateError('Obsolete memory source.');
+      }
+      await txn.insert('live_memory_turns', {
+        'session_id': sessionId, 'player_event_id': source.playerEventId,
+        'source_hash': liveMemorySourceHash(source),
+        'operations_json': jsonEncode(
+            operations.map((o) => o.toJson()).toList()),
+        'created_at': DateTime.now().microsecondsSinceEpoch,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    });
+  }
+
+  @override
+  Future<void> saveMemoryOverride(String sessionId,
+      LiveMemoryOverride value) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      final sessions = await txn.query('sessions', columns: ['id'],
+          where: 'id = ?', whereArgs: [sessionId], limit: 1);
+      if (sessions.isEmpty) throw StateError('Partie supprimée.');
+      await txn.insert('live_memory_overrides', {
+        'session_id': sessionId, 'fact_id': value.id,
+        'payload_json': value.fact == null ? null :
+            jsonEncode(value.fact!.toJson()),
+        'deleted': value.deleted ? 1 : 0,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    });
+  }
+
+  @override
+  Future<void> clearGeneratedMemory(String sessionId) async {
+    await (await database).delete('live_memory_turns',
+      where: 'session_id = ?', whereArgs: [sessionId]);
   }
 
   @override
@@ -102,6 +232,23 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
       if (updated != 1) {
         throw StateError('Partie supprimée ou introuvable.');
       }
+      // Atomically invalidate memory from deleted/regenerated source turns.
+      // Manual overrides live in a separate table and remain untouched.
+      final valid = {
+        for (final source in generations)
+          if (source.isStructured)
+            source.playerEventId: liveMemorySourceHash(source),
+      };
+      final memoryRows = await txn.query('live_memory_turns',
+        where: 'session_id = ?', whereArgs: [session.id]);
+      for (final row in memoryRows) {
+        final id = row['player_event_id'] as int;
+        if (valid[id] != row['source_hash']) {
+          await txn.delete('live_memory_turns',
+            where: 'session_id = ? AND player_event_id = ?',
+            whereArgs: [session.id, id]);
+        }
+      }
       await txn.delete('raw_generations',
         where: 'session_id = ?', whereArgs: [session.id]);
       for (final raw in generations) {
@@ -136,7 +283,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
     return _db ??= await (_factoryOverride ?? databaseFactory).openDatabase(
       location,
       options: OpenDatabaseOptions(
-      version: 8,
+      version: 9,
       onConfigure: (db) async =>
           db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, version) async {
@@ -163,8 +310,10 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore {
         );
         await _createDiagnostics(db);
         await _createRawGenerations(db);
+        await _createMemoryTables(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 9) await _createMemoryTables(db);
         if (oldVersion < 2) await _createDiagnostics(db);
         if (oldVersion < 3) {
           await db.execute('ALTER TABLE sessions ADD COLUMN profile_id TEXT');
