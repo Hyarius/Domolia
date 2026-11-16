@@ -108,22 +108,62 @@ class OuCheckoutResult {
   }
 }
 
-/// Public catalogue metadata; no API key or paid generation is involved.
+/// Catalogue evidence is distinct from an actual tool-call test.
+enum OuToolSupport { supported, unsupported, unknown }
+
+/// A successful HTTP response without a real function invocation is NOT proof.
+enum OuToolProbeOutcome { supported, unsupported, inconclusive }
+
+/// Public catalogue metadata. Missing flags must never mean "unsupported".
 class OuModel {
   const OuModel({
     required this.id,
     required this.available,
-    required this.toolCompatible,
+    required this.toolSupport,
     required this.inputPerTokenUsd,
     required this.outputPerTokenUsd,
   });
+
   final String id;
   final bool available;
-  /// True only if the catalogue explicitly advertises support. Unknown is
-  /// treated as false until the tool-calling PR supplies its capability model.
-  final bool toolCompatible;
+  final OuToolSupport toolSupport;
+  bool get toolCompatible => toolSupport == OuToolSupport.supported;
   final double? inputPerTokenUsd;
   final double? outputPerTokenUsd;
+
+  static OuToolSupport _tools(Map<String, dynamic> raw) {
+    final capabilities = raw['capabilities'];
+    final parameters = raw['supported_parameters'];
+    final providers = raw['providers'];
+    final sources = <Object?>[
+      raw['supports_tools'], raw['tool_calling'],
+      if (capabilities is Map) ...[
+        capabilities['tools'], capabilities['tool_calling'],
+      ],
+    ];
+    if (sources.contains(true) ||
+        parameters is List && parameters.contains('tools')) {
+      return OuToolSupport.supported;
+    }
+    if (providers is List) {
+      for (final item in providers) {
+        if (item is Map &&
+            (item['supports_tools'] == true || item['tool_calling'] == true)) {
+          return OuToolSupport.supported;
+        }
+      }
+    }
+    if (sources.contains(false)) return OuToolSupport.unsupported;
+    // An unknown provider never makes an entire multi-provider model
+    // incompatible. All provider entries must explicitly reject tools.
+    if (providers is List && providers.isNotEmpty &&
+        providers.every((item) => item is Map &&
+            (item['supports_tools'] == false ||
+                item['tool_calling'] == false))) {
+      return OuToolSupport.unsupported;
+    }
+    return OuToolSupport.unknown;
+  }
 
   static OuModel? parse(Object? raw) {
     if (raw is! Map<String, dynamic> ||
@@ -140,20 +180,10 @@ class OuModel {
           value is String ? double.tryParse(value) : null;
       return parsed != null && parsed.isFinite && parsed >= 0 ? parsed : null;
     }
-    final caps = raw['capabilities'];
-    final params = raw['supported_parameters'];
-    final providers = raw['providers'];
-    final explicitTools = raw['supports_tools'] == true ||
-        raw['tool_calling'] == true ||
-        (caps is Map && (caps['tools'] == true || caps['tool_calling'] == true)) ||
-        (params is List && params.contains('tools')) ||
-        (providers is List && providers.any((provider) =>
-          provider is Map && (provider['supports_tools'] == true ||
-            provider['tool_calling'] == true)));
     return OuModel(
       id: raw['id'] as String,
       available: raw['available'] != false,
-      toolCompatible: explicitTools,
+      toolSupport: _tools(raw),
       inputPerTokenUsd: price('prompt'),
       outputPerTokenUsd: price('completion'),
     );
@@ -228,6 +258,124 @@ class OpenUncensoredApi {
         .where((model) => model.available).toList();
     models.sort((a, b) => a.id.compareTo(b.id));
     return models;
+  }
+
+  /// Explicit, small, potentially billable probe. No tool is executed.
+  /// Only a correctly structured function call proves compatibility.
+  /// Unknown/ambiguous responses remain inconclusive, never unsupported.
+  Future<OuToolProbeOutcome> probeToolCalling(
+      String key, String model) async {
+    if (!validOpenUncensoredKey(key) ||
+        model.trim().isEmpty || model.length > 200 ||
+        model.contains(RegExp(r'[\\r\\n]'))) {
+      throw const OpenUncensoredFailure('Modèle ou clé de test invalide.');
+    }
+    final request = http.Request('POST', _api.resolve('chat/completions'))
+      ..followRedirects = false
+      ..headers['Authorization'] = 'Bearer ${key.trim()}'
+      ..headers['Accept'] = 'application/json'
+      ..headers['Content-Type'] = 'application/json'
+      ..body = jsonEncode({
+        'model': model,
+        'stream': false,
+        'max_tokens': 96,
+        'messages': [
+          {'role': 'system', 'content':
+              'Diagnostic technique. Utilise exclusivement la fonction '
+              'domolia_tool_probe avec value égal à ok.'},
+          {'role': 'user', 'content':
+              'Appelle maintenant domolia_tool_probe avec value = ok.'},
+        ],
+        'tools': [
+          {'type': 'function', 'function': {
+            'name': 'domolia_tool_probe',
+            'description': 'Diagnostic ponctuel de compatibilité des outils.',
+            'parameters': {'type': 'object', 'properties': {
+              'value': {'type': 'string', 'enum': ['ok']},
+            }, 'required': ['value'], 'additionalProperties': false},
+          }},
+        ],
+        'tool_choice': 'auto',
+      });
+    http.StreamedResponse response;
+    try {
+      response = await _client.send(request).timeout(const Duration(seconds: 25));
+    } on TimeoutException {
+      throw const OpenUncensoredFailure('Test expiré. Compatibilité inconnue.');
+    } catch (_) {
+      throw const OpenUncensoredFailure('Connexion impossible pendant le test.');
+    }
+    http.Response result;
+    try {
+      result = await http.Response.fromStream(response)
+          .timeout(const Duration(seconds: 40));
+    } catch (_) {
+      throw const OpenUncensoredFailure('Réponse du test incomplète.');
+    }
+    if (result.bodyBytes.length > 65536) {
+      throw const OpenUncensoredFailure('Réponse du test trop volumineuse.');
+    }
+    Object? decoded;
+    try {
+      decoded = jsonDecode(utf8.decode(result.bodyBytes));
+    } catch (_) {
+      throw const OpenUncensoredFailure('Réponse du test illisible.');
+    }
+    if (result.statusCode != 200) {
+      if ((result.statusCode == 400 || result.statusCode == 422) &&
+          decoded is Map) {
+        final error = decoded['error'];
+        if (error is Map) {
+          final code = error['code']?.toString().toLowerCase() ?? '';
+          final param = error['param']?.toString().toLowerCase() ?? '';
+          final message = error['message']?.toString().toLowerCase() ?? '';
+          if (param == 'tools' || param == 'tool_choice' ||
+              code.contains('unsupported_tool') ||
+              message.contains('tool calling is not supported') ||
+              message.contains('tools are not supported') ||
+              message.contains('tool_choice is not supported')) {
+            return OuToolProbeOutcome.unsupported;
+          }
+        }
+      }
+      if (result.statusCode == 401 || result.statusCode == 403) {
+        throw const OpenUncensoredFailure('Clé API refusée.');
+      }
+      if (result.statusCode == 402) {
+        throw const OpenUncensoredFailure('Crédits insuffisants pour le test.');
+      }
+      if (result.statusCode == 429) {
+        throw const OpenUncensoredFailure('Limite de débit atteinte.');
+      }
+      throw OpenUncensoredFailure(
+          'Test refusé par le fournisseur (HTTP ${result.statusCode}).');
+    }
+    if (decoded is! Map || decoded['choices'] is! List ||
+        (decoded['choices'] as List).isEmpty) {
+      return OuToolProbeOutcome.inconclusive;
+    }
+    final choice = (decoded['choices'] as List).first;
+    if (choice is! Map || choice['message'] is! Map) {
+      return OuToolProbeOutcome.inconclusive;
+    }
+    final calls = (choice['message'] as Map)['tool_calls'];
+    if (calls is! List) return OuToolProbeOutcome.inconclusive;
+    for (final call in calls) {
+      if (call is! Map || call['type'] != 'function' ||
+          call['function'] is! Map) continue;
+      final function = call['function'] as Map;
+      if (function['name'] != 'domolia_tool_probe' ||
+          function['arguments'] is! String) continue;
+      try {
+        final args = jsonDecode(function['arguments'] as String);
+        if (args is Map && args['value'] == 'ok') {
+          return OuToolProbeOutcome.supported;
+        }
+      } catch (_) {
+        // A malformed function argument does not prove tool support.
+      }
+    }
+    return OuToolProbeOutcome.inconclusive;
   }
 
   Future<OuCheckout> checkout({required int cents, String? topUpKey}) async {
