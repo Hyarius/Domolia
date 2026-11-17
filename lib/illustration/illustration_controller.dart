@@ -52,7 +52,21 @@ class IllustrationController extends ChangeNotifier {
   bool initialized = false;
   String? error;
 
-  StoredIllustration? forIntent(int id) => _latest[id];
+  StoredIllustration? forIntent(int id) {
+    final record = _latest[id];
+    if (record == null) return null;
+    final events = timeline();
+    final intent = events.whereType<ChatIllustrationIntent>()
+        .where((e) => e.id == id).toList();
+    if (intent.length != 1) return null;
+    try {
+      final source = const VisualSceneSelector().select(
+          intent: intent.single, timeline: events, lore: const BookLore());
+      return record.sourceHash == source.sourceHash ? record : null;
+    } catch (_) {
+      return null;
+    }
+  }
   bool isBusy(int id) => _inFlight.contains(id);
 
   void _notify() {
