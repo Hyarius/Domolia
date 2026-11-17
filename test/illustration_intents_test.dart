@@ -12,7 +12,7 @@ import 'package:domolia/chat/narrative_reference_tools.dart';
 import 'package:domolia/chat/raw_generation.dart';
 import 'package:domolia/chat/theatrical_narrator_protocol.dart';
 import 'package:domolia/chat/theatrical_script_decoder.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -137,8 +137,7 @@ void main() {
     });
 
     test('rejects long images and player impersonation', () {
-      expect(() => _decode('[NARRATION]\nUne pierre.\n[IMAGE]\n'
-          + List.filled(501, 'x').join()), throwsFormatException);
+      expect(() => _decode('[NARRATION]\nUne pierre.\n[IMAGE]\n${List.filled(501, 'x').join()}'), throwsFormatException);
       expect(() => _decode('[IMAGE]\nVous prenez le jeton.\n'
           '[JOUEUR]\nJe le prends.'), throwsFormatException);
     });
@@ -205,7 +204,7 @@ void main() {
     test('SQLite snapshot removes intents during rewind and preserves RAW', () async {
       sqfliteFfiInit();
       final dir = await Directory.systemTemp.createTemp('domolia-pr33-');
-      final file = dir.path + '/part.sqlite';
+      final file = '${dir.path}/part.sqlite';
       final store = SqliteBookStore(
           factory: databaseFactoryFfi, databasePath: file);
       addTearDown(() async { await store.close(); await dir.delete(recursive: true); });

@@ -752,7 +752,7 @@ class NarrativeChatController extends ChangeNotifier {
     ];
     if (structuredOutput) {
       context[0] = AiToolMessage(role: 'system',
-          content: '${_structuredInstructions(context[0].content)}\n\n$theatricalNarratorProtocol${illustrationMode == IllustrationMode.disabled ? '' : '\n' + theatricalIllustrationInstruction}');
+          content: '${_structuredInstructions(context[0].content)}\n\n$theatricalNarratorProtocol${illustrationMode == IllustrationMode.disabled ? '' : '\n$theatricalIllustrationInstruction'}');
     }
     context[0] = AiToolMessage(role: 'system',
         content: '${context.first.content}\n'
@@ -789,7 +789,7 @@ class NarrativeChatController extends ChangeNotifier {
               theatricalOutput: structuredOutput);
           if (structuredOutput) {
             fallback[0] = AiMessage(role: 'system',
-                content: '${_structuredInstructions(fallback.first.content)}\n\n$theatricalNarratorProtocol${illustrationMode == IllustrationMode.disabled ? '' : '\n' + theatricalIllustrationInstruction}');
+                content: '${_structuredInstructions(fallback.first.content)}\n\n$theatricalNarratorProtocol${illustrationMode == IllustrationMode.disabled ? '' : '\n$theatricalIllustrationInstruction'}');
           }
           return _requestText(endpoint, fallback, token, maxTokens,
               onFragment: onFragment);
@@ -1009,7 +1009,7 @@ class NarrativeChatController extends ChangeNotifier {
       _check(token);
       final context = buildNarratorContext(theatricalOutput: true);
       context[0] = AiMessage(role: 'system',
-          content: '${_structuredInstructions(context.first.content)}\n\n$theatricalNarratorProtocol${illustrationMode == IllustrationMode.disabled ? '' : '\n' + theatricalIllustrationInstruction}');
+          content: '${_structuredInstructions(context.first.content)}\n\n$theatricalNarratorProtocol${illustrationMode == IllustrationMode.disabled ? '' : '\n$theatricalIllustrationInstruction'}');
       final before = diagnostics?.last;
       Object? failure;
       try {
