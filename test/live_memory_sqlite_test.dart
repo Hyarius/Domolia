@@ -204,7 +204,7 @@ void main() {
   test('structured NDJSON is memorized from readable narrative, not JSON',
       () async {
     const serialized = '{"type":"message","speaker":"narrator",'
-        '"name":"Narrateur","text":"Élise porte une bague en argent."}\\n';
+        '"name":"Narrateur","text":"Élise porte une bague en argent."}\n';
     final source = raw(serialized);
     await db.saveNarrativeSnapshot(session('a'), [source]);
     final fake = ScriptedMemoryAi([output('bague en argent')]);
