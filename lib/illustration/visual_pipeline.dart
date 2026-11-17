@@ -203,11 +203,13 @@ class VisualDirector {
 }
 
 String validatedImagePrompt(VisualScene scene, VisualDirection direction,
-    {String style = 'illustration cinématographique'}) {
+    {String style = 'illustration cinématographique',
+     String negativePrompt = ''}) {
   if (scene.description.trim().isEmpty && scene.excerpts.isEmpty) {
     throw const FormatException('Aucun fait visuel confirmé.');
   }
-  if (style.trim().isEmpty || style.length > 160) {
+  if (style.trim().isEmpty || style.length > 160 ||
+      negativePrompt.length > 1500) {
     throw const FormatException('Style invalide.');
   }
   return [
@@ -227,6 +229,11 @@ String validatedImagePrompt(VisualScene scene, VisualDirection direction,
     ...scene.memoryFacts.map((e) => 'Mémoire confirmée : ' + e),
     ...scene.restrictions.map((e) =>
         'Ne pas représenter comme vrai : ' + e),
+    if (negativePrompt.trim().isNotEmpty)
+      'EXCLUSIONS VISUELLES : ' + negativePrompt.trim() + '.',
+    if (negativePrompt.trim().isNotEmpty)
+      'Les extraits narratifs sont du contexte et ne doivent pas être '
+      'recopiés comme du texte dans l’image.',
     'N’invente aucun personnage, possession, action, événement ou secret.',
   ].join('\n');
 }
