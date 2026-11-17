@@ -42,6 +42,8 @@ class BookEditorPageState extends State<BookEditorPage> {
   late final TextEditingController _style;
   late final TextEditingController _keywords;
   late final TextEditingController _openings;
+  late final TextEditingController _visualStyle;
+  late final TextEditingController _negativePrompt;
   Timer? _saveDelay;
   Future<void> _saveTail = Future<void>.value();
   int _editRevision = 0;
@@ -58,6 +60,9 @@ class BookEditorPageState extends State<BookEditorPage> {
     _keywords = TextEditingController(
         text: _book.tuning.styleKeywords.join(', '));
     _openings = TextEditingController(text: _book.openingMessages.join('\n'));
+    _visualStyle = TextEditingController(text: _book.illustrationSettings.style);
+    _negativePrompt =
+        TextEditingController(text: _book.illustrationSettings.negativePrompt);
     _loadProfile();
   }
 
@@ -74,6 +79,8 @@ class BookEditorPageState extends State<BookEditorPage> {
     _style.dispose();
     _keywords.dispose();
     _openings.dispose();
+    _visualStyle.dispose();
+    _negativePrompt.dispose();
     super.dispose();
   }
 
@@ -146,6 +153,9 @@ class BookEditorPageState extends State<BookEditorPage> {
         openingMessages: openings,
         tuning: current.tuning.copyWith(
           styleKeywords: NarrativeTuning.parseKeywords(_keywords.text)),
+        illustrationSettings: current.illustrationSettings.copyWith(
+          style: _visualStyle.text.trim(),
+          negativePrompt: _negativePrompt.text.trim()),
       ));
       return true;
     } on FormatException catch (error) {
@@ -172,6 +182,9 @@ class BookEditorPageState extends State<BookEditorPage> {
       openingMessages: openings,
       tuning: current.tuning.copyWith(
         styleKeywords: NarrativeTuning.parseKeywords(_keywords.text)),
+      illustrationSettings: current.illustrationSettings.copyWith(
+        style: _visualStyle.text.trim(),
+        negativePrompt: _negativePrompt.text.trim()),
       lore: lore,
     ));
   }
@@ -375,6 +388,8 @@ class BookEditorPageState extends State<BookEditorPage> {
             icon: Icon(Icons.edit_note_rounded), label: 'Narrateur'),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined), label: 'Système'),
+          NavigationDestination(
+            icon: Icon(Icons.palette_outlined), label: 'Images'),
         ],
       ),
       body: SafeArea(
@@ -435,6 +450,11 @@ class BookEditorPageState extends State<BookEditorPage> {
                 padding: const EdgeInsets.fromLTRB(18, 10, 18, 26),
                 children: _systemTab(),
               ),
+              ListView(
+                key: const ValueKey('bookTab-4'),
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 26),
+                children: _illustrationTab(),
+              ),
             ],
           )),
         ]),
@@ -481,28 +501,6 @@ class BookEditorPageState extends State<BookEditorPage> {
   ];
 
   List<Widget> _narratorTab() => [
-    DropdownButtonFormField<IllustrationMode>(
-      key: ValueKey('bookIllustration-${_book.illustrationMode.name}'),
-      initialValue: _book.illustrationMode,
-      isExpanded: true,
-      decoration: const InputDecoration(labelText: 'Illustrations du Livre'),
-      items: const [
-        DropdownMenuItem(value: IllustrationMode.disabled,
-            child: Text('Désactivées')),
-        DropdownMenuItem(value: IllustrationMode.suggestions,
-            child: Text('Suggestions (sans génération)')),
-        DropdownMenuItem(value: IllustrationMode.automatic,
-            child: Text('Automatique (préparation uniquement)')),
-      ],
-      onChanged: (mode) {
-        if (mode == null || mode == _book.illustrationMode) return;
-        unawaited(_persist((current) =>
-            current.copyWith(illustrationMode: mode)).catchError((Object _) {
-          _show('Impossible de sauvegarder les illustrations.');
-        }));
-      },
-    ),
-    const SizedBox(height: DomoliaSpacing.section),
     TextField(
       key: const ValueKey('bookNarrativeStyle'),
       controller: _style,
@@ -551,6 +549,119 @@ class BookEditorPageState extends State<BookEditorPage> {
         _queueSave();
       },
     ),
+  ];
+
+  List<Widget> _illustrationTab() => [
+    const Text('Direction artistique du Livre',
+      style: TextStyle(fontSize: 19, color: DomoliaColors.goldLight,
+        fontWeight: FontWeight.bold)),
+    const SizedBox(height: 8),
+    const Text('Ces options appartiennent au Livre et sont incluses dans '
+      'son export. Le fournisseur, la clé API et le modèle restent '
+      'configurés dans les réglages des IA graphiques.'),
+    const SizedBox(height: DomoliaSpacing.section),
+    DropdownButtonFormField<IllustrationMode>(
+      key: ValueKey('bookIllustration-${_book.illustrationMode.name}'),
+      initialValue: _book.illustrationMode,
+      isExpanded: true,
+      decoration: const InputDecoration(labelText: 'Illustrations du Livre'),
+      items: const [
+        DropdownMenuItem(value: IllustrationMode.disabled,
+            child: Text('Désactivées')),
+        DropdownMenuItem(value: IllustrationMode.suggestions,
+            child: Text('Suggestions (sans génération)')),
+        DropdownMenuItem(value: IllustrationMode.automatic,
+            child: Text('Automatique (préparation uniquement)')),
+      ],
+      onChanged: (mode) {
+        if (mode == null || mode == _book.illustrationMode) return;
+        unawaited(_persist((current) =>
+            current.copyWith(illustrationMode: mode)).catchError((Object _) {
+          _show('Impossible de sauvegarder les illustrations.');
+        }));
+      },
+    ),
+    const SizedBox(height: DomoliaSpacing.section),
+    TextField(
+      key: const ValueKey('bookImageStyle'),
+      controller: _visualStyle, maxLength: 160,
+      minLines: 2, maxLines: 4,
+      decoration: const InputDecoration(
+        labelText: 'Style graphique',
+        helperText: 'Direction artistique commune aux illustrations du Livre'),
+      onChanged: (_) => _queueSave(),
+    ),
+    const SizedBox(height: DomoliaSpacing.section),
+    TextField(
+      key: const ValueKey('bookImageNegativePrompt'),
+      controller: _negativePrompt, maxLength: 1500,
+      minLines: 3, maxLines: 7,
+      decoration: const InputDecoration(
+        labelText: 'Éléments à éviter (negative prompt)',
+        helperText: 'Par exemple : texte, sous-titres, bulles, '
+          'filigranes et signatures. Les modèles peuvent encore produire '
+          'des éléments indésirables.'),
+      onChanged: (_) => _queueSave(),
+    ),
+    const SizedBox(height: DomoliaSpacing.section),
+    DropdownButtonFormField<String>(
+      key: const ValueKey('bookImageSize'),
+      initialValue: _book.illustrationSettings.size,
+      isExpanded: true,
+      decoration: const InputDecoration(labelText: 'Taille / format'),
+      items: [
+        for (final size in BookIllustrationSettings.supportedSizes)
+          DropdownMenuItem(value: size, child: Text(size)),
+      ],
+      onChanged: (size) {
+        if (size == null || size == _book.illustrationSettings.size) return;
+        unawaited(_persist((book) => book.copyWith(
+          illustrationSettings:
+              book.illustrationSettings.copyWith(size: size))).catchError(
+          (Object _) => _show('Impossible de sauvegarder le format.')));
+      },
+    ),
+    const SizedBox(height: DomoliaSpacing.section),
+    DropdownButtonFormField<String>(
+      key: const ValueKey('bookImageQuality'),
+      initialValue: _book.illustrationSettings.quality ?? 'auto',
+      decoration: const InputDecoration(labelText: 'Qualité graphique'),
+      items: [
+        const DropdownMenuItem(value: 'auto',
+          child: Text('Défaut du fournisseur')),
+        for (final quality in BookIllustrationSettings.supportedQualities)
+          DropdownMenuItem(value: quality, child: Text(quality)),
+      ],
+      onChanged: (quality) {
+        if (quality == null) return;
+        unawaited(_persist((book) => book.copyWith(
+          illustrationSettings: book.illustrationSettings.copyWith(
+            quality: quality, clearQuality: quality == 'auto'))).catchError(
+          (Object _) => _show('Impossible de sauvegarder la qualité.')));
+      },
+    ),
+    const SizedBox(height: DomoliaSpacing.section),
+    DropdownButtonFormField<int>(
+      key: const ValueKey('bookImageCount'),
+      initialValue: _book.illustrationSettings.count,
+      decoration: const InputDecoration(labelText: 'Images par demande'),
+      items: [
+        for (var count = 1; count <= 4; count++)
+          DropdownMenuItem(value: count, child: Text('$count')),
+      ],
+      onChanged: (count) {
+        if (count == null || count == _book.illustrationSettings.count) return;
+        unawaited(_persist((book) => book.copyWith(
+          illustrationSettings: book.illustrationSettings.copyWith(
+            count: count))).catchError(
+          (Object _) => _show('Impossible de sauvegarder le nombre d’images.')));
+      },
+    ),
+    const SizedBox(height: DomoliaSpacing.section),
+    const Text('Certaines combinaisons de format, qualité et quantité '
+      'peuvent ne pas être prises en charge par le modèle API sélectionné. '
+      'Domolia affiche alors une erreur avant de lancer une génération '
+      'facturable.'),
   ];
 
   List<Widget> _systemTab() => [
