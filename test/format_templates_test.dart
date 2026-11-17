@@ -14,6 +14,11 @@ void main() {
     expect(book.lore.characters, hasLength(1));
     expect(book.lore.scenarios, hasLength(1));
     expect(book.lore.events, hasLength(1));
+    expect(book.illustrationSettings.negativePrompt,
+        contains('sous-titres'));
+    expect(book.illustrationSettings.size, '1024x1536');
+    expect(book.illustrationSettings.style, contains('aquarelle'));
+    expect(jsonDecode(source)['version'], BookDefinition.version);
     expect(BookDefinition.importJson(book.exportJson()).toPortableJson(),
         book.toPortableJson());
   });
@@ -23,6 +28,9 @@ void main() {
         File('template/conversation_template.json').readAsStringSync())
         as Map<String, dynamic>;
     expect(conversation['format'], 'domolia-conversation-v1');
+    expect((conversation['events'] as List).any(
+        (event) => event['type'] == 'image_intent' &&
+            event['state'] == 'proposed'), isTrue);
     expect((conversation['events'] as List).length,
         conversation['exportedEvents']);
     expect(conversation['totalEventsInConversation'],
