@@ -34,8 +34,8 @@ réorientation implicite ou un retry facturable.
 ## Stockage, coûts et limites
 
 Les fichiers PNG/JPEG/WebP sont copiés dans le stockage applicatif
-Android ; SQLite v13 conserve uniquement leurs métadonnées, les identifiants
-des intentions, leurs prompts et les coûts effectivement rapportés.
+Android ; SQLite v14 conserve uniquement leurs métadonnées, les identifiants
+des intentions, leurs prompts, les exclusions visuelles appliquées et les coûts effectivement rapportés.
 Le contrôle de l'historique empêche une image tardive d'être ajoutée à
 une scène rewound. Les fichiers orphelins sont purgés lors de la
 réouverture de la Partie.
@@ -56,12 +56,17 @@ le dépôt existant ne fournit pas de plateforme Web prête à compiler.
 1. Installer la préversion de la branche après un workflow Android APK vert.
 2. Choisir un narrateur ChatGPT et un metteur en scène ChatGPT dans les
    profils IA textuels ; choisir un fournisseur graphique OpenUncensored.
-3. Dans Paramètres > Génération d'images, sélectionner profil, modèle,
-   taille, qualité, style, nombre d'images. Vérifier la surcharge Partie.
+3. Dans Paramètres > Génération d'images, sélectionner le profil,
+   le modèle graphique et le metteur en scène uniquement. Vérifier la
+   surcharge de connexion par Partie. Dans l'éditeur du Livre > Images,
+   choisir taille, qualité, style, nombre d'images et exclusions (negative
+   prompt). Vérifier que l'export JSON conserve ces choix sans clé API.
 4. Jouer jusqu'à une intention [IMAGE] : vérifier qu'elle ne déclenche
    pas d'appel graphique automatique.
 5. Cliquer sur Générer l'illustration, confirmer le coût potentiellement
-   inconnu, suivre la préparation puis l'image réelle.
+   inconnu, suivre les étapes de l'Illustrateur au-dessus de la saisie.
+   Sans configuration graphique, vérifier l'erreur explicite et son
+   raccourci vers les réglages.
 6. Appuyer longuement sur « Soren referme lentement le tiroir derrière lui. ».
    Choisir Illustrer : une intention doit apparaître juste après, sans
    facturation graphique. Cliquer ensuite pour générer l'image.
@@ -79,6 +84,17 @@ le dépôt existant ne fournit pas de plateforme Web prête à compiler.
 11. Tester rewind en cours de requête, double clic, réseau déconnecté,
     clé invalide, solde insuffisant et refus du fournisseur.
     Ne pas réessayer automatiquement une opération facturable.
+12. Depuis le chat, utiliser le bouton Lore dans la barre supérieure,
+    modifier une fiche puis revenir à la même Partie.
+13. Depuis l'éditeur du Livre > Livre, générer une couverture : vérifier
+    la description préremplie depuis le JSON, l'annulation sans requête,
+    la confirmation facturable, l'indicateur de progression, puis la
+    couverture JPEG de moins de 1 Mio. Une erreur conserve l'ancienne
+    couverture. Exporter et réimporter le Livre pour vérifier la
+    description, la direction artistique et la couverture.
+14. Importer template/livre_template.json, vérifier son onglet Images,
+    puis enregistrer/exporter. Un ancien Livre v1/v2 reçoit les
+    réglages graphiques par défaut sans perdre ses données.
 
 ### Tests sans crédit réel
 
