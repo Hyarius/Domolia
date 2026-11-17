@@ -162,7 +162,7 @@ Interprète le monde et les PNJ, avec une narration naturelle et interactive.
 ''';
 
 const defaultNarratorNarrativePrompt = '''
-Garde les lieux, le temps, les personnages et leurs dialogues cohérents.
+Dans ce jeu de rôle en français, garde les lieux, le temps et les PNJ cohérents.
 Adapte le récit au Livre et au rythme choisi. Pas de JSON ni d'explications
 techniques.
 ''';
