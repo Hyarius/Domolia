@@ -64,6 +64,15 @@ class NarrativeReferenceTools {
         'id': {'type': 'string'},
       }, 'required': ['category', 'id'],
     }),
+    AiToolDefinition('get_lore_global',
+        'Read an exact global Book canon section omitted or abbreviated from the local starting briefing. Secrets must not be revealed to the player before discovery.', {
+      'type': 'object', 'properties': {
+        'section': {'type': 'string', 'enum': [
+          'universe','overview','genre','era','initialContext',
+          'history','rules','conflicts','directions','secrets']},
+        'offset': {'type': 'integer', 'minimum': 0, 'maximum': 50000},
+      }, 'required': ['section'],
+    }),
     AiToolDefinition('search_history',
         'Search all turns in THIS Party, including player messages, compact summaries and original RAW.', {
       'type': 'object', 'properties': {
@@ -277,6 +286,30 @@ class NarrativeReferenceTools {
     return jsonEncode({'source': 'book_canon', 'error': 'entry_not_found'});
   }
 
+  String _getGlobalLore(Map<String, dynamic> input) {
+    final section = input['section'];
+    final offset = input['offset'] ?? 0;
+    final fields = lore().global.toJson();
+    if (section is! String || !fields.containsKey(section) ||
+        offset is! int || offset < 0 || offset > 50000) {
+      throw const FormatException('Invalid global Lore section or offset');
+    }
+    final value = fields[section] as String;
+    final start = offset.clamp(0, value.length);
+    final end = (start + 2600).clamp(0, value.length);
+    return jsonEncode({
+      'source': 'book_canon',
+      'section': section,
+      'text': value.substring(start, end),
+      'offset': start,
+      'total_characters': value.length,
+      'has_more': end < value.length,
+      'notice': section == 'secrets'
+          ? 'Narrator-only secret. Never present as discovered without a witnessed in-Party event.'
+          : 'Canonical Book text, not proof of any in-Party event.',
+    });
+  }
+
   List<({ChatEntry player, String text, RawGeneration? raw})> _turns() {
     final availableRaw = {
       for (final generation in rawGenerations())
@@ -459,6 +492,7 @@ class NarrativeReferenceTools {
         'get_event_history' => _searchMemory(value, eventsOnly: true),
         'search_lore' => _searchLore(value),
         'get_lore_entry' => _getLore(value),
+        'get_lore_global' => _getGlobalLore(value),
         'search_history' => _searchHistory(value),
         'get_history_excerpt' => _getHistory(value),
         _ => jsonEncode({'error': 'unknown_tool'}),
