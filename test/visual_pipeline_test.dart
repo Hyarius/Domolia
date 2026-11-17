@@ -77,6 +77,23 @@ void main() {
        isNot(contains('Cheveux noirs')));
   });
 
+  test('Book exclusions are added without treating scene dialogue as overlay', () {
+    final selected=const VisualSceneSelector().select(
+        intent:intent,timeline:scene(),lore:lore);
+    const director=VisualDirection(
+      shot:'medium',angle:'eye_level',focusIds:[],
+      composition:'centered',lighting:'soft',
+      palette:'muted',mood:'calm');
+    final prompt=validatedImagePrompt(selected,director,
+      style:'gravure sombre',
+      negativePrompt:'sous-titres, textes, filigranes');
+    expect(prompt,contains('Style graphique : gravure sombre'));
+    expect(prompt,contains('EXCLUSIONS VISUELLES : sous-titres'));
+    expect(prompt,contains('ne doivent pas être recopiés'));
+    expect(()=>validatedImagePrompt(selected,director,
+      negativePrompt:'x' * 1501),throwsFormatException);
+  });
+
   test('Rewind removes source and changes hash of same ID', () {
     final selected=const VisualSceneSelector().select(
         intent:intent,timeline:scene(),lore:lore);
