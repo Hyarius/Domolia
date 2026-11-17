@@ -25,7 +25,7 @@ class NarrativeReferenceTools {
 
   static const definitions = <AiToolDefinition>[
     AiToolDefinition('search_memory',
-        'Search sourced facts about this Party, not Book canon. Includes old details, relationships and uncertain reports.', {
+        'Search Party memories (with certainty and source); not Book canon.', {
       'type': 'object', 'properties': {
         'query': {'type': 'string'},
         'category': {'type': 'string', 'enum': [
@@ -35,20 +35,20 @@ class NarrativeReferenceTools {
       }, 'required': ['query'],
     }),
     AiToolDefinition('get_memory_entry',
-        'Read a Party memory by its stable ID with certainty and source turn.', {
+        'Read one Party memory by ID (certainty and source included).', {
       'type': 'object', 'properties': {
         'id': {'type': 'string'},
       }, 'required': ['id'],
     }),
     AiToolDefinition('get_event_history',
-        'Search retained past events and commitments for this Party.', {
+        'Search old Party events and commitments.', {
       'type': 'object', 'properties': {
         'query': {'type': 'string'},
         'limit': {'type': 'integer', 'minimum': 1, 'maximum': 5},
       }, 'required': ['query'],
     }),
     AiToolDefinition('search_lore',
-        'Search Book canon: names, aliases, IDs and descriptions. Potential events have NOT necessarily happened.', {
+        'Search Book canon by name, alias, ID or description; events may be only potential.', {
       'type': 'object', 'properties': {
         'query': {'type': 'string'},
         'category': {'type': 'string',
@@ -57,7 +57,7 @@ class NarrativeReferenceTools {
       }, 'required': ['query'],
     }),
     AiToolDefinition('get_lore_entry',
-        'Retrieve a canonical entry including secrets, relationships and unverified conditions.', {
+        'Read Book entry by ID, including narrator-only secrets and conditions.', {
       'type': 'object', 'properties': {
         'category': {'type': 'string',
           'enum': ['character', 'place', 'scenario', 'event']},
@@ -65,7 +65,7 @@ class NarrativeReferenceTools {
       }, 'required': ['category', 'id'],
     }),
     AiToolDefinition('get_lore_global',
-        'Read an exact global Book canon section omitted or abbreviated from the local starting briefing. Secrets must not be revealed to the player before discovery.', {
+        'Read a global Book section in chunks, including narrator-only secrets.', {
       'type': 'object', 'properties': {
         'section': {'type': 'string', 'enum': [
           'universe','overview','genre','era','initialContext',
@@ -74,14 +74,14 @@ class NarrativeReferenceTools {
       }, 'required': ['section'],
     }),
     AiToolDefinition('search_history',
-        'Search all turns in THIS Party, including player messages, compact summaries and original RAW.', {
+        'Search Party turns: player, summaries and original RAW.', {
       'type': 'object', 'properties': {
         'query': {'type': 'string'},
         'limit': {'type': 'integer', 'minimum': 1, 'maximum': 5},
       }, 'required': ['query'],
     }),
     AiToolDefinition('get_history_excerpt',
-        'Read original RAW from an old turn by player_event_id or a timeline event_id; count at most 3.', {
+        'Read old RAW by player_event_id or event_id (up to 3 turns).', {
       'type': 'object', 'properties': {
         'player_event_id': {'type': 'integer'},
         'event_id': {'type': 'integer'},
@@ -327,7 +327,7 @@ class NarrativeReferenceTools {
         text: [
           player.text,
           if (original != null) original.compactText ?? '',
-          if (original != null) original.rawText,
+          if (original != null) stripIllustrationBlocks(original.rawText),
           ...lines,
         ].join('\n'),
       ));
@@ -405,15 +405,15 @@ class NarrativeReferenceTools {
             'player_event_id': t.player.id,
             'player_message': _short(t.player.text),
             if (t.raw != null) ...{
-              'raw_total_characters': t.raw!.rawText.length,
+              'raw_total_characters': stripIllustrationBlocks(t.raw!.rawText).length,
               'raw_offset': rawOffset,
-              'raw_original': t.raw!.rawText.substring(
-                rawOffset.clamp(0, t.raw!.rawText.length),
+              'raw_original': stripIllustrationBlocks(t.raw!.rawText).substring(
+                rawOffset.clamp(0, stripIllustrationBlocks(t.raw!.rawText).length),
                 (rawOffset + (count == 1 ? 4500 : 1250))
-                    .clamp(0, t.raw!.rawText.length),
+                    .clamp(0, stripIllustrationBlocks(t.raw!.rawText).length),
               ),
               'raw_truncated': rawOffset +
-                  (count == 1 ? 4500 : 1250) < t.raw!.rawText.length,
+                  (count == 1 ? 4500 : 1250) < stripIllustrationBlocks(t.raw!.rawText).length,
             },
             if (t.raw?.compactText != null)
               'compact': _short(t.raw!.compactText),

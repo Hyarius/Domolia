@@ -1,4 +1,5 @@
 import '../chat/raw_generation.dart';
+import '../chat/chat_protocol.dart';
 import 'package:flutter/foundation.dart';
 
 import '../ai/ai_diagnostics.dart';
@@ -194,6 +195,17 @@ class BookLibraryController extends ChangeNotifier {
           clearMemoryProfile: profileId == null),
     };
     await store.putSession(next);
+    _notify();
+  }
+
+  Future<void> setSessionIllustrationMode(
+      String id, IllustrationMode? override) async {
+    final current = await store.findSession(id);
+    if (current == null) throw StateError('Partie introuvable.');
+    await store.putSession(current.copyWith(
+      illustrationModeOverride: override,
+      clearIllustrationMode: override == null,
+    ));
     _notify();
   }
 

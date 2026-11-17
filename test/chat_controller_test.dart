@@ -520,12 +520,11 @@ void main() {
     expect(optimizer.calls, 0);
     expect(cached, isNotEmpty);
     expect(cached!.length, lessThanOrEqualTo(3600));
-    expect(hash, 'startup-v2-${const LoreContextOptimizer().sourceHash(lore)}');
+    expect(hash, 'startup-v3-${const LoreContextOptimizer().sourceHash(lore)}');
     expect(provider.narrativeContext!.first.content,
-        contains('CONTEXTE INITIAL PRÉPARÉ LOCALEMENT'));
+        contains('CONTEXTE INITIAL DU LIVRE'));
     expect(provider.narrativeContext!.first.content,
-        contains('CONTEXTE INITIAL PRÉPARÉ LOCALEMENT (canon, non vécu)\n'
-            'CONTEXTE DE DÉPART'));
+        contains('CONTEXTE INITIAL DU LIVRE (canon, pas faits vécus)'));
     expect(provider.narrativeContext!.first.content,
         isNot(contains(r'FICHES CANONIQUES PERTINENTES (non vécues)\n')));
     await local.send('Je m’assieds.');
@@ -568,7 +567,7 @@ void main() {
     expect(persisted!.length, lessThanOrEqualTo(3600));
     expect(local.messages.last.text, provider.raw);
     expect(provider.narrativeContext!.first.content,
-        contains('CONTEXTE INITIAL PRÉPARÉ LOCALEMENT'));
+        contains('CONTEXTE INITIAL DU LIVRE'));
     expect(provider.narrativeContext!.first.content,
         isNot(contains('LORE CANONIQUE RÉSUMÉ')));
   });
@@ -588,7 +587,7 @@ void main() {
     await local.send('Je me présente.');
     expect(local.messages.last.text, provider.raw);
     expect(provider.narrativeContext!.first.content,
-        contains('CONTEXTE INITIAL PRÉPARÉ LOCALEMENT'));
+        contains('CONTEXTE INITIAL DU LIVRE'));
     expect(provider.narrativeContext!.first.content,
         isNot(contains('Stale unverified remote output')));
   });

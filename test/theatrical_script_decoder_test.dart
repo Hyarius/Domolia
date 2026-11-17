@@ -33,6 +33,33 @@ void main() {
     expect((events[3] as ChatLine).text, 'La rue est vide.');
   });
 
+  test('unmarked stage direction after a quoted PNJ line is narration', () {
+    final events = parse(
+      '[PERSONNAGE:Léa Monel|essoufflée]\n'
+      '« Soren ? On m’a rapporté quelque chose. »\n\n'
+      'Elle garde une main sur sa sacoche, hésitant à l’ouvrir.',
+      chunkSize: 1,
+    );
+    expect(events, hasLength(2));
+    expect((events[0] as ChatLine).speaker, ChatSpeaker.character);
+    expect((events[0] as ChatLine).name, 'Léa Monel');
+    expect((events[0] as ChatLine).text, '« Soren ? On m’a rapporté quelque chose. »');
+    expect((events[1] as ChatLine).speaker, ChatSpeaker.narrator);
+    expect((events[1] as ChatLine).text,
+        'Elle garde une main sur sa sacoche, hésitant à l’ouvrir.');
+  });
+
+  test('separate quoted paragraphs stay the same character', () {
+    final events = parse(
+      '[PERSONNAGE:Léa Monel]\n« Une première nouvelle. »\n\n'
+      '« Et une seconde nouvelle. »',
+      chunkSize: 2,
+    );
+    expect(events, hasLength(1));
+    expect((events.single as ChatLine).speaker, ChatSpeaker.character);
+    expect((events.single as ChatLine).text, contains('seconde nouvelle'));
+  });
+
   test('preview hides incomplete headers and exposes partial dialogue', () {
     final decoder = TheatricalScriptDecoder();
     decoder.add('[PERSONN');

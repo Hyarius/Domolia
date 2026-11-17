@@ -62,6 +62,12 @@ Map<String, dynamic> exportConversation(
       for (final event in selected)
         if (event is ChatSceneChange)
           {'id': event.id, 'type': 'scene_change'}
+        else if (event is ChatIllustrationIntent)
+          {
+            'id': event.id, 'type': 'image_intent',
+            'playerEventId': event.playerEventId,
+            'description': event.description, 'state': event.state.name,
+          }
         else if (event is ChatEntry)
           {
             'id': event.id,
