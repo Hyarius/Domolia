@@ -158,6 +158,33 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
     );
   }
 
+
+  /// Remove obsolete metadata inside the same transaction that rewrites the
+  /// timeline. Files are garbage-collected independently after commit.
+  static Future<void> _pruneIllustrations(
+      DatabaseExecutor txn, BookSession session) async {
+    final hashes = <int, String>{};
+    final selector = const VisualSceneSelector();
+    for (final intent in session.timeline.whereType<ChatIllustrationIntent>()) {
+      if (intent.state == IllustrationIntentState.cancelled ||
+          intent.state == IllustrationIntentState.ignored) {
+        continue;
+      }
+      hashes[intent.id] = selector.select(
+        intent: intent, timeline: session.timeline, lore: const BookLore(),
+      ).sourceHash;
+    }
+    final rows = await txn.query('illustration_generations',
+      columns: ['request_id', 'intent_id', 'source_hash'],
+      where: 'session_id = ?', whereArgs: [session.id]);
+    for (final row in rows) {
+      if (hashes[row['intent_id']] != row['source_hash']) {
+        await txn.delete('illustration_generations',
+          where: 'request_id = ?', whereArgs: [row['request_id']]);
+      }
+    }
+  }
+
   @override
   Future<List<StoredIllustration>> listIllustrations(String sessionId) async {
     final rows = await (await database).query(
@@ -209,7 +236,11 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
           sessions.single['timeline_json'] as String);
       final matched = timeline.whereType<ChatIllustrationIntent>()
           .where((e) => e.id == record.intentId).toList();
-      if (matched.length != 1) return false;
+      if (matched.length != 1 ||
+          matched.single.state == IllustrationIntentState.cancelled ||
+          matched.single.state == IllustrationIntentState.ignored) {
+        return false;
+      }
       // Compare only historical timeline evidence. Later turns are excluded.
       final current = const VisualSceneSelector().select(
         intent: matched.single, timeline: timeline, lore: const BookLore());
@@ -365,6 +396,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
       if (updated != 1) {
         throw StateError('Partie supprimée ou introuvable.');
       }
+      await _pruneIllustrations(txn, session);
       // Atomically invalidate memory from deleted/regenerated source turns.
       // Manual overrides live in a separate table and remain untouched.
       final valid = {
@@ -620,18 +652,23 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
       if (updated == 0) {
         await txn.insert('sessions', {'id': session.id, ...values});
       }
+      await _pruneIllustrations(txn, session);
     });
   }
 
   @override
   Future<void> updateSession(BookSession session) async {
     // A late autosave must never reinsert a session the user has deleted.
-    await (await database).update('sessions', {
-      'title': session.title,
-      'timeline_json': session.encodeTimeline(),
-      'updated_at': DateTime.now().microsecondsSinceEpoch,
-    }, where: 'id = ? AND book_id = ?',
-      whereArgs: [session.id, session.bookId]);
+    final db = await database;
+    await db.transaction((txn) async {
+      final updated = await txn.update('sessions', {
+        'title': session.title,
+        'timeline_json': session.encodeTimeline(),
+        'updated_at': DateTime.now().microsecondsSinceEpoch,
+      }, where: 'id = ? AND book_id = ?',
+        whereArgs: [session.id, session.bookId]);
+      if (updated == 1) await _pruneIllustrations(txn, session);
+    });
   }
 
   @override
