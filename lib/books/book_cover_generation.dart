@@ -1,11 +1,10 @@
-// ignore_for_file: prefer_interpolation_to_compose_strings
+// ignore_for_file: prefer_interpolation_to_compose_strings, curly_braces_in_flow_control_structures
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
 
-import '../ai/ai_controller.dart';
 import '../ai/ai_provider.dart';
 import '../illustration/image_preferences.dart';
 import '../illustration/image_providers.dart';
