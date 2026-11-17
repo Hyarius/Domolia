@@ -150,7 +150,7 @@ class LiveMemoryCoordinator extends ChangeNotifier {
             response,
             playerEventId: source.playerEventId,
             playerText: player.single.text,
-            validatedRaw: source.rawText,
+            validatedRaw: source.validatedNarrative,
           );
           if (_closed) return;
           await store.commitMemoryTurn(sessionId, source, operations);
@@ -216,7 +216,8 @@ class LiveMemoryCoordinator extends ChangeNotifier {
   }
 
   List<AiMessage> _prompt(String player, RawGeneration raw) {
-    final existing = context([player, raw.rawText], budget: 2900);
+    final narrative = raw.validatedNarrative;
+    final existing = context([player, narrative], budget: 2900);
     return [
       const AiMessage(
         role: 'system',
@@ -249,7 +250,7 @@ class LiveMemoryCoordinator extends ChangeNotifier {
             'MÉMOIRE EXISTANTE (sélection limitée):\n$existing\n\n'
             'ID DU TOUR: ${raw.playerEventId}\n'
             'MESSAGE JOUEUR:\n${player.substring(0, player.length.clamp(0, 4000))}\n\n'
-            'RAW VALIDÉ:\n${raw.rawText.substring(0, raw.rawText.length.clamp(0, 14000))}',
+            'NARRATION VALIDÉE:\n${narrative.substring(0, narrative.length.clamp(0, 14000))}',
       ),
     ];
   }
