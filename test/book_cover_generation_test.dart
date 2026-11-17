@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:domolia/ai/ai_controller.dart';
+import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/books/book_cover_generation.dart';
 import 'package:domolia/books/book_definition.dart';
 import 'package:domolia/books/book_lore.dart';
