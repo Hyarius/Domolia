@@ -46,9 +46,12 @@ void main() {
       state: IllustrationJobState.available, provider: 'openai',
       model: 'gpt-image-2', createdAtUtc: DateTime.utc(2026, 11, 17),
       prompt: 'Soren referme le tiroir.',
+      negativePrompt: 'aucune bulle de texte',
       fileNames: const ['img-request-first-0.png'],
     );
     expect(await first.saveIllustrationIfCurrent(record), isTrue);
+    expect((await first.listIllustrations('s')).single.negativePrompt,
+      'aucune bulle de texte');
     expect((await first.listIllustrations('s')).single.fileNames,
       ['img-request-first-0.png']);
     await first.close();
@@ -57,6 +60,8 @@ void main() {
     addTearDown(second.close);
     expect((await second.listIllustrations('s')).single.model,
       'gpt-image-2');
+    expect((await second.listIllustrations('s')).single.negativePrompt,
+      'aucune bulle de texte');
     await second.updateSession(session.copyWith(
       timeline: timeline().take(2).toList()));
     expect(await second.listIllustrations('s'), isEmpty);
