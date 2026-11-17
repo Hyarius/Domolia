@@ -100,17 +100,14 @@ void main() {
     expect(provider.calls, 1);
     expect(provider.lastPrompt!.first.content, contains('SCRIPT THÉÂTRAL'));
     provider.fragments.add(const AiStreamChunk(
-      text: '{"type":"message","speaker":"character",'
-          '"name":"Oren","text":"Bonsoir',
+      text: '[PERSONNAGE:Oren]\nBonsoir',
     ));
     await _tick();
     expect(chat.timeline.whereType<ChatEntry>().last.text, 'Bonsoir');
     expect(chat.timeline.whereType<ChatEntry>().last.inProgress, true);
     expect(persisted.whereType<ChatEntry>().length, 1);
     provider.fragments.add(const AiStreamChunk(
-      text: ', voyageur."}\n'
-          '{"type":"message","speaker":"narrator","name":"Narrateur",'
-          '"text":"La pluie cesse."}\n',
+      text: ', voyageur.\n[NARRATION]\nLa pluie cesse.\n',
     ));
     await _tick();
     expect(chat.timeline.whereType<ChatEntry>().length, 3);
@@ -170,7 +167,7 @@ void main() {
     expect(chat.messages.length, 1);
   });
 
-  test('tool round discards free-text draft before final NDJSON', () async {
+  test('tool round discards free-text draft before final stage script', () async {
     final tool = _ToolNarrator();
     addTearDown(tool.close);
     final toolChat = NarrativeChatController(
@@ -195,8 +192,7 @@ void main() {
     await tool.first.close();
     await _tick();
     tool.finalTurn.add(const AiToolStreamChunk(text:
-      '{"type":"message","speaker":"narrator","name":"Narrateur",'
-      '"text":"Réponse après recherche."}\n'));
+      '[NARRATION]\nRéponse après recherche.\n'));
     await tool.finalTurn.close();
     await pending;
     expect(toolChat.error, isNull);
@@ -209,10 +205,8 @@ void main() {
     final pending = chat.send('Je regarde.');
     await _tick();
     provider.fragments.add(const AiStreamChunk(
-      text: '{"type":"message","speaker":"narrator",'
-          '"name":"Narrateur","text":"Le vent souffle."}\n'
-          '{"type":"message","speaker":"player",'
-          '"name":"Vous","text":"Je vole."}\n',
+      text: '[NARRATION]\nLe vent souffle.\n'
+          '[PERSONNAGE:Vous]\nJe vole.\n',
     ));
     await provider.fragments.close();
     await pending;
@@ -226,8 +220,7 @@ void main() {
     final pending = chat.send('Je regarde.');
     await _tick();
     provider.fragments.add(const AiStreamChunk(
-      text: '{"type":"message","speaker":"narrator",'
-          '"name":"Narrateur","text":"La porte',
+      text: '[NARRATION]\nLa porte',
     ));
     await _tick();
     expect(chat.timeline.whereType<ChatEntry>().length, 2);
@@ -257,8 +250,7 @@ void main() {
     await _tick();
     expect(tool.calls, 1);
     tool.first.add(const AiToolStreamChunk(
-      text: '{"type":"message","speaker":"narrator",'
-          '"name":"Narrateur","text":"Brouillon',
+      text: '[NARRATION]\nBrouillon',
     ));
     await _tick();
     expect(toolChat.timeline.whereType<ChatEntry>().last.inProgress, true);
@@ -273,14 +265,13 @@ void main() {
     await _tick();
     expect(tool.calls, 2);
     tool.finalTurn.add(const AiToolStreamChunk(
-      text: '{"type":"message","speaker":"character",'
-          '"name":"Oren","text":"Bienvenue',
+      text: '[PERSONNAGE:Oren]\nBienvenue',
     ));
     await _tick();
     expect(toolChat.timeline.whereType<ChatEntry>().last.text, 'Bienvenue');
     expect(toolChat.timeline.whereType<ChatEntry>().last.inProgress, true);
     expect(eventsSaved.last.whereType<ChatEntry>().length, 1);
-    tool.finalTurn.add(const AiToolStreamChunk(text: '."}\n'));
+    tool.finalTurn.add(const AiToolStreamChunk(text: '.\n'));
     await tool.finalTurn.close();
     await pending;
     expect(toolChat.error, isNull);
@@ -307,11 +298,12 @@ void main() {
     expect(persistedRaw, hasLength(1));
   });
 
-  test('Live Memory quotes are checked against literary NDJSON content',
+  test('Live Memory quotes come from validated theatrical content',
       () {
     final source = RawGeneration(playerEventId: 1, rawText:
-        '{"type":"message","speaker":"character","name":"Oren",'
-        '"text":"Le ticket bleu porte le numéro 47."}\n').structured(2, 2);
+        '[PERSONNAGE:Oren]\nLe ticket bleu porte le numéro 47.\n')
+        .structured(2, 2, compactText:
+            'Oren : Le ticket bleu porte le numéro 47.');
     expect(source.validatedNarrative,
         'Oren : Le ticket bleu porte le numéro 47.');
     final payload = jsonEncode({'operations': [{

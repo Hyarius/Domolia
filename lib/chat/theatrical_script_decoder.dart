@@ -1,37 +1,13 @@
 import 'chat_protocol.dart';
 
-/// Incremental theatre script parser. A plain prose reply becomes one narrator
-/// block. Historical NDJSON is accepted for compatibility without changing
-/// the durable ChatTimelineEvent model.
+/// Single-format incremental theatre-script decoder. Ordinary literary prose
+/// is accepted as narration; JSON output is explicitly rejected.
 class TheatricalScriptDecoder {
-  final ChatLineDecoder _legacyJson = ChatLineDecoder();
   final _TheatricalLines _script = _TheatricalLines();
-  String _initial = '';
-  bool? _jsonMode;
 
-  List<ChatOutputEvent> add(String fragment) {
-    if (_jsonMode == null) {
-      _initial += fragment;
-      if (_initial.length > 131072) {
-        throw const FormatException('Réponse narrative trop volumineuse.');
-      }
-      final start = _initial.trimLeft();
-      if (start.isEmpty) return const [];
-      _jsonMode = start.startsWith('{');
-      final initial = _initial;
-      _initial = '';
-      return _jsonMode! ? _legacyJson.add(initial) : _script.add(initial);
-    }
-    return _jsonMode! ? _legacyJson.add(fragment) : _script.add(fragment);
-  }
-
-  ChatLine? get preview => _jsonMode == null
-      ? null : _jsonMode! ? _legacyJson.preview : _script.preview;
-
-  List<ChatOutputEvent> finish() {
-    if (_jsonMode == null) return const [];
-    return _jsonMode! ? _legacyJson.finish() : _script.finish();
-  }
+  List<ChatOutputEvent> add(String fragment) => _script.add(fragment);
+  ChatLine? get preview => _script.preview;
+  List<ChatOutputEvent> finish() => _script.finish();
 }
 
 class _TheatricalLines {
@@ -116,10 +92,6 @@ class _TheatricalLines {
       throw const FormatException(
           'Le narrateur ne peut pas écrire les répliques du joueur.');
     }
-    // Never silently reinterpret malformed JSON as stage directions.
-    if (trimmed.startsWith('{"type"')) {
-      throw const FormatException('Formats narratifs mélangés.');
-    }
     final narration = _narration.firstMatch(trimmed);
     if (narration != null) {
       _flush(output);
@@ -156,8 +128,11 @@ class _TheatricalLines {
       if (scene.group(1)!.isNotEmpty) _append(scene.group(1)!);
       return;
     }
-    // A bare text reply, including dashes, stays narration: attributing
-    // characters without a speaker marker is unreliable.
+    // JSON, unknown markers, and truncated headers cannot become prose.
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      throw const FormatException('Format narratif invalide : utilise le script théâtral.');
+    }
+    // A bare literary response remains narration; never guess speakers.
     _append(line);
   }
 
@@ -166,7 +141,7 @@ class _TheatricalLines {
     // A split marker must not flash as raw syntax in the UI.
     final withheld = candidate.startsWith('[') ||
         candidate.startsWith(String.fromCharCodes([96, 96, 96])) ||
-        candidate.startsWith('{"type"');
+        candidate.startsWith('{');
     final text = [
       if (_currentText.trim().isNotEmpty) _currentText,
       if (!withheld && candidate.isNotEmpty) _pendingLine,

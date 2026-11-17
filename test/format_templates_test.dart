@@ -47,16 +47,4 @@ void main() {
     expect(events.whereType<ChatSceneChangeOutput>(), hasLength(1));
   });
 
-  test('legacy streaming template still decodes all NDJSON lines', () {
-    final decoder = TheatricalScriptDecoder();
-    final source = File('template/narrateur_streaming_template.ndjson')
-        .readAsStringSync();
-    final events = <ChatOutputEvent>[];
-    for (final fragment in source.split('')) {
-      events.addAll(decoder.add(fragment));
-    }
-    events.addAll(decoder.finish());
-    expect(events.whereType<ChatLine>(), hasLength(2));
-    expect(events.whereType<ChatSceneChangeOutput>(), hasLength(1));
-  });
 }

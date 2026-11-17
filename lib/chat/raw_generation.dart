@@ -1,6 +1,3 @@
-import 'chat_protocol.dart';
-import 'theatrical_script_decoder.dart';
-
 /// An original literary reply. Its source is never reconstructed from UI bubbles.
 /// IDs refer to player messages, not to generated timeline event positions.
 class RawGeneration {
@@ -21,31 +18,12 @@ class RawGeneration {
 
   bool get isStructured => firstEventId != null && lastEventId != null;
 
-  /// Human-readable, source-faithful content used for Live Memory quotes.
-  /// Historical records contain literary RAW already; new structured turns
-  /// preserve the original script or NDJSON in [rawText] for auditing.
-  String get validatedNarrative {
-    if (!isStructured) {
-      return rawText;
-    }
-    try {
-      final parser = TheatricalScriptDecoder();
-      final events = <ChatOutputEvent>[
-        ...parser.add(rawText),
-        ...parser.finish(),
-      ];
-      if (!events.any((e) => e is ChatLine)) return rawText;
-      return events.whereType<ChatLine>().map((line) {
-        if (line.speaker == ChatSpeaker.character) {
-          return '${line.name} : ${line.text}';
-        }
-        return line.text;
-      }).join('\n');
-    } on FormatException {
-      // Malformed or historical text is never silently discarded.
-      return rawText;
-    }
-  }
+  /// Narrative content captured when the turn was validated. Never reparse
+  /// the model's original output: old persisted formats stay opaque.
+  String get validatedNarrative => isStructured &&
+          compactText != null && compactText!.trim().isNotEmpty
+      ? compactText!
+      : rawText;
 
   RawGeneration structured(int first, int last, {String? compactText}) => RawGeneration(
     playerEventId: playerEventId,
