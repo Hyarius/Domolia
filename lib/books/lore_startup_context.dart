@@ -29,7 +29,7 @@ class LoreStartupContextBuilder {
     void add(String label, String value, {int maximum = 400}) {
       final trimmed = value.trim();
       if (trimmed.isEmpty) return;
-      final left = maxCharacters - used - label.length - 4;
+      final left = maxCharacters - used - label.length - 5;
       if (left < 50) return;
       final clipped = _clip(trimmed, left < maximum ? left : maximum);
       final block = '$label : $clipped';
@@ -80,7 +80,7 @@ class LoreStartupContextBuilder {
     var used = 0;
     void add(String title, String details, {int maximum = 260}) {
       if (details.trim().isEmpty) return;
-      final left = maxCharacters - used - title.length - 4;
+      final left = maxCharacters - used - title.length - 5;
       if (left < 70) return;
       final block = '$title : ${_clip(details.trim(),
           left < maximum ? left : maximum)}';
