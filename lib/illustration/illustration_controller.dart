@@ -16,6 +16,10 @@ import 'visual_pipeline.dart';
 
 typedef ImageProviderFactory = ImageGenerationProvider Function(String id);
 
+/// The phase is set before each awaited operation so the chat has immediate
+/// feedback, even when validation fails before a persisted job exists.
+enum IllustrationActivity { preparing, directing, generating, saving }
+
 /// One session, one timeline. No image request is started by its constructor,
 /// initialization, narration, or an incoming [IMAGE] marker.
 class IllustrationController extends ChangeNotifier {
@@ -49,9 +53,33 @@ class IllustrationController extends ChangeNotifier {
 
   final Map<int, StoredIllustration> _latest = {};
   final Set<int> _inFlight = {};
+  final Map<int, IllustrationActivity> _activities = {};
   bool _closed = false;
   bool initialized = false;
   String? error;
+  int? errorIntentId;
+
+  /// The most recently started in-flight illustration, shown above the composer.
+  String? get activityLabel {
+    if (_activities.isEmpty) return null;
+    switch (_activities.values.last) {
+      case IllustrationActivity.preparing:
+        return 'Illustrateur analyse la scène…';
+      case IllustrationActivity.directing:
+        return 'Illustrateur prépare la mise en scène…';
+      case IllustrationActivity.generating:
+        return 'Illustrateur dessine…';
+      case IllustrationActivity.saving:
+        return 'Illustrateur finalise l’image…';
+    }
+  }
+
+  void dismissError() {
+    if (error == null) return;
+    error = null;
+    errorIntentId = null;
+    _notify();
+  }
 
   StoredIllustration? forIntent(int id) {
     final record = _latest[id];
@@ -143,6 +171,8 @@ class IllustrationController extends ChangeNotifier {
   Future<void> generate(int intentId) async {
     if (_closed || !_inFlight.add(intentId)) return;
     error = null;
+    errorIntentId = null;
+    _activities[intentId] = IllustrationActivity.preparing;
     _notify();
     StoredIllustration? current;
     final savedFiles = <String>[];
@@ -196,6 +226,7 @@ class IllustrationController extends ChangeNotifier {
         throw StateError('Cette scène a été modifiée ou supprimée.');
       }
       _latest[intentId] = current;
+      _activities[intentId] = IllustrationActivity.directing;
       _notify();
 
       directorInvoked = true;
@@ -212,6 +243,7 @@ class IllustrationController extends ChangeNotifier {
         throw StateError('Scène invalidée avant la génération.');
       }
       _latest[intentId] = current;
+      _activities[intentId] = IllustrationActivity.generating;
       _notify();
 
       providerInvoked = true;
@@ -222,6 +254,8 @@ class IllustrationController extends ChangeNotifier {
         ),
         apiKey: profile.apiKey,
       );
+      _activities[intentId] = IllustrationActivity.saving;
+      _notify();
       for (var index = 0; index < result.images.length; index++) {
         final image = result.images[index];
         savedFiles.add(await files.save(unique + '-' + index.toString(),
@@ -254,6 +288,8 @@ class IllustrationController extends ChangeNotifier {
           : failure is StateError ? failure.message
           : 'Erreur de génération. Vérifiez le fournisseur et les crédits.';
       error = message;
+      errorIntentId = intentId;
+      _notify();
       for (final file in savedFiles) { await files.delete(file); }
       if (current != null) {
         final failed = current.copyWith(
@@ -267,6 +303,7 @@ class IllustrationController extends ChangeNotifier {
         if (providerInvoked) await _usage(failed, failed: true, start: start);
       }
     } finally {
+      _activities.remove(intentId);
       _inFlight.remove(intentId);
       _notify();
     }
