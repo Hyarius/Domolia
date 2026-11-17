@@ -172,6 +172,10 @@ void main() {
     final chat = NarrativeChatController(
       provider: provider, configuration: () => _config,
       loreProvider: () => _lore,
+      narrator: const Narrator(
+        narrativePrompt: 'Ne produis ni JSON, ni balises, '
+            'ni instructions destinées à une interface.',
+      ),
       structuredStreamingEnabled: true,
       resolveConnection: () async => NarrativeAiEndpoint(
         provider: provider, configuration: _config, toolCallingEnabled: true),
@@ -186,6 +190,8 @@ void main() {
     for (final request in provider.requests) {
       expect(request.where((m) => m.role == 'system'), hasLength(1));
       expect(request.first.content, contains('SCRIPT THÉÂTRAL'));
+      expect(request.first.content,
+          isNot(contains('Ne produis ni JSON, ni balises')));
     }
     expect(chat.messages.last.text, 'L’archiviste attend une réponse.');
   });
