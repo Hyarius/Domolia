@@ -10,11 +10,11 @@ enum IllustrationIntentState { proposed, ignored, cancelled, queued }
 /// stable timeline event ID, and its origin is the player turn that produced it.
 class ChatIllustrationIntent extends ChatTimelineEvent {
   const ChatIllustrationIntent({
-    required super.id,
+    required int id,
     required this.playerEventId,
     required this.description,
     this.state = IllustrationIntentState.proposed,
-  });
+  }) : super(id);
 
   final int playerEventId;
   final String description;
