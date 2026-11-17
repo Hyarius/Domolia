@@ -410,7 +410,7 @@ class _HomePageState extends State<HomePage> {
           // A tool round is one billed LLM request, not another fee per tool.
           final usage = AiUsageRecord.fromExchange(session.id, exchange);
           if (exchange.stage == 'narrator_structured' ||
-              exchange.stage.startsWith('narrator_tool_round_')) {
+              (exchange.stage?.startsWith('narrator_tool_round_') ?? false)) {
             final key = _credits.active;
             if (key != null) unawaited(_credits.refresh(key.id));
           }
