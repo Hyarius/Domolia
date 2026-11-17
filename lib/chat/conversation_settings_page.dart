@@ -542,7 +542,12 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           'Raisonnement déclaré : ${all.reasoningTokensKnown}',
         style: const TextStyle(color: DomoliaColors.muted, fontSize: 12)),
       const SizedBox(height: 6),
-      const Text('Tokens : mesures fournies par le fournisseur, parfois estimées par lui. '
+      Text('Usage fournisseur : ${all.providerReportedUsage}/${all.calls} appels · '
+           'JSON envoyé : ${all.requestBytesKnown} octets connus',
+        style: const TextStyle(color: DomoliaColors.muted, fontSize: 12)),
+      const SizedBox(height: 6),
+      const Text('Tokens : déclarés par le fournisseur si disponibles, '
+           'sinon diagnostics ou valeurs inconnues. '
           'Un « + » signale des appels sans usage disponible. '
           'Le coût est affiché seulement si le fournisseur le fournit ; '
           '« ≥ » signifie que le total est incomplet. '
