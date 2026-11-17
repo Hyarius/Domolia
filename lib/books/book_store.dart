@@ -149,7 +149,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
       'source_hash TEXT NOT NULL, state TEXT NOT NULL, '
       'provider TEXT NOT NULL, model TEXT NOT NULL, '
       'created_at INTEGER NOT NULL, prompt TEXT NOT NULL, '
-      'file_name TEXT, mime_type TEXT, error TEXT, cost_usd REAL, '
+      'files_json TEXT NOT NULL, mime_type TEXT, error TEXT, cost_usd REAL, '
       'FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE)',
     );
     await db.execute(
@@ -177,7 +177,8 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
           createdAtUtc: DateTime.fromMicrosecondsSinceEpoch(
             row['created_at'] as int, isUtc: true),
           prompt: row['prompt'] as String,
-          fileName: row['file_name'] as String?,
+          fileNames: (jsonDecode(row['files_json'] as String) as List)
+              .cast<String>(),
           mimeType: row['mime_type'] as String?,
           error: row['error'] as String?,
           costUsd: (row['cost_usd'] as num?)?.toDouble(),
@@ -188,10 +189,11 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
   @override
   Future<Set<String>> retainedIllustrationFiles() async {
     final rows = await (await database).query('illustration_generations',
-      columns: ['file_name'], where: 'file_name IS NOT NULL');
+      columns: ['files_json']);
     return {
       for (final row in rows)
-        if (row['file_name'] is String) row['file_name'] as String,
+        for (final name in (jsonDecode(row['files_json'] as String) as List))
+          if (name is String) name,
     };
   }
 
@@ -222,7 +224,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
         'model': record.model,
         'created_at': record.createdAtUtc.microsecondsSinceEpoch,
         'prompt': record.prompt,
-        'file_name': record.fileName,
+        'files_json': jsonEncode(record.fileNames),
         'mime_type': record.mimeType,
         'error': record.error,
         'cost_usd': record.costUsd,
