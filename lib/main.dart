@@ -406,6 +406,7 @@ class _HomePageState extends State<HomePage> {
         _awaitSessionWrites = () => writes;
         final AiUsageStore? usageStore =
             storage is AiUsageStore ? storage as AiUsageStore : null;
+        final creditedNarratorExchanges = <int>{};
         void captureExchange(AiExchange exchange) {
           // The usage ledger is separate from bounded, purgeable diagnostics.
           // A tool round is one billed LLM request, not another fee per tool.
@@ -413,8 +414,10 @@ class _HomePageState extends State<HomePage> {
           // Freeze the payload synchronously: queued SQLite writes must not
           // accidentally serialize a later mutation of the same HTTP record.
           final diagnosticJson = exchange.exportJson();
-          if (exchange.stage == 'narrator_structured' ||
-              (exchange.stage?.startsWith('narrator_tool_round_') ?? false)) {
+          if ((exchange.stage == 'narrator_structured' ||
+              (exchange.stage?.startsWith('narrator_tool_round_') ?? false)) &&
+              creditedNarratorExchanges.add(
+                  exchange.createdAtUtc.microsecondsSinceEpoch)) {
             final key = _credits.active;
             if (key != null) unawaited(_credits.refresh(key.id));
           }

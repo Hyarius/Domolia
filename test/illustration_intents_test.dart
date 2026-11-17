@@ -310,7 +310,7 @@ void main() {
       final provider = _ScriptProvider(
         '[NARRATION]\nLéa arrive sur le quai.\n'
         '[IMAGE]\nLéa Monel avec sa sacoche orange dans la brume.\n'
-        '[PERSONNAGE:Léa Monel]\\n« Je suis ici. »',
+        '[PERSONNAGE:Léa Monel]\n« Je suis ici. »',
       )..recorder = recorder;
       final chat = NarrativeChatController(
         provider: provider, configuration: () => _config,
@@ -416,7 +416,7 @@ void main() {
     });
 
     test('prompt addition stays bounded, without new context budget', () {
-      expect(theatricalNarratorProtocol.length, lessThan(600));
+      expect(theatricalNarratorProtocol.length, lessThan(750));
       expect(theatricalIllustrationInstruction.length, lessThan(250));
       expect(theatricalIllustrationInstruction, contains('au plus un'));
       expect(theatricalIllustrationInstruction, contains('secrets'));

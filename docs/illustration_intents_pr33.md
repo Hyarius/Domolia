@@ -62,8 +62,10 @@ exclut aussi les blocs d'image du RAW récupéré à défaut d'un résumé compa
 L'export de conversation inclut les événements d'intention en tant que
 type indépendant ; la trace IA contient toujours le RAW original.
 
-Pas de nouvel appel IA ou nouvel outil. En mode désactivé le protocole
-est identique à PR32. Mesurer en CI les constantes
+Pas de nouvel appel IA ou nouvel outil. Le protocole théâtral ajoute
+une règle concise pour séparer les descriptions des bulles de PNJ, y compris
+lorsque le modèle omet le marqueur. Le supplément [IMAGE] n'est envoyé que
+lorsque les suggestions sont activées. Mesurer en CI les constantes
 `theatricalNarratorProtocol.length` et
 `theatricalIllustrationInstruction.length`. Le coût réel fournisseur
 doit être mesuré par diagnostic A/B, pas estimé à partir des caractères.
@@ -82,10 +84,14 @@ Suggestions), à modèle et paramètres identiques :
 7. « J'attends quelques secondes dans un couloir ordinaire. »
 
 Contrôler : au plus une image par réponse ; pas d'image systématique ;
+les gestes après une réplique reviennent dans une bulle Narrateur ;
 noms distincts ; aucune possession, condition réalisée, rumeur confirmée
 ou secret divulgué dans les intentions. Reprendre une Partie sauvegardée,
 régénérer et revenir avant une intention, puis inspecter l'export narratif
-et la trace RAW.
+et la trace RAW. En Tool Calling, la trace de la dernière passe
+est enrichie avec les bulles et les intentions validées, sans doubler
+l'enregistrement de la consommation. Les diagnostics du narrateur sont
+finalisés avant le déclenchement asynchrone de la Live Memory.
 
 **Limite de PR33 :** les règles de fidélité visuelle sont des instructions
 du narrateur, non une validation sémantique locale des descriptions.
