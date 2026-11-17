@@ -417,6 +417,16 @@ class _GroupChatPageState extends State<GroupChatPage> {
             'Une nouvelle génération est facturable, même en cas de refus '
             'ou d’interruption. Aucun nouvel essai n’est automatique.'),
           actions: [
+            if (widget.onOpenImageSettings != null)
+              TextButton.icon(
+                key: const ValueKey('imageConfirmSettings'),
+                onPressed: () {
+                  Navigator.pop(dialogContext, false);
+                  widget.onOpenImageSettings?.call();
+                },
+                icon: const Icon(Icons.tune_rounded),
+                label: const Text('Réglages'),
+              ),
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
               child: const Text('Annuler'),
@@ -499,6 +509,8 @@ class _GroupChatPageState extends State<GroupChatPage> {
       ]),
       builder: (context, _) {
         final transcript = chat.timeline;
+        final illustrationStatus = widget.illustrations?.activityLabel;
+        final illustrationError = widget.illustrations?.error;
         return SafeArea(
           child: Column(
             children: [
@@ -557,6 +569,64 @@ class _GroupChatPageState extends State<GroupChatPage> {
                       SizedBox(width: 14, height: 14,
                         child: CircularProgressIndicator(strokeWidth: 1.5,
                           color: DomoliaColors.goldDark)),
+                    ],
+                  ),
+                ),
+              if (illustrationStatus != null)
+                Padding(
+                  key: const ValueKey('chatIllustratorIndicator'),
+                  padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.brush_rounded,
+                        color: DomoliaColors.goldLight, size: 22),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(illustrationStatus,
+                          style: const TextStyle(
+                            color: DomoliaColors.goldLight,
+                            fontStyle: FontStyle.italic,
+                          )),
+                      ),
+                      const SizedBox(width: 10),
+                      const SizedBox(width: 14, height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 1.5,
+                          color: DomoliaColors.goldDark)),
+                    ],
+                  ),
+                ),
+              if (illustrationError != null)
+                Container(
+                  key: const ValueKey('chatIllustrationErrorBanner'),
+                  padding: const EdgeInsets.fromLTRB(16, 9, 12, 9),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4B2525),
+                    border: Border.all(color: const Color(0xFFC87979)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline,
+                        size: 20, color: Color(0xFFFFC7C7)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text('Illustration : $illustrationError',
+                          style: const TextStyle(color: Color(0xFFFFE0E0))),
+                      ),
+                      if (widget.onOpenImageSettings != null)
+                        IconButton(
+                          key: const ValueKey('chatIllustrationOpenSettings'),
+                          tooltip: 'Paramètres de génération d’images',
+                          onPressed: widget.onOpenImageSettings,
+                          icon: const Icon(Icons.tune_rounded,
+                            color: Color(0xFFFFE0E0)),
+                        ),
+                      IconButton(
+                        key: const ValueKey('chatIllustrationDismissError'),
+                        tooltip: 'Masquer l’erreur d’illustration',
+                        onPressed: widget.illustrations!.dismissError,
+                        icon: const Icon(Icons.close,
+                          color: Color(0xFFFFE0E0)),
+                      ),
                     ],
                   ),
                 ),
