@@ -6,8 +6,8 @@
   "selection": {
     "scope": "complete"
   },
-  "totalEventsInConversation": 3,
-  "exportedEvents": 3,
+  "totalEventsInConversation": 4,
+  "exportedEvents": 4,
   "events": [
     {
       "id": 1,
@@ -25,6 +25,13 @@
     },
     {
       "id": 3,
+      "type": "image_intent",
+      "playerEventId": 1,
+      "description": "L’horloge arrêtée, au comptoir de l’auberge.",
+      "state": "proposed"
+    },
+    {
+      "id": 4,
       "type": "scene_change"
     }
   ]
