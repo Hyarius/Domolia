@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import '../chat/narrator.dart';
+import '../chat/chat_protocol.dart';
 import 'book_lore.dart';
 
 /// Only portable, non-sensitive properties belong to a BookDefinition.
@@ -16,13 +17,14 @@ class BookDefinition {
     this.narrativeStyle = defaultNarratorNarrativePrompt,
     this.detailLevel = 3,
     this.tuning = const NarrativeTuning(),
+    this.illustrationMode = IllustrationMode.suggestions,
     this.openingMessages = defaultNarratorOpeningMessages,
     this.extensions = const <String, Object?>{},
     this.lore = const BookLore(),
   });
 
   static const format = 'domolia.book';
-  static const version = 2;
+  static const version = 3;
   static const maxJsonBytes = 2 * 1024 * 1024;
   static const maxCoverBytes = 1024 * 1024;
   static const _allowedMime = {'image/png', 'image/jpeg', 'image/webp'};
@@ -36,6 +38,7 @@ class BookDefinition {
   final String narrativeStyle;
   final int detailLevel;
   final NarrativeTuning tuning;
+  final IllustrationMode illustrationMode;
   final List<String> openingMessages;
   /// Reserved for future versioned, explicitly safe scenario/character data.
   final Map<String, Object?> extensions;
@@ -84,6 +87,7 @@ class BookDefinition {
     String? narrativeStyle,
     int? detailLevel,
     NarrativeTuning? tuning,
+    IllustrationMode? illustrationMode,
     List<String>? openingMessages,
     Map<String, Object?>? extensions,
     BookLore? lore,
@@ -96,6 +100,7 @@ class BookDefinition {
         narrativeStyle: narrativeStyle ?? this.narrativeStyle,
         detailLevel: detailLevel ?? this.detailLevel,
         tuning: tuning ?? this.tuning,
+        illustrationMode: illustrationMode ?? this.illustrationMode,
         openingMessages: openingMessages ?? this.openingMessages,
         extensions: extensions ?? this.extensions,
         lore: lore ?? this.lore,
@@ -122,6 +127,7 @@ class BookDefinition {
           'style': narrativeStyle,
           'detailLevel': detailLevel,
           ...tuning.toJson(),
+          'illustrationMode': illustrationMode.name,
         },
         'openingMessages': openingMessages,
         'extensions': extensions,
@@ -204,9 +210,9 @@ class BookDefinition {
     };
     if (parsed.keys.any((key) => !allowed.contains(key)) ||
         parsed['format'] != format ||
-        (parsed['version'] != 1 && parsed['version'] != version) ||
+        !{1, 2, version}.contains(parsed['version']) ||
         (parsed['version'] == 1 && parsed.containsKey('lore')) ||
-        (parsed['version'] == version && !parsed.containsKey('lore')) ||
+        (parsed['version'] != 1 && !parsed.containsKey('lore')) ||
         parsed['id'] is! String || parsed['title'] is! String ||
         parsed['tags'] is! List || parsed['narrative'] is! Map<String, dynamic> ||
         parsed['openingMessages'] is! List ||
@@ -220,11 +226,16 @@ class BookDefinition {
         openings.any((e) => e is! String) ||
         narrative.keys.any((key) => !const {
           'style', 'detailLevel', 'responseLength',
-          'scenePacing', 'styleKeywords',
+          'scenePacing', 'styleKeywords', 'illustrationMode',
         }.contains(key)) ||
         narrative['style'] is! String ||
         narrative['detailLevel'] is! int) {
       throw const FormatException('Champs narratifs invalides.');
+    }
+    final modeValue = narrative['illustrationMode'];
+    if (modeValue != null && (modeValue is! String ||
+        !IllustrationMode.values.any((mode) => mode.name == modeValue))) {
+      throw const FormatException('Mode d’illustration invalide.');
     }
     final cover = parsed['cover'];
     if (cover != null && (cover is! Map<String, dynamic> ||
@@ -241,6 +252,10 @@ class BookDefinition {
       narrativeStyle: narrative['style'] as String,
       detailLevel: narrative['detailLevel'] as int,
       tuning: NarrativeTuning.fromJson(narrative),
+      illustrationMode: modeValue == null
+          ? parsed['version'] == version
+              ? IllustrationMode.suggestions : IllustrationMode.disabled
+          : IllustrationMode.values.byName(modeValue as String),
       openingMessages: List<String>.unmodifiable(openings.cast<String>()),
       extensions: Map<String, Object?>.unmodifiable(
         parsed['extensions'] as Map<String, dynamic>,

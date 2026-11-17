@@ -3,7 +3,10 @@ import 'chat_protocol.dart';
 /// Single-format incremental theatre-script decoder. Ordinary literary prose
 /// is accepted as narration; JSON output is explicitly rejected.
 class TheatricalScriptDecoder {
-  final _TheatricalLines _script = _TheatricalLines();
+  TheatricalScriptDecoder({bool allowImages = true})
+      : _script = _TheatricalLines(allowImages: allowImages);
+
+  final _TheatricalLines _script;
 
   List<ChatOutputEvent> add(String fragment) => _script.add(fragment);
   ChatLine? get preview => _script.preview;
@@ -11,6 +14,13 @@ class TheatricalScriptDecoder {
 }
 
 class _TheatricalLines {
+  _TheatricalLines({required this.allowImages});
+  final bool allowImages;
+
+  static final _image = RegExp(
+    r'^\[\s*IMAGE\s*\]\s*(.*)$',
+    caseSensitive: false,
+  );
   static final _narration = RegExp(
     r'^\[\s*(?:NARRATION|NARRATEUR)\s*\]\s*(.*)$',
     caseSensitive: false,
@@ -29,6 +39,8 @@ class _TheatricalLines {
   );
   static final _fence = RegExp(r'^\x60{3}[a-zA-Z]*$');
 
+  bool _imageBlock = false;
+  int _imageCount = 0;
   String _pendingLine = '';
   String _currentText = '';
   ChatSpeaker _speaker = ChatSpeaker.narrator;
@@ -68,7 +80,16 @@ class _TheatricalLines {
 
   void _flush(List<ChatOutputEvent> output) {
     final text = _currentText.trim();
-    if (text.isNotEmpty) {
+    if (_imageBlock) {
+      if (text.length > 500) {
+        throw const FormatException('Description d’image trop longue.');
+      }
+      // Empty and repeated suggestions never invalidate valid prose.
+      if (allowImages && text.isNotEmpty && _imageCount == 0) {
+        _emit(output, ChatIllustrationOutput(text));
+        _imageCount++;
+      }
+    } else if (text.isNotEmpty) {
       if (text.length > 6000) {
         throw const FormatException('Message narratif trop volumineux.');
       }
@@ -92,9 +113,17 @@ class _TheatricalLines {
       throw const FormatException(
           'Le narrateur ne peut pas écrire les répliques du joueur.');
     }
+    final illustration = _image.firstMatch(trimmed);
+    if (illustration != null) {
+      _flush(output);
+      _imageBlock = true;
+      if (illustration.group(1)!.isNotEmpty) _append(illustration.group(1)!);
+      return;
+    }
     final narration = _narration.firstMatch(trimmed);
     if (narration != null) {
       _flush(output);
+      _imageBlock = false;
       _speaker = ChatSpeaker.narrator;
       _name = 'Narrateur';
       _status = null;
@@ -112,6 +141,7 @@ class _TheatricalLines {
         throw const FormatException('Personnage narratif invalide.');
       }
       _flush(output);
+      _imageBlock = false;
       _speaker = ChatSpeaker.character;
       _name = name;
       _status = status;
@@ -122,6 +152,7 @@ class _TheatricalLines {
     if (scene != null) {
       _flush(output);
       _emit(output, const ChatSceneChangeOutput());
+      _imageBlock = false;
       _speaker = ChatSpeaker.narrator;
       _name = 'Narrateur';
       _status = null;
@@ -132,11 +163,26 @@ class _TheatricalLines {
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
       throw const FormatException('Format narratif invalide : utilise le script théâtral.');
     }
+    // Some models omit [NARRATION] after a quoted PNJ reply.
+    // Only recover an unmarked, separate prose paragraph after a *closed*
+    // guillemet. Continued quoted dialogue stays with the same character.
+    if (_speaker == ChatSpeaker.character &&
+        _currentText.endsWith('\n') &&
+        _currentText.trimRight().endsWith('»') &&
+        trimmed.isNotEmpty &&
+        !trimmed.startsWith('«') &&
+        !trimmed.startsWith('—')) {
+      _flush(output);
+      _speaker = ChatSpeaker.narrator;
+      _name = 'Narrateur';
+      _status = null;
+    }
     // A bare literary response remains narration; never guess speakers.
     _append(line);
   }
 
   ChatLine? get preview {
+    if (_imageBlock) return null;
     final candidate = _pendingLine.trimLeft();
     // A split marker must not flash as raw syntax in the UI.
     final withheld = candidate.startsWith('[') ||

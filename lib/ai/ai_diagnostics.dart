@@ -80,6 +80,12 @@ class AiExchange {
     this.interpretedEvents = List.unmodifiable(interpretedEvents);
   }
 
+  /// Tool rounds are billed and recorded before local theatrical decoding.
+  /// Enrich the same HTTP exchange afterwards, without creating a second call.
+  void attachInterpretedEvents(List<Map<String, dynamic>> events) {
+    interpretedEvents = List.unmodifiable(events);
+  }
+
   void addRawResponse(List<int> bytes) {
     totalResponseBytes += bytes.length;
     final left = maxRawResponseBytes - _response.length;
@@ -182,9 +188,13 @@ class StoredAiDiagnostic {
     return response is Map<String, dynamic> ? response['statusCode'] as int? : null;
   }
 
-  bool isNarratorForTurn(int playerId) =>
-      data['stage'] == 'narrator_raw' &&
-      data['playerEventId'] == playerId;
+  bool isNarratorForTurn(int playerId) {
+    final stage = data['stage'];
+    return data['playerEventId'] == playerId &&
+        (stage == 'narrator_raw' ||
+         stage == 'narrator_structured' ||
+         (stage is String && stage.startsWith('narrator_tool_round_')));
+  }
 
   /// An AI request can produce multiple chat bubbles; each keeps its own
   /// event ID in the interpreted events of the exact captured HTTP exchange.

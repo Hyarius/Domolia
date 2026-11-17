@@ -17,6 +17,7 @@ class BookSession {
     this.memoryProfileId,
     this.memoryEnabled = true,
     this.toolCallingEnabled = true,
+    this.illustrationModeOverride,
     this.generationOverrides = const {},
     this.optimizedLore,
     this.optimizedLoreHash,
@@ -36,6 +37,8 @@ class BookSession {
   final bool memoryEnabled;
   /// Per-Party opt-out; never overrides an incompatible profile.
   final bool toolCallingEnabled;
+  /// Null inherits the Book setting, including changes made after creation.
+  final IllustrationMode? illustrationModeOverride;
   /// Task-specific output/reasoning overrides; never part of a shared Book.
   final Map<AiNarrativeTask, AiTaskGenerationOverride> generationOverrides;
   /// Generated summary only. The canonical Lore remains in BookDefinition.
@@ -61,6 +64,8 @@ class BookSession {
     bool clearMemoryProfile = false,
     bool? memoryEnabled,
     bool? toolCallingEnabled,
+    IllustrationMode? illustrationModeOverride,
+    bool clearIllustrationMode = false,
     Map<AiNarrativeTask, AiTaskGenerationOverride>? generationOverrides,
     String? optimizedLore,
     String? optimizedLoreHash,
@@ -79,6 +84,8 @@ class BookSession {
             ? null : memoryProfileId ?? this.memoryProfileId,
         memoryEnabled: memoryEnabled ?? this.memoryEnabled,
         toolCallingEnabled: toolCallingEnabled ?? this.toolCallingEnabled,
+        illustrationModeOverride: clearIllustrationMode
+            ? null : illustrationModeOverride ?? this.illustrationModeOverride,
         generationOverrides: generationOverrides ?? this.generationOverrides,
         optimizedLore: optimizedLore ?? this.optimizedLore,
         optimizedLoreHash: optimizedLoreHash ?? this.optimizedLoreHash,
@@ -89,6 +96,14 @@ class BookSession {
         for (final event in timeline)
           if (event is ChatSceneChange)
             {'id': event.id, 'type': 'scene_change'}
+          else if (event is ChatIllustrationIntent)
+            {
+              'id': event.id,
+              'type': 'image_intent',
+              'playerEventId': event.playerEventId,
+              'description': event.description,
+              'state': event.state.name,
+            }
           else if (event is ChatEntry)
             {
               'id': event.id,
@@ -117,6 +132,21 @@ class BookSession {
       }
       if (item['type'] == 'scene_change' && item.length == 2) {
         result.add(ChatSceneChange(id: id));
+      } else if (item['type'] == 'image_intent' &&
+          item['playerEventId'] is int &&
+          (item['playerEventId'] as int) >= 0 &&
+          item['description'] is String &&
+          (item['description'] as String).trim().isNotEmpty &&
+          (item['description'] as String).length <= 500 &&
+          item['state'] is String &&
+          IllustrationIntentState.values.any((v) => v.name == item['state']) &&
+          item.length == 5) {
+        result.add(ChatIllustrationIntent(
+          id: id,
+          playerEventId: item['playerEventId'] as int,
+          description: item['description'] as String,
+          state: IllustrationIntentState.values.byName(item['state'] as String),
+        ));
       } else if (item['type'] == 'message' &&
           item['speaker'] is String &&
           item['name'] is String && item['text'] is String &&
