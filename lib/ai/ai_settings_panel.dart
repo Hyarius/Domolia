@@ -558,7 +558,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
       return const SizedBox.shrink();
     }
     const titles = <AiNarrativeTask, String>{
-      AiNarrativeTask.narrator: 'Narrateur RAW',
+      AiNarrativeTask.narrator: 'Narrateur',
       AiNarrativeTask.jsonifier: 'JSONificateur',
       AiNarrativeTask.optimizer: 'Optimiseur de Lore (une fois par Partie)',
       AiNarrativeTask.memory: 'Extraction mémoire (à chaque tour)',
@@ -577,7 +577,8 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
         'L’optimiseur est désactivé tant qu’aucun profil ne lui est assigné.',
         style: TextStyle(color: DomoliaColors.muted)),
       const SizedBox(height: DomoliaSpacing.field),
-      for (final task in AiNarrativeTask.values) ...[
+      for (final task in AiNarrativeTask.values
+          .where((task) => task != AiNarrativeTask.jsonifier)) ...[
         Builder(builder: (context) {
           final chosen = routing.profileFor(task);
           final known = chosen != null &&

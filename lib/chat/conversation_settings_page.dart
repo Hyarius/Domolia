@@ -51,7 +51,6 @@ class ConversationSettingsPage extends StatefulWidget {
 
 class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   String? _selected;
-  String? _formatterProfile;
   String? _optimizerProfile;
   String? _memoryProfile;
   bool _memoryEnabled = true;
@@ -78,7 +77,6 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       if (mounted) {
         setState(() {
           _selected = session?.aiProfileId;
-          _formatterProfile = session?.formatterProfileId;
           _optimizerProfile = session?.optimizerProfileId;
           _memoryProfile = session?.memoryProfileId;
           _memoryEnabled = session?.memoryEnabled ?? true;
@@ -160,11 +158,9 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       );
       if (mounted) {
         setState(() {
-          if (task == 'jsonifier') {
-            _formatterProfile = selected;
-          } else if (task == 'optimizer') {
+          if (task == 'optimizer') {
             _optimizerProfile = selected;
-          } else {
+          } else if (task == 'memory') {
             _memoryProfile = selected;
           }
         });
@@ -208,7 +204,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     final inherited = widget.taskRouting?.generationFor(task) ??
         AiTaskGenerationSettings.defaults(task);
     final title = switch (task) {
-      AiNarrativeTask.narrator => 'Narrateur RAW',
+      AiNarrativeTask.narrator => 'Narrateur',
       AiNarrativeTask.jsonifier => 'JSONificateur',
       AiNarrativeTask.optimizer => 'Optimiseur de Lore',
       AiNarrativeTask.memory => 'Extraction mémoire',
@@ -622,7 +618,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                   initialValue: exists ? _selected ?? '' : '',
                   isExpanded: true,
                   decoration: const InputDecoration(
-                    labelText: 'Narrateur RAW — profil de cette Partie'),
+                    labelText: 'Narrateur — profil de cette Partie'),
                   items: [
                     const DropdownMenuItem(value: '',
                         child: Text('Profil par défaut du Livre')),
@@ -633,20 +629,6 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                   ],
                   onChanged: _saving || widget.chat.busy
                       ? null : _setProfile,
-                ),
-                const SizedBox(height: DomoliaSpacing.field),
-                _taskProfileField(
-                  task: 'jsonifier',
-                  label: 'JSONificateur — profil de cette Partie',
-                  value: _formatterProfile,
-                  profiles: profiles,
-                  inheritedLabel: 'Hériter des paramètres généraux',
-                  additional: const [
-                    DropdownMenuItem(
-                      value: '#narrator',
-                      child: Text('Même IA que le narrateur'),
-                    ),
-                  ],
                 ),
                 const SizedBox(height: DomoliaSpacing.field),
                 _taskProfileField(
@@ -717,7 +699,8 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                   style: TextStyle(color: DomoliaColors.goldLight,
                       fontSize: 17)),
                 const SizedBox(height: DomoliaSpacing.compact),
-                for (final task in AiNarrativeTask.values) ...[
+                for (final task in AiNarrativeTask.values
+                    .where((task) => task != AiNarrativeTask.jsonifier)) ...[
                   _taskGenerationControls(task),
                   const SizedBox(height: DomoliaSpacing.field),
                 ],

@@ -182,8 +182,10 @@ class NarrativeChatController extends ChangeNotifier {
     );
     _lastPlayerIndex = last < 0 ? null : last;
     if (pendingRaw != null) {
-      error = 'Une réponse attend sa mise en forme. '
-          'Réessayez sans régénérer le récit.';
+      error = structuredStreamingEnabled
+          ? 'Une ancienne réponse reste à récupérer. Appuyez sur Réessayer.'
+          : 'Une réponse attend sa mise en forme. '
+              'Réessayez sans régénérer le récit.';
     }
     _notify();
   }
@@ -1038,7 +1040,63 @@ class NarrativeChatController extends ChangeNotifier {
     }
   }
 
+  /// Complete a pre-upgrade literary RAW locally: no JSONifier request,
+  /// no second payment and no modification of the author's original text.
+  Future<void> _recoverPendingLegacy() async {
+    final pending = pendingRaw;
+    if (_closed || busy || pending == null) return;
+    final token = ++_generationToken;
+    busy = true;
+    error = null;
+    _notify();
+    try {
+      await _save(_timeline, _generations);
+      _check(token);
+      if (pending.rawText.trim().isEmpty) {
+        throw const FormatException(
+            'Ancienne narration vide. Régénérez ce tour.');
+      }
+      final message = ChatEntry(id: _nextId,
+          speaker: ChatSpeaker.narrator, name: 'Narrateur',
+          text: pending.rawText.trim());
+      final converted = pending.structured(_nextId, _nextId);
+      final updated = [
+        ..._generations.where((r) => r.playerEventId != pending.playerEventId),
+        converted,
+      ];
+      _committingSnapshot = true;
+      try {
+        await _save([..._timeline, message], updated);
+      } finally {
+        _committingSnapshot = false;
+      }
+      _check(token);
+      _nextId++;
+      _generations..clear()..addAll(updated);
+      _timeline.add(message);
+      _timelineChanged();
+      _notify();
+      if (memory != null) unawaited(memory!.analyzePending());
+    } on _Cancelled {
+      // A cancelled conversion is not published.
+    } on FormatException catch (failure) {
+      error = failure.message;
+    } catch (failure, stack) {
+      AppLogger.error('Migration RAW échouée', component: 'chat',
+          error: failure, stackTrace: stack);
+      error = 'Migration de la réponse impossible. Réessayez.';
+    } finally {
+      if (!_closed && token == _generationToken) {
+        busy = false;
+        _notify();
+      }
+    }
+  }
+
   Future<void> _generate({bool reuseRaw = false}) async {
+    if (structuredStreamingEnabled && pendingRaw != null) {
+      return _recoverPendingLegacy();
+    }
     if (structuredStreamingEnabled && !reuseRaw && pendingRaw == null) {
       return _generateStructured();
     }
