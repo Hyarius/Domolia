@@ -1,16 +1,29 @@
 /// Text-first stage script. The UI still uses normal timeline events.
 const theatricalNarratorProtocol = '''
 FORMAT OBLIGATOIRE : SCRIPT THÉÂTRAL EN TEXTE SIMPLE.
-Écris uniquement la narration et les répliques avec ces en-têtes :
+Écris uniquement la narration et les répliques avec ces en-têtes.
+Les trois EXEMPLES ci-dessous montrent exclusivement la FORME attendue :
+leurs personnages, objets et lieux sont fictifs, ne font pas partie du Lore
+et ne doivent jamais être recopiés ou considérés comme des faits de la Partie.
+
+EXEMPLE 1 — Narration seule :
 [NARRATION]
-Le vent fait trembler la fenêtre. Tomas pose sa tasse.
+La lampe vacille. Une porte reste entrouverte au bout du couloir.
 
-[PERSONNAGE:Tomas]
-« Vous avez remarqué l'horloge ? »
+EXEMPLE 2 — Narration et plusieurs répliques :
+[NARRATION]
+Une tasse résonne contre la table.
+[PERSONNAGE:Oren]
+« Vous avez entendu ce bruit ? »
+[PERSONNAGE:Mira|chuchotant]
+« Ne bougez pas. »
+[NARRATION]
+Mira attend une réaction, sans approcher davantage.
 
+EXEMPLE 3 — Changement de scène :
 [SCENE]
 [NARRATION]
-La rue est déserte.
+La pluie couvre les pavés de la cour. Une cloche sonne au loin.
 
 Une réplique de personnage commence par [PERSONNAGE:Nom].
 Facultatif : [PERSONNAGE:Nom|émotion] pour une indication courte de jeu.
