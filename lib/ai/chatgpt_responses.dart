@@ -122,7 +122,8 @@ class ChatGptResponsesProvider
             input.add({
               'type': 'function_call',
               'call_id': call.id,
-              'name': 'domolia.' + call.name,
+              'name': call.name,
+              'namespace': 'domolia',
               'arguments': call.arguments,
             });
           }
@@ -160,7 +161,7 @@ class ChatGptResponsesProvider
 
     final indices = <int, int>{};
     final argumentsSeen = <int, bool>{};
-    var toolCallCount = 0;
+    final completedCalls = <int>{};
     var outputLength = 0;
     int indexOf(Map<String, dynamic> event) {
       final outputIndex = event['output_index'];
@@ -188,7 +189,7 @@ class ChatGptResponsesProvider
           if (item is Map<String, dynamic> &&
               item['type'] == 'function_call') {
             final idx = indexOf(event);
-            toolCallCount++;
+            completedCalls.add(idx);
             yield AiToolStreamChunk(
               callIndex: idx,
               callId: item['call_id'] is String
@@ -210,7 +211,7 @@ class ChatGptResponsesProvider
           if (item is Map<String, dynamic> &&
               item['type'] == 'function_call') {
             final idx = indexOf(event);
-            if (toolCallCount == 0) toolCallCount++;
+            completedCalls.add(idx);
             yield AiToolStreamChunk(
               callIndex: idx,
               callId: item['call_id'] is String
@@ -225,7 +226,7 @@ class ChatGptResponsesProvider
         case 'response.completed':
           final usage = _usage(event);
           yield AiToolStreamChunk(
-            finishReason: toolCallCount > 0 ? 'tool_calls' : 'stop',
+            finishReason: completedCalls.isNotEmpty ? 'tool_calls' : 'stop',
             promptTokens: usage?['input_tokens'] as int?,
             completionTokens: usage?['output_tokens'] as int?,
           );
