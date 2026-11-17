@@ -23,6 +23,7 @@ import 'books/book_store.dart';
 import 'memory/live_memory_coordinator.dart';
 import 'memory/live_memory_page.dart';
 import 'ai/ai_controller.dart';
+import 'ai/ai_settings_panel.dart';
 import 'ai/ai_task_routing.dart';
 import 'ai/ai_diagnostics.dart';
 import 'ai/ai_usage.dart';
@@ -108,7 +109,7 @@ class DomoliaApp extends StatelessWidget {
   }
 }
 
-enum _Page { home, books, book, chat, about, settings, updates, ai, diagnostics, logs, conversationSettings, memory }
+enum _Page { home, books, book, chat, about, settings, updates, ai, aiProviders, diagnostics, logs, conversationSettings, memory }
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -675,6 +676,12 @@ class _HomePageState extends State<HomePage> {
               onBack: () => unawaited(_goBack()),
               showBackButton: false,
             )
+          : _page == _Page.aiProviders ? AiSettingsPanel(
+              controller: _ai,
+              taskRouting: _taskRouting,
+              showBackButton: false,
+              onBack: () => unawaited(_goBack()),
+            )
           : _page == _Page.diagnostics ? AiDiagnosticsSettingsPage(
               onBack: () => unawaited(_goBack()),
               showBackButton: false,
@@ -762,7 +769,7 @@ class _HomePageState extends State<HomePage> {
               title: const Text('Paramètres'),
               selected: _page == _Page.settings ||
                   _page == _Page.updates || _page == _Page.ai ||
-                  _page == _Page.diagnostics || _page == _Page.logs,
+                  _page == _Page.aiProviders || _page == _Page.diagnostics || _page == _Page.logs,
               selectedColor: DomoliaColors.goldLight,
               selectedTileColor: DomoliaColors.raisedSurface,
               onTap: () => _showPage(_Page.settings),
@@ -792,6 +799,15 @@ class _HomePageState extends State<HomePage> {
           subtitle: const Text('OpenUncensored, clés et modèles'),
           trailing: const Icon(Icons.chevron_right),
           onTap: _openAiSettings,
+        ),
+        const Divider(),
+        ListTile(
+          key: const ValueKey('settingsAiProviders'),
+          leading: const Icon(Icons.hub_outlined, color: DomoliaColors.gold),
+          title: const Text('Fournisseurs IA'),
+          subtitle: const Text('ChatGPT, modèles NSFW et IA par tâche'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => unawaited(_navigateTo(_Page.aiProviders)),
         ),
         const Divider(),
         ListTile(

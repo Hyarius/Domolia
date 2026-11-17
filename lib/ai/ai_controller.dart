@@ -496,6 +496,7 @@ class AiConnectionController extends ChangeNotifier {
     required String narratorModel,
     required String jsonifierModel,
     required String optimizerModel,
+    bool activateManagedProfile = true,
     // Explicit OpenUncensored model-catalogue metadata, not an HTTP probe.
     // Null means that no trustworthy capability information is available.
     bool? narratorToolsSupported,
@@ -549,10 +550,12 @@ class AiConnectionController extends ChangeNotifier {
           next[index] = replacement;
         }
       }
+      final nextSelectedId = activateManagedProfile
+          ? ouNarratorProfileId : _selectedId;
       await store.write(AiProfilesState(
-        profiles: next, selectedId: ouNarratorProfileId));
+        profiles: next, selectedId: nextSelectedId));
       _profiles = next;
-      _selectedId = ouNarratorProfileId;
+      _selectedId = nextSelectedId;
       for (final id in selectedModels.keys) {
         _invalidate(id);
       }

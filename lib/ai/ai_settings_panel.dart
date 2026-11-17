@@ -10,11 +10,13 @@ class AiSettingsPanel extends StatefulWidget {
     super.key,
     required this.controller,
     required this.onBack,
+    this.showBackButton = true,
     this.taskRouting,
   });
 
   final AiConnectionController controller;
   final VoidCallback onBack;
+  final bool showBackButton;
   final AiTaskRouting? taskRouting;
 
   @override
@@ -577,8 +579,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
         'L’optimiseur est désactivé tant qu’aucun profil ne lui est assigné.',
         style: TextStyle(color: DomoliaColors.muted)),
       const SizedBox(height: DomoliaSpacing.field),
-      for (final task in AiNarrativeTask.values
-          .where((task) => task != AiNarrativeTask.jsonifier)) ...[
+      for (final task in AiNarrativeTask.values) ...[
         Builder(builder: (context) {
           final chosen = routing.profileFor(task);
           final known = chosen != null &&
@@ -709,15 +710,17 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
             children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: widget.onBack,
-                  icon: const Icon(Icons.arrow_back),
-                  label: const Text('Retour aux paramètres'),
+              if (widget.showBackButton) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: widget.onBack,
+                    icon: const Icon(Icons.arrow_back),
+                    label: const Text('Retour aux paramètres'),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
+                const SizedBox(height: 8),
+              ],
               const Text(
                 'Fournisseur IA',
                 style: TextStyle(
