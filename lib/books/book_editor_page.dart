@@ -248,10 +248,9 @@ class BookEditorPageState extends State<BookEditorPage> {
       await _persist((current) => current.copyWith(
         coverMime: generated.cover.mime,
         coverBase64: generated.cover.base64));
-      _show('Couverture générée et enregistrée. '
-          'Coût signalé : ' +
-          (generated.costUsd == null
-              ? 'inconnu.' : '${generated.costUsd} USD.'));
+      final price = generated.costUsd == null
+          ? 'inconnu' : '${generated.costUsd} USD';
+      _show('Couverture générée et enregistrée. Coût signalé : $price.');
     } on ImageGenerationFailure catch (failure) {
       _show(failure.message);
     } on FormatException catch (failure) {
