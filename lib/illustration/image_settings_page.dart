@@ -24,7 +24,6 @@ class ImageSettingsPage extends StatefulWidget {
 }
 
 class _ImageSettingsPageState extends State<ImageSettingsPage> {
-  final _style = TextEditingController();
   ImageGenerationOptions _options = const ImageGenerationOptions();
   List<ImageModelCapability> _models = const [];
   bool _loading = true;
@@ -39,12 +38,6 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
     _initialize();
   }
 
-  @override
-  void dispose() {
-    _style.dispose();
-    super.dispose();
-  }
-
   Future<void> _initialize() async {
     try {
       await widget.ai.initialize();
@@ -55,7 +48,6 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
       setState(() {
         _override = saved != null;
         _options = saved ?? widget.preferences.application;
-        _style.text = _options.style;
         _loading = false;
       });
       await _loadModels();
@@ -132,13 +124,9 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
     if (!_canEdit) return;
     setState(() { _saving = true; _error = null; });
     try {
-      final next = _options.copyWith(style: _style.text.trim());
+      final next = _options;
       next.validate();
-      if (_imageProfile == null || _selectedModel == null ||
-          !(_selectedModel!.sizes.contains(next.size)) ||
-          next.count > _selectedModel!.maximumImages ||
-          (next.quality != null &&
-              !_selectedModel!.qualities.contains(next.quality))) {
+      if (_imageProfile == null || _selectedModel == null) {
         throw const FormatException('Sélectionnez un modèle et des options valides.');
       }
       if (next.directorProfileId.isEmpty ||
@@ -154,7 +142,7 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
         const SnackBar(content: Text('Paramètres graphiques sauvegardés.')));
     } catch (_) {
       if (mounted) setState(() => _error =
-          'Enregistrement impossible : contrôlez profil, modèle et format.');
+          'Enregistrement impossible : contrôlez les profils et le modèle.');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -169,7 +157,6 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
         setState(() {
           _override = false;
           _options = widget.preferences.application;
-          _style.text = _options.style;
         });
         await _loadModels();
       } catch (_) {
@@ -183,8 +170,6 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final model = _selectedModel;
-    final formats = model?.sizes ?? const <String>[];
-    final quality = _options.quality ?? 'auto';
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
@@ -193,13 +178,15 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
             child: TextButton.icon(
               onPressed: widget.onBack, icon: const Icon(Icons.arrow_back),
               label: const Text('Retour'))),
-        const Text('Génération d’images',
+        const Text('Connexion des IA graphiques',
           style: TextStyle(color: DomoliaColors.goldLight,
               fontSize: 22, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         const Text('Le narrateur et le générateur graphique sont indépendants. '
           'Un compte ChatGPT connecté ne donne pas accès à l’API Images : '
-          'utilisez un profil API avec votre propre clé facturable.'),
+          'utilisez un profil API avec votre propre clé facturable. '
+          'La taille, la qualité, le style, le nombre d’images et les '
+          'éléments à exclure se règlent dans chaque Livre.'),
         const SizedBox(height: 16),
         if (widget.sessionId != null)
           SwitchListTile(
@@ -224,8 +211,7 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
               if (id == null) return;
               setState(() {
                 _options = _options.copyWith(
-                    profileId: id, model: '', clearQuality: true,
-                    size: '1024x1024', count: 1);
+                    profileId: id, model: '');
                 _models = const [];
               });
               _loadModels();
@@ -259,65 +245,13 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
             ],
             onChanged: !_canEdit ? null : (id) {
               if (id == null) return;
-              setState(() => _options = _options.copyWith(
-                model: id, size: '1024x1024', count: 1, clearQuality: true));
+              setState(() => _options = _options.copyWith(model: id));
             },
           ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            key: const ValueKey('imageSize'),
-            initialValue: formats.contains(_options.size) ? _options.size : null,
-            decoration: const InputDecoration(labelText: 'Format / ratio'),
-            items: [
-              for (final size in formats)
-                DropdownMenuItem(value: size, child: Text(size)),
-            ],
-            onChanged: !_canEdit ? null : (size) {
-              if (size != null) setState(() =>
-                  _options = _options.copyWith(size: size));
-            },
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            key: const ValueKey('imageQuality'),
-            initialValue: quality == 'auto' ||
-                (model?.qualities.contains(quality) ?? false) ? quality : 'auto',
-            decoration: const InputDecoration(labelText: 'Qualité'),
-            items: [
-              const DropdownMenuItem(value: 'auto', child: Text('Par défaut')),
-              for (final option in model?.qualities ?? const <String>[])
-                DropdownMenuItem(value: option, child: Text(option)),
-            ],
-            onChanged: !_canEdit ? null : (selected) {
-              setState(() => _options = _options.copyWith(
-                quality: selected, clearQuality: selected == 'auto'));
-            },
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            key: const ValueKey('imageCount'),
-            initialValue: _options.count <= (model?.maximumImages ?? 1)
-                ? _options.count : 1,
-            decoration: const InputDecoration(labelText: 'Nombre d’images'),
-            items: [
-              for (var count = 1; count <= (model?.maximumImages ?? 1); count++)
-                DropdownMenuItem(value: count, child: Text('$count')),
-            ],
-            onChanged: !_canEdit ? null : (count) {
-              if (count != null) setState(() =>
-                  _options = _options.copyWith(count: count));
-            },
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            key: const ValueKey('imageStyle'),
-            controller: _style, enabled: _canEdit, maxLength: 160,
-            decoration: const InputDecoration(labelText: 'Style graphique'),
-          ),
           const SizedBox(height: 6),
-          const Text('Coût avant génération : inconnu. Les tarifs catalogue '
-              'ne sont pas des plafonds garantis. Aucune génération '
-              'n’est lancée sans confirmation.'),
+          const Text('Coût avant génération : inconnu. Aucune '
+              'génération n’est lancée sans confirmation.'),
           if (_error != null) ...[
             const SizedBox(height: 12),
             Text(_error!, style: const TextStyle(color: Colors.redAccent)),
