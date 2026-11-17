@@ -69,12 +69,54 @@ Les durées d'appel connues sont respectivement 37 264 ms et 49 973 ms
 4. Réduction du plafond historique *en mode Tool Calling* de
    **7 000 à 5 200 caractères**. Les anciens tours demeurent dans SQLite
    et consultables via `search_history` / `get_history_excerpt`.
-5. Sélection du lore fondée sur les quatre messages les plus récents
-   pour ce même mode avec outils, au lieu de toute la fenêtre récente.
-   Les règles globales, scénarios principaux et conditions restent
-   protégés par `LoreContextBuilder`.
-6. Les fournisseurs sans Tool Calling conservent les budgets et la
-   pertinence du lore antérieurs.
+5. **Préparation locale et déterministe d'un contexte de départ**, une
+   fois par Partie au premier tour narratif. Maximum **3 600 caractères**
+   pour l'univers, les règles de base, la situation de départ, la seule
+   intrigue principale et le casting initial. Aucun appel à un modèle de
+   compression, aucun envoi de l'arbre des scénarios complet.
+6. La préparation et son empreinte (`startup-v2-` + hash du Lore) sont
+   conservées dans les champs de cache SQLite préexistants : sans
+   migration. Les anciennes optimisations LLM sont invalidées ; une
+   modification du Livre invalide son contexte dérivé, pas le canon.
+7. Ajout d'un outil local paginé `get_lore_global` pour récupérer
+   exactement les champs mondiaux absents ou abrégés. Les outils
+   `search_lore` et `get_lore_entry` restent la voie normale pour
+   les personnages, lieux, scénarios, événements et conditions.
+   Les secrets non découverts restent réservés au narrateur.
+8. Références locales limitées à **850 caractères avec outils** et
+   **1 600 sans outils**, choisies parmi les quatre messages récents.
+   Aucun débordement du sélecteur historique ne peut bloquer le tour.
+9. Les contrôles d'optimisation par IA devenue inactive sont masqués
+   dans l'interface ; les anciennes valeurs enregistrées restent
+   compatibles, sans déclencher de facturation.
+
+## Reproduction : blocage sur Le Registre de Sel
+
+L'export `domolia-diagnostic-ia (14).json` et la capture du
+17 novembre 2026 montrent une erreur à la deuxième action : le cache
+de compression distant du Lore a échoué au premier tour, puis
+`LoreContextBuilder` a bloqué le second tour sur son contrôle de
+« lore essentiel trop volumineux ». Une même Partie ne doit jamais
+se retrouver dans cet état alors que les fiches non essentielles restent
+consultables localement.
+
+Le nouveau parcours élimine ces **deux** causes :
+- plus de requête `context_optimizer` (même si un ancien profil est
+  enregistré) ;
+- aucun appel à `LoreContextBuilder.build` pour assembler le contexte
+  narrateur : l'introduction reste bornée, les détails sont récupérés
+  sur demande, sans lire tous les événements et secrets d'avance.
+
+Un livre dont les règles globales dépassent la part initiale disponible
+reste conservé intact. La partie visible est explicitement marquée
+« suite dans le Lore » et la suite s'obtient via
+`get_lore_global(section, offset)`, par morceaux de 2 600 caractères.
+Les fournisseurs sans Tool Calling disposent seulement des extraits
+locaux de la scène : pour des règles très longues, les outils sont
+fortement recommandés.
+
+Les gains réels de tokens sur ce nouveau Livre restent à mesurer sur
+une nouvelle trace, avec la même IA et les mêmes actions.
 
 ## Estimation hors-ligne, reproductible et limitée
 
