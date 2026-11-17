@@ -1,6 +1,7 @@
 // ignore_for_file: prefer_interpolation_to_compose_strings
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
 
@@ -138,7 +139,7 @@ class BookCoverGenerator {
   /// Generated 1–10 MB images are converted to JPEG under the Book's 1 MB
   /// limit. Decode and reencode so the portable file never contains
   /// provider-specific metadata, and prevent oversized pixel buffers.
-  static BookCoverData convertToPortableCover(List<int> input) {
+  static BookCoverData convertToPortableCover(Uint8List input) {
     if (input.isEmpty || input.length > 16 * 1024 * 1024) {
       throw const FormatException('Couverture générée trop volumineuse.');
     }
