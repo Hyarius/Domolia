@@ -76,9 +76,9 @@ void main() {
     expect(chat.timeline.whereType<ChatEntry>().last.inProgress, true);
     expect(persisted.whereType<ChatEntry>().length, 1);
     provider.fragments.add(const AiStreamChunk(
-      text: ', voyageur."}\\n'
+      text: ', voyageur."}\n'
           '{"type":"message","speaker":"narrator","name":"Narrateur",'
-          '"text":"La pluie cesse."}\\n',
+          '"text":"La pluie cesse."}\n',
     ));
     await _tick();
     expect(chat.timeline.whereType<ChatEntry>().length, 3);
@@ -101,9 +101,9 @@ void main() {
     await _tick();
     provider.fragments.add(const AiStreamChunk(
       text: '{"type":"message","speaker":"narrator",'
-          '"name":"Narrateur","text":"Le vent souffle."}\\n'
+          '"name":"Narrateur","text":"Le vent souffle."}\n'
           '{"type":"message","speaker":"player",'
-          '"name":"Vous","text":"Je vole."}\\n',
+          '"name":"Vous","text":"Je vole."}\n',
     ));
     await provider.fragments.close();
     await pending;
