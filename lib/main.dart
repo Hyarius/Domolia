@@ -41,6 +41,10 @@ import 'updates/update_io.dart';
 import 'updates/update_widgets.dart';
 import 'logging/app_logger.dart';
 import 'logging/app_logs_page.dart';
+import 'illustration/illustration_controller.dart';
+import 'illustration/illustration_records.dart';
+import 'illustration/image_preferences.dart';
+import 'illustration/image_settings_page.dart';
 
 void main() {
   runZonedGuarded(() async {
@@ -109,7 +113,7 @@ class DomoliaApp extends StatelessWidget {
   }
 }
 
-enum _Page { home, books, book, chat, about, settings, updates, ai, aiProviders, diagnostics, logs, conversationSettings, memory }
+enum _Page { home, books, book, chat, about, settings, updates, ai, aiProviders, diagnostics, logs, conversationSettings, memory, imageSettings }
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -142,6 +146,9 @@ class _HomePageState extends State<HomePage> {
   late final bool _ownsUpdates;
   final AiExchangeRecorder _aiDiagnostics = AiExchangeRecorder();
   final AiTaskRouting _taskRouting = AiTaskRouting();
+  final ImagePreferences _imagePreferences = ImagePreferences();
+  IllustrationController? _illustrations;
+  String? _imageSettingsSessionId;
   late final AiConnectionController _ai;
   late final OuCreditsController _credits;
   late final bool _ownsCredits;
@@ -208,6 +215,8 @@ class _HomePageState extends State<HomePage> {
     if (_ownsUpdates) _updates.dispose();
     if (_ownsChat) _chat.dispose();
     _liveMemory?.dispose();
+    _illustrations?.dispose();
+    _imagePreferences.dispose();
     if (_ownsNarratorSettings) _narratorSettings.dispose();
     if (_ownsBooks) {
       if (_books.store is SqliteBookStore) {
@@ -520,6 +529,37 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       _chat.restoreTimeline(session.timeline, rawGenerations: rawGenerations);
       _chat.beginConversation();
+      _illustrations?.dispose();
+      _illustrations = null;
+      if (_books.store is IllustrationRecordStore && _ownsChat) {
+        final store = _books.store as IllustrationRecordStore;
+        final illustrationController = IllustrationController(
+          sessionId: session.id,
+          ai: _ai,
+          preferences: _imagePreferences,
+          records: store,
+          timeline: () => _chat.timeline,
+          lore: () => _books.byId(book.id)?.lore ?? book.lore,
+          memory: () => _liveMemory?.facts ?? const [],
+          awaitNarrativeWrites: () => _awaitSessionWrites?.call()
+              ?? Future<void>.value(),
+          files: LocalIllustrationFiles(),
+          usage: store is AiUsageStore ? store as AiUsageStore : null,
+          onOpenUncensoredCharge: () {
+            final active = _credits.active;
+            if (active != null) unawaited(_credits.refresh(active.id));
+          },
+        );
+        try {
+          await illustrationController.initialize();
+          _illustrations = illustrationController;
+        } catch (_) {
+          illustrationController.dispose();
+          // The narrative remains usable if image storage is unavailable.
+          AppLogger.warning('Chargement des illustrations indisponible',
+              component: 'illustrations');
+        }
+      }
       setState(() {
         _selectedBookId = book.id;
         _activeBookTitle = book.title;
@@ -536,6 +576,11 @@ class _HomePageState extends State<HomePage> {
         const SnackBar(content: Text('Impossible d’ouvrir cette partie.')),
       );
     }
+  }
+
+  void _openImageSettings({String? sessionId}) {
+    _imageSettingsSessionId = sessionId;
+    unawaited(_navigateTo(_Page.imageSettings));
   }
 
   void _openAiSettings() {
@@ -612,6 +657,8 @@ class _HomePageState extends State<HomePage> {
                 )
           : _page == _Page.chat ? GroupChatPage(
               controller: _chat,
+              illustrations: _illustrations,
+              onOpenImageSettings: () => _openImageSettings(sessionId: _activeSessionId),
               onOpenSettings: _openConversationSettings,
               bookTitle: _activeBookTitle,
               sessionTitle: _activeSessionTitle,
@@ -676,6 +723,13 @@ class _HomePageState extends State<HomePage> {
               controller: _credits,
               onBack: () => unawaited(_goBack()),
               showBackButton: false,
+            )
+          : _page == _Page.imageSettings ? ImageSettingsPage(
+              ai: _ai,
+              preferences: _imagePreferences,
+              sessionId: _imageSettingsSessionId,
+              showBackButton: false,
+              onBack: () => unawaited(_goBack()),
             )
           : _page == _Page.aiProviders ? AiSettingsPanel(
               controller: _ai,
@@ -809,6 +863,15 @@ class _HomePageState extends State<HomePage> {
           subtitle: const Text('ChatGPT, modèles NSFW et IA par tâche'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => unawaited(_navigateTo(_Page.aiProviders)),
+        ),
+        const Divider(),
+        ListTile(
+          key: const ValueKey('settingsImages'),
+          leading: const Icon(Icons.brush_outlined, color: DomoliaColors.gold),
+          title: const Text('Génération d’images'),
+          subtitle: const Text('Fournisseur, modèle, cadrage et style'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _openImageSettings(),
         ),
         const Divider(),
         ListTile(
