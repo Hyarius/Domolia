@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 
 import '../ai/ai_diagnostics.dart';
 import '../theme/domolia_theme.dart';
+import '../illustration/illustration_controller.dart';
+import '../illustration/illustration_slot.dart';
 import 'chat_controller.dart';
 import 'chat_protocol.dart';
 
@@ -19,9 +21,13 @@ class GroupChatPage extends StatefulWidget {
     this.onLoadDiagnostics,
     this.onPurgeDiagnostics,
     this.onExportDiagnostic,
+    this.illustrations,
+    this.onOpenImageSettings,
   });
 
   final NarrativeChatController controller;
+  final IllustrationController? illustrations;
+  final VoidCallback? onOpenImageSettings;
   final VoidCallback onOpenSettings;
   final String? bookTitle;
   final String? sessionTitle;
@@ -39,6 +45,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
   final _scroll = ScrollController();
   int? _lastTimelineEventId;
   int? _highlightedMessageId;
+  bool _imageDialogOpen = false;
 
   @override
   void initState() {
@@ -393,11 +400,101 @@ class _GroupChatPageState extends State<GroupChatPage> {
   }
 
 
+  Future<void> _generateImage(int intentId) async {
+    final illustrations = widget.illustrations;
+    if (illustrations == null || illustrations.isBusy(intentId) ||
+        _imageDialogOpen) return;
+    _imageDialogOpen = true;
+    try {
+      final accepted = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Générer cette illustration ?'),
+          content: const Text('La mise en scène IA et la génération '
+            'peuvent toutes deux être facturées. Coût : inconnu. '
+            'Une nouvelle génération est facturable, même en cas de refus '
+            'ou d’interruption. Aucun nouvel essai n’est automatique.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              key: const ValueKey('imageConfirmGenerate'),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Générer'),
+            ),
+          ],
+        ),
+      );
+      if (accepted == true && mounted) {
+        // Non-blocking; controller checks double clicks and rewind races.
+        illustrations.generate(intentId);
+      }
+    } finally {
+      _imageDialogOpen = false;
+    }
+  }
+
+  Future<void> _illustrateLatest() async {
+    final illustrations = widget.illustrations;
+    if (illustrations == null) return;
+    final intent = illustrations.lastUnillustratedIntent;
+    if (intent != null) {
+      await _generateImage(intent);
+      return;
+    }
+    final messageId = illustrations.lastAiMessageWithoutIntent;
+    if (messageId == null ||
+        !widget.controller.canIllustrateMessage(messageId)) {
+      _showExportMessage('Aucune scène récente à illustrer.');
+      return;
+    }
+    if (_imageDialogOpen) return;
+    _imageDialogOpen = true;
+    bool create;
+    try {
+      create = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Créer une intention visuelle ?'),
+          content: const Text('La narration ne contient pas d’intention '
+            'non générée. Créer une proposition après le dernier '
+            'message IA, sans rien inventer ?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              key: const ValueKey('imageCreateIntent'),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Créer l’intention'),
+            ),
+          ],
+        ),
+      ) ?? false;
+    } finally {
+      _imageDialogOpen = false;
+    }
+    if (!create || !mounted) return;
+    try {
+      final inserted = await widget.controller.illustrateMessage(messageId);
+      if (!inserted || !mounted) return;
+      final nextIntent = illustrations.lastUnillustratedIntent;
+      if (nextIntent != null) await _generateImage(nextIntent);
+    } catch (_) {
+      _showExportMessage('Impossible de créer l’intention d’image.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final chat = widget.controller;
     return AnimatedBuilder(
-      animation: chat,
+      animation: Listenable.merge([
+        chat, if (widget.illustrations != null) widget.illustrations!,
+      ]),
       builder: (context, _) {
         final transcript = chat.timeline;
         return SafeArea(
@@ -419,10 +516,17 @@ class _GroupChatPageState extends State<GroupChatPage> {
                             );
                           }
                           if (entry is ChatIllustrationIntent) {
-                            return _IllustrationPlaceholder(
-                              key: ValueKey('chat-illustration-${entry.id}'),
-                              intent: entry,
-                            );
+                            return widget.illustrations == null
+                                ? _IllustrationPlaceholder(
+                                  key: ValueKey('chat-illustration-${entry.id}'),
+                                  intent: entry,
+                                )
+                                : IllustrationSlot(
+                                  key: ValueKey('chat-illustration-${entry.id}'),
+                                  intent: entry,
+                                  controller: widget.illustrations!,
+                                  onGenerate: () => _generateImage(entry.id),
+                                );
                           }
                           final bubble = entry as ChatEntry;
                           return _ChatBubble(
@@ -515,6 +619,16 @@ class _GroupChatPageState extends State<GroupChatPage> {
                       ),
                     ),
                     const SizedBox(width: 9),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (widget.illustrations != null)
+                          IconButton(
+                            key: const ValueKey('chatIllustrateLastScene'),
+                            tooltip: 'Illustrer la dernière scène',
+                            icon: const Icon(Icons.brush_outlined),
+                            onPressed: _illustrateLatest,
+                          ),
                     SizedBox(
                       height: 49,
                       width: 49,
@@ -531,6 +645,8 @@ class _GroupChatPageState extends State<GroupChatPage> {
                               onPressed: _input.text.trim().isEmpty ? null : _send,
                               icon: const Icon(Icons.arrow_upward_rounded),
                             ),
+                    ),
+                      ],
                     ),
                   ],
                 ),
