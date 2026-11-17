@@ -502,8 +502,10 @@ class NarrativeChatController extends ChangeNotifier {
           ).build(lore,
               // Pick nearby canon using the current scene, rather than
               // revisiting every place mentioned in the history window.
-              // Older entries remain available through search_lore.
-              selected.take(4).map((entry) => entry.content));
+              // Only for hybrid mode: older entries can be retrieved
+              // through search_lore. Plain-mode behavior is unchanged.
+              (hybrid ? selected.take(4) : selected)
+                  .map((entry) => entry.content));
     final memories = memory?.context(
       selected.map((m) => m.content), budget: 3600) ?? '';
     return [
