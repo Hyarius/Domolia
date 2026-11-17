@@ -290,7 +290,7 @@ void main() {
     expect(provider.calls,0);
     expect(find.byKey(const ValueKey('chatIllustrationErrorBanner')),
       findsOneWidget);
-    expect(find.textContaining('Configurez un profil'),findsWidgets);
+    expect(find.textContaining('Génération d’image non configurée'),findsWidgets);
     await tester.tap(find.byKey(
       const ValueKey('chatIllustrationOpenSettings')));
     expect(settingsOpened,isTrue);
