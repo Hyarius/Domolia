@@ -454,19 +454,55 @@ class NarrativeChatController extends ChangeNotifier {
     ];
   }
 
+  /// Character names may be explicitly established by this player's action
+  /// before the narrator's RAW uses pronouns or anonymous quoted dialogue.
+  /// Only a canonical Book name/alias mentioned in THIS player turn qualifies;
+  /// unrelated names from the entire Book must not become valid speakers.
+  Set<String> _verifiedJsonifierSpeakers() {
+    final known = _timeline.whereType<ChatEntry>()
+        .where((e) => e.speaker == ChatSpeaker.character)
+        .map((e) => e.name).toSet();
+    final lore = loreProvider?.call();
+    final index = _lastPlayerIndex;
+    if (lore == null || index == null ||
+        _timeline[index] is! ChatEntry) {
+      return known;
+    }
+    final playerText = (_timeline[index] as ChatEntry).text;
+    bool mentioned(String label) {
+      if (label.trim().length < 3) return false;
+      final escaped = RegExp.escape(label.trim());
+      return RegExp(
+        r'(^|[^A-Za-zÀ-ÿ0-9])' + escaped +
+            r'($|[^A-Za-zÀ-ÿ0-9])',
+        caseSensitive: false,
+      ).hasMatch(playerText);
+    }
+    for (final character in lore.characters) {
+      final labels = [character.name, ...character.aliases];
+      if (labels.any(mentioned)) known.addAll(labels);
+    }
+    return known;
+  }
+
   List<AiMessage> _jsonifierContext(String raw) {
-    final previous = _timeline.reversed.whereType<ChatEntry>()
-        .take(6).toList().reversed;
+    // Quoted/anonymous dialogue may require the preceding speakers to resolve
+    // pronouns. Otherwise the RAW is self-contained and history is wasted.
+    final ambiguousSpeech = raw.contains('«') || raw.contains('»') ||
+        RegExp(r'(^|\n)\s*[—–-]\s+', multiLine: true).hasMatch(raw);
+    final previous = ambiguousSpeech
+        ? _timeline.reversed.whereType<ChatEntry>().take(2).toList().reversed
+        : const <ChatEntry>[];
     final context = [
       for (final entry in previous)
-        '${entry.name}${entry.status == null ? '' : ' (${entry.status})'} : ${entry.text}',
+        '${entry.name}${entry.status == null ? '' : ' (${entry.status})'} : '
+        '${entry.text.length <= 160 ? entry.text : entry.text.substring(0, 160)}',
     ].join('\n');
     return [
       const AiMessage(role: 'system', content: jsonifierSystemPrompt),
       AiMessage(
         role: 'user',
-        content: 'Contexte précédent (ne pas convertir) :\n'
-            '$context\n\n'
+        content: '${context.isEmpty ? '' : 'Contexte précédent (ne pas convertir) :\n$context\n\n'}'
             'Parties RAW à classifier (texte JSON échappé, '
             'numéros fournis par Dart) :\n'
             '${const Jsonifier().partsForPrompt(raw)}',
@@ -643,7 +679,8 @@ class NarrativeChatController extends ChangeNotifier {
       } finally {
         _capture('narrator_tool_round_$round', before,
             failure: failed, stagePromptTokens: turn?.promptTokens,
-            stageCompletionTokens: turn?.completionTokens);
+            stageCompletionTokens: turn?.completionTokens,
+            stageToolCalls: turn?.calls.length);
       }
       final complete = turn;
       totalPrompt += complete.promptTokens ?? 0;
@@ -677,7 +714,8 @@ class NarrativeChatController extends ChangeNotifier {
 
   void _capture(String stage, AiExchange? before,
       {Object? failure, List<ChatTimelineEvent> events = const [],
-      int? stagePromptTokens, int? stageCompletionTokens}) {
+      int? stagePromptTokens, int? stageCompletionTokens,
+      int? stageToolCalls}) {
     final current = diagnostics?.last;
     if (current == null || identical(before, current) ||
         current.completedAtUtc != null) {
@@ -688,6 +726,7 @@ class NarrativeChatController extends ChangeNotifier {
     current.complete(
       promptTokens: stagePromptTokens ?? promptTokens,
       completionTokens: stageCompletionTokens ?? completionTokens,
+      toolCalls: stageToolCalls ?? 0,
       error: failure?.toString(),
       cancelled: failure is _Cancelled,
       interpretedEvents: [
@@ -807,9 +846,13 @@ class NarrativeChatController extends ChangeNotifier {
       modelUsed = endpoint.configuration.model;
       if (rawRecord == null) {
         stage = 'optimizer';
+        promptTokens = null;
+        completionTokens = null;
         await _ensureOptimizedContext(token);
         _check(token);
         stage = 'raw';
+        promptTokens = null;
+        completionTokens = null;
         AppLogger.info('Début narration RAW', component: 'chat');
         final before = diagnostics?.last;
         Object? failed;
@@ -847,6 +890,8 @@ class NarrativeChatController extends ChangeNotifier {
       }
       _check(token);
       stage = 'jsonifier';
+      promptTokens = null;
+      completionTokens = null;
       final formatterEndpoint = resolveFormatterConnection == null
           ? endpoint : await resolveFormatterConnection!();
       _check(token);
@@ -859,9 +904,7 @@ class NarrativeChatController extends ChangeNotifier {
             formatterEndpoint, _jsonifierContext(rawRecord.rawText), token,
             formatterEndpoint.maxOutputTokens ?? 2400);
         _check(token);
-        final known = _timeline.whereType<ChatEntry>()
-            .where((e) => e.speaker == ChatSpeaker.character)
-            .map((e) => e.name);
+        final known = _verifiedJsonifierSpeakers();
         final jsonified = const Jsonifier().decodeWithMemory(
           rawRecord.rawText, formatted, knownCharacters: known,
           hasPreviousScene: _timeline.isNotEmpty,

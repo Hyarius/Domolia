@@ -180,6 +180,35 @@ void main() {
     expect(context,contains('SECRETS DU NARRATEUR'));
   });
 
+
+  test('A named place supplies a bounded canonical local cast', () {
+    const lore = BookLore(
+      global: LoreGlobal(universe: 'Archipel de Verre'),
+      characters: [
+        LoreCharacter(
+          id: 'oren', name: 'Oren Martel',
+          description: 'Aubergiste du Pont de Verre.',
+          appearance: 'Tablier de lin, moustache grise.',
+        ),
+        LoreCharacter(
+          id: 'distant', name: 'Sela Roche',
+          description: 'Gardienne du phare, loin de l’auberge.',
+        ),
+      ],
+      places: [
+        LorePlace(
+          id: 'auberge', name: 'Auberge du Pont de Verre',
+          characterIds: ['oren'],
+        ),
+      ],
+    );
+    final context = const LoreContextBuilder(maxCharacters: 3000)
+        .build(lore, ['La pluie tombe sur l’Auberge du Pont de Verre.']);
+    expect(context, contains('Oren Martel'));
+    expect(context, contains('moustache grise'));
+    expect(context, isNot(contains('Sela Roche')));
+  });
+
   test('Conditional story events are always possibilities, never marked done', () {
     final context = const LoreContextBuilder(maxCharacters:7000)
         .build(testLore,['Je trouve un passage secret. Ancien prisonnier.']);
@@ -187,6 +216,53 @@ void main() {
     expect(context,contains('Si le joueur trouve le passage secret.'));
     expect(context,contains('Description (pas une réalisation constatée)'));
     expect(context,contains('Ne jamais imposer une action du joueur'));
+  });
+
+  test('Optional lore omission cannot abort a narratively valid budget', () {
+    final lore = BookLore(
+      global: const LoreGlobal(
+        universe: 'Les Marches de Verre',
+        rules: 'Le joueur décide de ses actes.',
+      ),
+      events: [
+        LoreEvent(
+          id: 'pluie', name: 'Pluie sur le pont',
+          trigger: LoreEventTrigger.planned, mandatory: true,
+          description: 'Une pluie fine commence à tomber. ' * 25,
+        ),
+      ],
+    );
+    final mandatoryOnly = const LoreContextBuilder(maxCharacters: 10000)
+        .build(BookLore(global: lore.global), ['Je regarde la pluie.']);
+    final budget = mandatoryOnly.length + 6;
+    final result = LoreContextBuilder(maxCharacters: budget)
+        .build(lore, ['Je regarde la pluie.']);
+    expect(result.length, lessThanOrEqualTo(budget));
+    expect(result, contains('Les Marches de Verre'));
+    expect(result, contains('Le joueur décide de ses actes.'));
+    expect(result, isNot(contains('Pluie sur le pont')));
+  });
+
+  test('An omitted secondary entry is reported without deleting the canon', () {
+    final lore = BookLore(
+      global: const LoreGlobal(universe: 'Les Marches de Verre'),
+      events: [
+        LoreEvent(id: 'e1', name: 'Événement 1',
+          trigger: LoreEventTrigger.planned, mandatory: true,
+          description: 'Détail éventuel 1. ' * 7),
+        LoreEvent(id: 'e2', name: 'Événement 2',
+          trigger: LoreEventTrigger.planned, mandatory: true,
+          description: 'Détail éventuel 2. ' * 15),
+      ],
+    );
+    final requiredOnly = const LoreContextBuilder(maxCharacters: 10000)
+        .build(BookLore(global: lore.global), ['Je regarde.']);
+    final cap = requiredOnly.length + 45;
+    final result = LoreContextBuilder(maxCharacters: cap)
+        .build(lore, ['Je regarde.']);
+    expect(result.length, lessThanOrEqualTo(cap));
+    expect(result, contains('Les Marches de Verre'));
+    expect(result, contains('LORE PARTIEL'));
   });
 
   test('Mandatory global facts never truncate silently', () {

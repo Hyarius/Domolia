@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../ai/ai_diagnostics.dart';
+import '../ai/ai_usage.dart';
 import '../logging/app_logger.dart';
 import 'book_definition.dart';
 import 'book_session.dart';
@@ -50,7 +51,7 @@ abstract interface class LiveMemoryStore {
   Future<Set<int>> analyzedMemoryTurns(String sessionId);
 }
 
-class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemoryStore {
+class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemoryStore, AiUsageStore {
   SqliteBookStore({DatabaseFactory? factory, this.databasePath})
       : _factoryOverride = factory;
 
@@ -98,6 +99,41 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
       'PRIMARY KEY(session_id, fact_id), '
       'FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE)',
     );
+  }
+
+  static Future<void> _createUsage(Database db) async {
+    await db.execute(
+      'CREATE TABLE IF NOT EXISTS ai_usage ('
+      'id TEXT PRIMARY KEY, session_id TEXT NOT NULL, '
+      'created_at INTEGER NOT NULL, payload_json TEXT NOT NULL, '
+      'FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS ai_usage_by_session '
+      'ON ai_usage(session_id, created_at)',
+    );
+  }
+
+  @override
+  Future<void> putUsage(AiUsageRecord record) async {
+    await (await database).insert('ai_usage', {
+      'id': record.id,
+      'session_id': record.sessionId,
+      'created_at': record.createdAtUtc.microsecondsSinceEpoch,
+      'payload_json': jsonEncode(record.toJson()),
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  @override
+  Future<List<AiUsageRecord>> loadUsage(String sessionId) async {
+    final rows = await (await database).query('ai_usage',
+      where: 'session_id = ?', whereArgs: [sessionId],
+      orderBy: 'created_at ASC');
+    return [
+      for (final row in rows)
+        AiUsageRecord.fromJson(jsonDecode(row['payload_json'] as String)
+            as Map<String, dynamic>),
+    ];
   }
 
   @override
@@ -283,7 +319,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
     return _db ??= await (_factoryOverride ?? databaseFactory).openDatabase(
       location,
       options: OpenDatabaseOptions(
-      version: 10,
+      version: 11,
       onConfigure: (db) async =>
           db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, version) async {
@@ -313,8 +349,10 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
         await _createDiagnostics(db);
         await _createRawGenerations(db);
         await _createMemoryTables(db);
+        await _createUsage(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 11) await _createUsage(db);
         if (oldVersion < 9) await _createMemoryTables(db);
         if (oldVersion < 10) {
           final sessions = await db.rawQuery(

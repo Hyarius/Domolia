@@ -17,8 +17,26 @@ class DialogueParts {
 
   static final RegExp _quotes = RegExp(r'«[^»]*»', dotAll: true);
   static final RegExp _label = RegExp(
-    r'^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9_ -]{0,49})\s*[:：]\s*',
+    r"^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9_ '’\-]{0,49})\s*[:：]\s*",
   );
+  static final RegExp _dashDialogue = RegExp(r'^[—–]\s+');
+
+  // Model output may use an ASCII apostrophe for a typographic RAW apostrophe.
+  // Normalize only for source-backed speaker checks, never the saved RAW.
+  String _speakerKey(String value) => value.toLowerCase()
+      .replaceAll('’', "'")
+      .replaceAll('‘', "'")
+      .trim();
+
+  bool _hasEarlierSpeakerAnchor(
+      List<RawDialoguePart> parts, int index, String speaker) {
+    final key = _speakerKey(speaker);
+    final first = index > 4 ? index - 4 : 0;
+    for (var i = index - 1; i >= first; i--) {
+      if (_speakerKey(parts[i].text).contains(key)) return true;
+    }
+    return false;
+  }
 
   List<RawDialoguePart> split(List<String> blocks) {
     final result = <RawDialoguePart>[];
@@ -65,7 +83,8 @@ class DialogueParts {
     if (parts.isEmpty || parts.map((e) => e.text).join() != raw) {
       throw const FormatException('JSONification : partition RAW invalide.');
     }
-    final names = knownCharacters.map((e) => e.toLowerCase()).toSet();
+    final names = knownCharacters.map(_speakerKey).toSet();
+    final normalizedRaw = _speakerKey(raw);
     final types = <String>[];
     final seen = <int>{};
     final result = <ChatOutputEvent>[];
@@ -73,6 +92,10 @@ class DialogueParts {
     var nextPart = 0;
     var hasMessage = false;
     var lastScene = false;
+    // The latest verified speaker may continue after one short narrative
+    // beat. Never infer an entirely new speaker from previous session history.
+    String? lastVerifiedSpeaker;
+    int? lastVerifiedDialoguePart;
     for (final event in events) {
       if (event is! Map<String, dynamic>) {
         throw const FormatException('JSONification : partie non objet.');
@@ -85,6 +108,8 @@ class DialogueParts {
           throw const FormatException('JSONification : scène mal placée.');
         }
         result.add(const ChatSceneChangeOutput());
+        lastVerifiedSpeaker = null;
+        lastVerifiedDialoguePart = null;
         lastScene = true;
         continue;
       }
@@ -113,12 +138,13 @@ class DialogueParts {
             throw const FormatException('JSONification : dialogue invalide.');
           }
           final name = (event['name'] as String).trim();
+          final speakerKey = _speakerKey(name);
           if (name.isEmpty || name.length > 50 ||
               RegExp(r'[\r\n]').hasMatch(name) ||
               {'joueur', 'vous', 'player', 'narrateur'}
-                  .contains(name.toLowerCase()) ||
-              !(raw.toLowerCase().contains(name.toLowerCase()) ||
-                  names.contains(name.toLowerCase()))) {
+                  .contains(speakerKey) ||
+              !(normalizedRaw.contains(speakerKey) ||
+                  names.contains(speakerKey))) {
             throw const FormatException('JSONification : locuteur non vérifié.');
           }
           var text = source.text.trim();
@@ -126,12 +152,26 @@ class DialogueParts {
             text = text.substring(1, text.length - 1).trim();
           } else {
             final match = _label.firstMatch(text);
-            if (match == null ||
-                match.group(1)!.trim().toLowerCase() != name.toLowerCase()) {
-              throw const FormatException(
-                  'JSONification : dialogue non cité sans attribution.');
+            if (match != null &&
+                _speakerKey(match.group(1)!.trim()) == speakerKey) {
+              text = text.substring(match.end).trim();
+            } else {
+              final dash = _dashDialogue.firstMatch(text);
+              // An unlabelled em-dash line is only attributable if this same
+              // speaker was explicitly mentioned in nearby earlier RAW prose.
+              // A name from an unrelated session does not suffice.
+              final followsVerifiedSpeaker =
+                  lastVerifiedSpeaker == speakerKey &&
+                  lastVerifiedDialoguePart != null &&
+                  nextPart - lastVerifiedDialoguePart <= 2;
+              if (dash == null ||
+                  !(_hasEarlierSpeakerAnchor(parts, nextPart, name) ||
+                    followsVerifiedSpeaker)) {
+                throw const FormatException(
+                    'JSONification : dialogue non cité sans attribution.');
+              }
+              text = text.substring(dash.end).trim();
             }
-            text = text.substring(match.end).trim();
           }
           if (text.isEmpty || text.length > 6000) {
             throw const FormatException('JSONification : réplique invalide.');
@@ -144,6 +184,8 @@ class DialogueParts {
           result.add(ChatLine(
               speaker: ChatSpeaker.character, name: name, text: text,
               status: status.isEmpty ? null : status));
+          lastVerifiedSpeaker = speakerKey;
+          lastVerifiedDialoguePart = nextPart;
           hasMessage = true;
         case 'aside':
           if (event.length != 3 || source.quoted ||

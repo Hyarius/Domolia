@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../ai/ai_provider.dart';
+import '../ai/ai_diagnostics.dart';
 import '../books/book_store.dart';
 import '../chat/chat_protocol.dart';
 import '../chat/raw_generation.dart';
@@ -26,12 +27,16 @@ class LiveMemoryCoordinator extends ChangeNotifier {
     required this.store,
     required this.resolveConnection,
     required this.isEnabled,
+    this.diagnostics,
+    this.onExchangeCaptured,
   });
 
   final String sessionId;
   final LiveMemoryStore store;
   final Future<LiveMemoryAiEndpoint?> Function() resolveConnection;
   final Future<bool> Function() isEnabled;
+  final AiExchangeRecorder? diagnostics;
+  final void Function(AiExchange)? onExchangeCaptured;
 
   List<LiveMemoryFact> _facts = const [];
   List<LiveMemoryFact> _history = const [];
@@ -105,7 +110,13 @@ class LiveMemoryCoordinator extends ChangeNotifier {
       final snapshots = store as NarrativeSnapshotStore;
       final records = await snapshots.listRawGenerations(sessionId);
       final analyzed = await store.analyzedMemoryTurns(sessionId);
-      for (final source in records) {
+      final candidates = records
+          .where(
+            (source) =>
+                source.isStructured && !analyzed.contains(source.playerEventId),
+          )
+          .toList(growable: false);
+      for (final (index, source) in candidates.indexed) {
         if (_closed || !await isEnabled()) return;
         if (!source.isStructured || analyzed.contains(source.playerEventId)) {
           continue;
@@ -127,28 +138,53 @@ class LiveMemoryCoordinator extends ChangeNotifier {
         }
         final endpoint = await resolveConnection();
         if (endpoint == null) return;
-        final response = await endpoint.provider.complete(
-          endpoint.configuration,
-          messages: _prompt(player.single.text, source),
-          maxTokens: endpoint.maxTokens,
-        );
-        final operations = LiveMemoryOperation.parse(
-          response,
-          playerEventId: source.playerEventId,
-          playerText: player.single.text,
-          validatedRaw: source.rawText,
-        );
-        if (_closed) return;
-        await store.commitMemoryTurn(sessionId, source, operations);
-        await refresh();
-        AppLogger.debug(
-          'Tour mémorisé',
-          component: 'memory',
-          details: {
-            'sourceTurnId': source.playerEventId,
-            'operations': operations.length,
-          },
-        );
+        final previousExchange = diagnostics?.last;
+        Object? extractionFailure;
+        try {
+          final response = await endpoint.provider.complete(
+            endpoint.configuration,
+            messages: _prompt(player.single.text, source),
+            maxTokens: endpoint.maxTokens,
+          );
+          final operations = LiveMemoryOperation.parse(
+            response,
+            playerEventId: source.playerEventId,
+            playerText: player.single.text,
+            validatedRaw: source.rawText,
+          );
+          if (_closed) return;
+          await store.commitMemoryTurn(sessionId, source, operations);
+          // Only reload memory if a later pending turn needs these new facts.
+          // The finally block publishes the final projection once.
+          if (index + 1 < candidates.length) await refresh();
+          AppLogger.debug(
+            'Tour mémorisé',
+            component: 'memory',
+            details: {
+              'sourceTurnId': source.playerEventId,
+              'operations': operations.length,
+            },
+          );
+        } catch (failure) {
+          extractionFailure = failure;
+          rethrow;
+        } finally {
+          // Include the non-streaming extractor in the same accounting
+          // pipeline. Its charge survives even if parsing/commit fails.
+          final exchange = diagnostics?.last;
+          if (exchange != null &&
+              !identical(exchange, previousExchange) &&
+              exchange.completedAtUtc == null) {
+            exchange.stage = 'live_memory';
+            exchange.playerEventId = source.playerEventId;
+            exchange.complete(error: extractionFailure?.toString());
+            try {
+              onExchangeCaptured?.call(exchange);
+            } catch (_) {
+              // Usage logging must never invalidate a committed memory.
+            }
+          }
+        }
       }
     } catch (failure, stack) {
       // An invalid/late output is not allowed to change any fact.
