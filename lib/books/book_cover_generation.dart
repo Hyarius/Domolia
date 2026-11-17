@@ -113,6 +113,10 @@ class BookCoverGenerator {
       throw const ImageGenerationFailure(ImageFailureKind.unsupported,
           'Ce modèle ne fournit pas de format pour les couvertures.');
     }
+    if (book.illustrationSettings.maximumCostUsd != null) {
+      throw const ImageGenerationFailure(ImageFailureKind.unsupported,
+          'Plafond de dépense strict impossible : coût maximal inconnu.');
+    }
     final quality = book.illustrationSettings.quality;
     if (quality != null && !capability.qualities.contains(quality)) {
       throw const ImageGenerationFailure(ImageFailureKind.unsupported,
