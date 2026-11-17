@@ -378,6 +378,12 @@ class _GroupChatPageState extends State<GroupChatPage> {
                               key: ValueKey('chat-scene-${entry.id}'),
                             );
                           }
+                          if (entry is ChatIllustrationIntent) {
+                            return _IllustrationPlaceholder(
+                              key: ValueKey('chat-illustration-${entry.id}'),
+                              intent: entry,
+                            );
+                          }
                           final bubble = entry as ChatEntry;
                           return _ChatBubble(
                             key: ValueKey('chat-entry-${bubble.id}'),
@@ -636,6 +642,50 @@ class _SceneDivider extends StatelessWidget {
       ),
     );
   }
+}
+
+/// An intent is an inline placeholder, not a message or a generated image.
+class _IllustrationPlaceholder extends StatelessWidget {
+  const _IllustrationPlaceholder({super.key, required this.intent});
+  final ChatIllustrationIntent intent;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'Illustration proposée : ${intent.description}',
+    child: Container(
+      key: const ValueKey('chatIllustrationPlaceholder'),
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(4, 4, 4, 20),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: DomoliaColors.goldDark),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.image_outlined,
+              size: 23, color: DomoliaColors.goldLight),
+          const SizedBox(width: 12),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Illustration suggérée',
+                  style: TextStyle(color: DomoliaColors.goldLight,
+                      fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              Text(intent.description,
+                  style: const TextStyle(color: DomoliaColors.cream)),
+              const SizedBox(height: 6),
+              const Text('Génération indisponible pour le moment',
+                  style: TextStyle(color: DomoliaColors.goldLight,
+                      fontSize: 12)),
+            ],
+          )),
+        ],
+      ),
+    ),
+  );
 }
 
 class _ChatBubble extends StatelessWidget {

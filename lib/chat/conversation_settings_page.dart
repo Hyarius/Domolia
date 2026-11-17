@@ -56,6 +56,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   bool _memoryEnabled = true;
   String? _inheritedNarratorProfile;
   bool _toolCallingEnabled = true;
+  IllustrationMode? _illustrationModeOverride;
   int _cachedLoreCharacters = 0;
   Map<AiNarrativeTask, AiTaskGenerationOverride> _generationOverrides = {};
   List<AiUsageRecord> _usageRecords = const [];
@@ -81,6 +82,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           _memoryProfile = session?.memoryProfileId;
           _memoryEnabled = session?.memoryEnabled ?? true;
           _toolCallingEnabled = session?.toolCallingEnabled ?? true;
+          _illustrationModeOverride = session?.illustrationModeOverride;
           _inheritedNarratorProfile = bookProfile;
           _cachedLoreCharacters = session?.optimizedLore?.length ?? 0;
           _usageRecords = usage;
@@ -130,6 +132,24 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       if (mounted) setState(() => _toolCallingEnabled = enabled);
     } catch (_) {
       _notify('Impossible de sauvegarder les consultations IA.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _setIllustrationMode(String? selected) async {
+    if (_saving || widget.chat.busy) return;
+    setState(() => _saving = true);
+    try {
+      final value = selected == null || selected.isEmpty
+          ? null : IllustrationMode.values.byName(selected);
+      await widget.library.setSessionIllustrationMode(widget.sessionId, value);
+      widget.chat.setIllustrationMode(value ??
+          widget.library.byId(widget.bookId)?.illustrationMode ??
+          IllustrationMode.disabled);
+      if (mounted) setState(() => _illustrationModeOverride = value);
+    } catch (_) {
+      _notify('Impossible de sauvegarder le mode d’illustration.');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -633,7 +653,26 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                       ? null : _setProfile,
                 ),
                 const SizedBox(height: DomoliaSpacing.field),
-
+                DropdownButtonFormField<String>(
+                  key: ValueKey('conversationIllustration-${_illustrationModeOverride?.name ?? "book"}'),
+                  initialValue: _illustrationModeOverride?.name ?? '',
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                      labelText: 'Illustrations de cette Partie'),
+                  items: [
+                    DropdownMenuItem(value: '',
+                        child: Text('Hériter du Livre')),
+                    const DropdownMenuItem(value: 'disabled',
+                        child: Text('Désactivées')),
+                    const DropdownMenuItem(value: 'suggestions',
+                        child: Text('Suggestions')),
+                    const DropdownMenuItem(value: 'automatic',
+                        child: Text('Automatique (non disponible)')),
+                  ],
+                  onChanged: _saving || widget.chat.busy
+                      ? null : _setIllustrationMode,
+                ),
+                const SizedBox(height: DomoliaSpacing.field),
                 SwitchListTile(
                   key: const ValueKey('conversationMemoryEnabled'),
                   title: const Text('Mémoire automatique'),

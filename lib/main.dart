@@ -466,6 +466,8 @@ class _HomePageState extends State<HomePage> {
           configuration: () => null,
           narrator: book.narrator,
           structuredStreamingEnabled: true,
+          illustrationMode: session.illustrationModeOverride ??
+              book.illustrationMode,
           loreProvider: () => _books.byId(book.id)?.lore ?? book.lore,
           diagnostics: _aiDiagnostics,
           memory: _liveMemory,

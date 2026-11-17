@@ -1,4 +1,5 @@
 import '../chat/raw_generation.dart';
+import '../chat/chat_protocol.dart';
 import '../memory/live_memory.dart';
 import 'dart:convert';
 import '../ai/ai_task_generation.dart';
@@ -319,7 +320,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
     return _db ??= await (_factoryOverride ?? databaseFactory).openDatabase(
       location,
       options: OpenDatabaseOptions(
-      version: 11,
+      version: 12,
       onConfigure: (db) async =>
           db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, version) async {
@@ -341,6 +342,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
           'tool_calling_enabled INTEGER NOT NULL DEFAULT 1, '
           'memory_profile_id TEXT, '
           'memory_enabled INTEGER NOT NULL DEFAULT 1, '
+          'illustration_mode TEXT, '
           'FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE)',
         );
         await db.execute(
@@ -352,6 +354,13 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
         await _createUsage(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 12) {
+          final sessions = await db.rawQuery(
+              "SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'");
+          if (sessions.isNotEmpty) {
+            await db.execute('ALTER TABLE sessions ADD COLUMN illustration_mode TEXT');
+          }
+        }
         if (oldVersion < 11) await _createUsage(db);
         if (oldVersion < 9) await _createMemoryTables(db);
         if (oldVersion < 10) {
@@ -466,6 +475,8 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
     memoryProfileId: row['memory_profile_id'] as String?,
     memoryEnabled: row['memory_enabled'] != 0,
     toolCallingEnabled: row['tool_calling_enabled'] != 0,
+    illustrationModeOverride: row['illustration_mode'] == null ? null :
+        IllustrationMode.values.byName(row['illustration_mode'] as String),
     generationOverrides: AiTaskGenerationOverride.decode(
         row['generation_options_json'] as String?),
     optimizedLore: row['optimized_lore'] as String?,
@@ -496,6 +507,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
       'memory_profile_id': session.memoryProfileId,
       'memory_enabled': session.memoryEnabled ? 1 : 0,
       'tool_calling_enabled': session.toolCallingEnabled ? 1 : 0,
+      'illustration_mode': session.illustrationModeOverride?.name,
       'generation_options_json': AiTaskGenerationOverride.encode(
           session.generationOverrides),
       'optimized_lore': session.optimizedLore,

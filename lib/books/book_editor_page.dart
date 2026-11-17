@@ -8,6 +8,7 @@ import '../ai/ai_provider.dart';
 import '../theme/domolia_theme.dart';
 import '../chat/narrative_tuning_editor.dart';
 import '../chat/narrator.dart';
+import '../chat/chat_protocol.dart';
 import '../logging/app_logger.dart';
 import 'book_cover_loader.dart';
 import 'book_definition.dart';
@@ -480,6 +481,28 @@ class BookEditorPageState extends State<BookEditorPage> {
   ];
 
   List<Widget> _narratorTab() => [
+    DropdownButtonFormField<IllustrationMode>(
+      key: ValueKey('bookIllustration-${_book.illustrationMode.name}'),
+      initialValue: _book.illustrationMode,
+      isExpanded: true,
+      decoration: const InputDecoration(labelText: 'Illustrations du Livre'),
+      items: const [
+        DropdownMenuItem(value: IllustrationMode.disabled,
+            child: Text('Désactivées')),
+        DropdownMenuItem(value: IllustrationMode.suggestions,
+            child: Text('Suggestions (sans génération)')),
+        DropdownMenuItem(value: IllustrationMode.automatic,
+            child: Text('Automatique (préparation uniquement)')),
+      ],
+      onChanged: (mode) {
+        if (mode == null || mode == _book.illustrationMode) return;
+        unawaited(_persist((current) =>
+            current.copyWith(illustrationMode: mode)).catchError((Object _) {
+          _show('Impossible de sauvegarder les illustrations.');
+        }));
+      },
+    ),
+    const SizedBox(height: DomoliaSpacing.section),
     TextField(
       key: const ValueKey('bookNarrativeStyle'),
       controller: _style,
