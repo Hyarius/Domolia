@@ -497,7 +497,7 @@ void main() {
     test('failed atomic write leaves no partial manual intention', () async {
       final chat = _chat(_ScriptProvider('[NARRATION]\nUnused.'),
           IllustrationMode.suggestions,
-          save: (_, __) async => throw StateError('disk full'));
+          save: (_, _) async => throw StateError('disk full'));
       addTearDown(chat.dispose);
       chat.restoreTimeline(const [
         ChatEntry(id: 1, speaker: ChatSpeaker.player,
