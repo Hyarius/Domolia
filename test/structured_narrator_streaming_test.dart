@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:domolia/memory/live_memory.dart';
 
 import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/chat/chat_controller.dart';
@@ -29,6 +32,35 @@ class _StreamingNarrator implements AiChatProvider, AiStreamingChatProvider {
     calls++;
     lastPrompt = messages;
     return fragments.stream;
+  }
+}
+
+
+class _ToolNarrator implements AiChatProvider, AiToolCallingChatProvider {
+  final first = StreamController<AiToolStreamChunk>.broadcast();
+  final finalTurn = StreamController<AiToolStreamChunk>.broadcast();
+  int calls = 0;
+
+  @override
+  Future<List<AiModel>> listModels(AiConfiguration config) async => [];
+  @override
+  Future<String> complete(AiConfiguration config, {
+    required List<AiMessage> messages, int maxTokens = 1200,
+  }) => throw StateError('Unexpected standalone narrator or JSONifier');
+
+  @override
+  Stream<AiToolStreamChunk> streamToolChat(AiConfiguration config, {
+    required List<AiToolMessage> messages,
+    required List<AiToolDefinition> tools,
+    int maxTokens = 1200,
+  }) {
+    calls++;
+    return calls == 1 ? first.stream : finalTurn.stream;
+  }
+
+  Future<void> close() async {
+    await first.close();
+    await finalTurn.close();
   }
 }
 
@@ -127,4 +159,102 @@ void main() {
     await pending;
     expect(persistedRaw, isEmpty);
   });
+  test('tool consultation discards technical draft and streams final reply',
+      () async {
+    final tool = _ToolNarrator();
+    addTearDown(tool.close);
+    final eventsSaved = <List<ChatTimelineEvent>>[];
+    final toolChat = NarrativeChatController(
+      provider: tool, configuration: () => _config,
+      structuredStreamingEnabled: true,
+      resolveConnection: () async => NarrativeAiEndpoint(
+        provider: tool, configuration: _config,
+        toolCallingEnabled: true,
+      ),
+      onPersistState: (events, raws) async {
+        eventsSaved.add(List.of(events));
+      },
+    );
+    addTearDown(toolChat.dispose);
+    final pending = toolChat.send('Je cherche Oren.');
+    await _tick();
+    expect(tool.calls, 1);
+    tool.first.add(const AiToolStreamChunk(
+      text: '{"type":"message","speaker":"narrator",'
+          '"name":"Narrateur","text":"Brouillon',
+    ));
+    await _tick();
+    expect(toolChat.timeline.whereType<ChatEntry>().last.inProgress, true);
+    tool.first.add(const AiToolStreamChunk(callIndex: 0,
+      callId: 'search', callName: 'search_lore',
+      argumentsDelta: '{"query":"Oren"}',
+    ));
+    await _tick();
+    expect(toolChat.timeline.whereType<ChatEntry>().length, 1);
+    tool.first.add(const AiToolStreamChunk(finishReason: 'tool_calls'));
+    await tool.first.close();
+    await _tick();
+    expect(tool.calls, 2);
+    tool.finalTurn.add(const AiToolStreamChunk(
+      text: '{"type":"message","speaker":"character",'
+          '"name":"Oren","text":"Bienvenue',
+    ));
+    await _tick();
+    expect(toolChat.timeline.whereType<ChatEntry>().last.text, 'Bienvenue');
+    expect(toolChat.timeline.whereType<ChatEntry>().last.inProgress, true);
+    expect(eventsSaved.last.whereType<ChatEntry>().length, 1);
+    tool.finalTurn.add(const AiToolStreamChunk(text: '."}\n'));
+    await tool.finalTurn.close();
+    await pending;
+    expect(toolChat.error, isNull);
+    expect(toolChat.messages.last.text, 'Bienvenue.');
+    expect(toolChat.rawGenerations, hasLength(1));
+    expect(toolChat.rawGenerations.single.rawText, contains('Bienvenue.'));
+    expect(tool.calls, 2);
+  });
+
+  test('existing pending RAW is recovered locally, without JSONifier',
+      () async {
+    chat.restoreTimeline(const [
+      ChatEntry(id: 4, speaker: ChatSpeaker.player,
+          name: 'Vous', text: 'Je regarde la porte.'),
+    ], rawGenerations: const [
+      RawGeneration(playerEventId: 4,
+          rawText: 'La porte se ferme derrière vous.'),
+    ]);
+    await chat.retry();
+    expect(chat.error, isNull);
+    expect(chat.messages.last.text, 'La porte se ferme derrière vous.');
+    expect(chat.rawGenerations.single.isStructured, true);
+    expect(provider.calls, 0);
+    expect(persistedRaw, hasLength(1));
+  });
+
+  test('Live Memory quotes are checked against literary NDJSON content',
+      () {
+    final source = RawGeneration(playerEventId: 1, rawText:
+        '{"type":"message","speaker":"character","name":"Oren",'
+        '"text":"Le ticket bleu porte le numéro 47."}\n').structured(2, 2);
+    expect(source.validatedNarrative,
+        'Oren : Le ticket bleu porte le numéro 47.');
+    final payload = jsonEncode({'operations': [{
+      'action': 'upsert',
+      'id': 'object:ticket:number',
+      'category': 'object', 'entity': 'ticket',
+      'label': 'Ticket bleu', 'field': 'number',
+      'text': 'Le ticket bleu porte le numéro 47.',
+      'kind': 'state', 'certainty': 'confirmed',
+      'visibility': 'player', 'importance': 3,
+      'sourceSide': 'raw', 'quote': 'numéro 47',
+    }]});
+    final operations = LiveMemoryOperation.parse(payload,
+        playerEventId: 1, playerText: 'Je regarde le ticket.',
+        validatedRaw: source.validatedNarrative);
+    expect(operations.single.fact.sourceQuote, 'numéro 47');
+    expect(() => LiveMemoryOperation.parse(payload,
+        playerEventId: 1, playerText: 'Je regarde le ticket.',
+        validatedRaw: 'Oren ne mentionne aucun numéro.'),
+        throwsFormatException);
+  });
+
 }
