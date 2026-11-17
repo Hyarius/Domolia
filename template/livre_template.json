@@ -1,6 +1,6 @@
 {
   "format": "domolia.book",
-  "version": 2,
+  "version": 3,
   "id": "livre_template",
   "title": "Livre de démonstration",
   "tags": [],
@@ -13,7 +13,8 @@
     "styleKeywords": [
       "Mystérieux",
       "Dialogué"
-    ]
+    ],
+    "illustrationMode": "suggestions"
   },
   "openingMessages": [
     "La pluie frappe les vitres de l'auberge. Une horloge s'est arrêtée à 21 h 17. Le tenancier attend votre première question."
@@ -117,5 +118,13 @@
         ]
       }
     ]
+  },
+  "illustration": {
+    "size": "1024x1536",
+    "quality": null,
+    "count": 1,
+    "style": "illustration cinématographique, aquarelle sombre et lumière diffuse",
+    "negativePrompt": "texte incrusté, sous-titres, bulles de dialogue, signatures, filigranes, logos, interface utilisateur",
+    "maximumCostUsd": null
   }
 }
