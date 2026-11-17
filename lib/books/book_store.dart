@@ -1,4 +1,7 @@
 import '../chat/raw_generation.dart';
+import '../illustration/illustration_records.dart';
+import '../illustration/visual_pipeline.dart';
+import 'book_lore.dart';
 import '../chat/chat_protocol.dart';
 import '../memory/live_memory.dart';
 import 'dart:convert';
@@ -52,7 +55,7 @@ abstract interface class LiveMemoryStore {
   Future<Set<int>> analyzedMemoryTurns(String sessionId);
 }
 
-class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemoryStore, AiUsageStore {
+class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemoryStore, AiUsageStore, IllustrationRecordStore {
   SqliteBookStore({DatabaseFactory? factory, this.databasePath})
       : _factoryOverride = factory;
 
@@ -135,6 +138,97 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
         AiUsageRecord.fromJson(jsonDecode(row['payload_json'] as String)
             as Map<String, dynamic>),
     ];
+  }
+
+
+  static Future<void> _createIllustrations(Database db) async {
+    await db.execute(
+      'CREATE TABLE IF NOT EXISTS illustration_generations ('
+      'request_id TEXT PRIMARY KEY, '
+      'session_id TEXT NOT NULL, intent_id INTEGER NOT NULL, '
+      'source_hash TEXT NOT NULL, state TEXT NOT NULL, '
+      'provider TEXT NOT NULL, model TEXT NOT NULL, '
+      'created_at INTEGER NOT NULL, prompt TEXT NOT NULL, '
+      'file_name TEXT, mime_type TEXT, error TEXT, cost_usd REAL, '
+      'FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS illustration_by_intent '
+      'ON illustration_generations(session_id, intent_id, created_at DESC)',
+    );
+  }
+
+  @override
+  Future<List<StoredIllustration>> listIllustrations(String sessionId) async {
+    final rows = await (await database).query(
+      'illustration_generations', where: 'session_id = ?',
+      whereArgs: [sessionId], orderBy: 'created_at ASC',
+    );
+    return [
+      for (final row in rows)
+        StoredIllustration(
+          requestId: row['request_id'] as String,
+          sessionId: row['session_id'] as String,
+          intentId: row['intent_id'] as int,
+          sourceHash: row['source_hash'] as String,
+          state: IllustrationJobState.values.byName(row['state'] as String),
+          provider: row['provider'] as String,
+          model: row['model'] as String,
+          createdAtUtc: DateTime.fromMicrosecondsSinceEpoch(
+            row['created_at'] as int, isUtc: true),
+          prompt: row['prompt'] as String,
+          fileName: row['file_name'] as String?,
+          mimeType: row['mime_type'] as String?,
+          error: row['error'] as String?,
+          costUsd: (row['cost_usd'] as num?)?.toDouble(),
+        ),
+    ];
+  }
+
+  @override
+  Future<Set<String>> retainedIllustrationFiles() async {
+    final rows = await (await database).query('illustration_generations',
+      columns: ['file_name'], where: 'file_name IS NOT NULL');
+    return {
+      for (final row in rows)
+        if (row['file_name'] is String) row['file_name'] as String,
+    };
+  }
+
+  @override
+  Future<bool> saveIllustrationIfCurrent(StoredIllustration record) async {
+    final db = await database;
+    return db.transaction<bool>((txn) async {
+      final sessions = await txn.query('sessions',
+        columns: ['timeline_json'], where: 'id = ?',
+        whereArgs: [record.sessionId], limit: 1);
+      if (sessions.isEmpty) return false;
+      final timeline = BookSession.decodeTimeline(
+          sessions.single['timeline_json'] as String);
+      final matched = timeline.whereType<ChatIllustrationIntent>()
+          .where((e) => e.id == record.intentId).toList();
+      if (matched.length != 1) return false;
+      // Compare only historical timeline evidence. Later turns are excluded.
+      final current = const VisualSceneSelector().select(
+        intent: matched.single, timeline: timeline, lore: const BookLore());
+      if (current.sourceHash != record.sourceHash) return false;
+      await txn.insert('illustration_generations', {
+        'request_id': record.requestId,
+        'session_id': record.sessionId,
+        'intent_id': record.intentId,
+        'source_hash': record.sourceHash,
+        'state': record.state.name,
+        'provider': record.provider,
+        'model': record.model,
+        'created_at': record.createdAtUtc.microsecondsSinceEpoch,
+        'prompt': record.prompt,
+        'file_name': record.fileName,
+        'mime_type': record.mimeType,
+        'error': record.error,
+        'cost_usd': record.costUsd,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      return true;
+    });
   }
 
   @override
@@ -320,7 +414,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
     return _db ??= await (_factoryOverride ?? databaseFactory).openDatabase(
       location,
       options: OpenDatabaseOptions(
-      version: 12,
+      version: 13,
       onConfigure: (db) async =>
           db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, version) async {
@@ -352,8 +446,10 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
         await _createRawGenerations(db);
         await _createMemoryTables(db);
         await _createUsage(db);
+        await _createIllustrations(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 13) await _createIllustrations(db);
         if (oldVersion < 12) {
           final sessions = await db.rawQuery(
               "SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'");
