@@ -523,6 +523,11 @@ void main() {
     expect(hash, 'startup-v2-${const LoreContextOptimizer().sourceHash(lore)}');
     expect(provider.narrativeContext!.first.content,
         contains('CONTEXTE INITIAL PRÉPARÉ LOCALEMENT'));
+    expect(provider.narrativeContext!.first.content,
+        contains('CONTEXTE INITIAL PRÉPARÉ LOCALEMENT (canon, non vécu)\\n'
+            'CONTEXTE DE DÉPART'));
+    expect(provider.narrativeContext!.first.content,
+        isNot(contains(r'FICHES CANONIQUES PERTINENTES (non vécues)\\n')));
     await local.send('Je m’assieds.');
     expect(saveCount, 1);
 
