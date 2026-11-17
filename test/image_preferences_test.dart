@@ -10,10 +10,10 @@ void main() {
   test('App defaults and Party overrides persist separately', () async {
     final prefs=ImagePreferences();
     await prefs.initialize();
-    expect((await prefs.forSession('s1')).count,1);
+    expect((await prefs.forSession('s1')).model,isEmpty);
     const saved=ImageGenerationOptions(
         profileId:'ou', directorProfileId:'gpt',
-        model:'visual',style:'dessin à l’encre');
+        model:'visual');
     await prefs.saveApplication(saved);
     await prefs.saveParty('s1', saved.copyWith(model:'gpt-image-2'));
     final restarted=ImagePreferences();
@@ -26,10 +26,21 @@ void main() {
     restarted.dispose();
   });
 
-  test('Invalid counts and negative spending cap are rejected', () {
-    expect(()=>const ImageGenerationOptions(count:0).validate(),
-        throwsFormatException);
+  test('Only API configuration is persisted, legacy art keys ignored', () {
+    final settings = ImageGenerationOptions.fromJson({
+      'profileId':'image',
+      'directorProfileId':'director',
+      'model':'visual',
+      'style':'old style',
+      'size':'512x512',
+      'count':4,
+      'quality':'low',
+    });
+    expect(settings.model,'visual');
+    expect(settings.toJson().keys,
+      containsAllInOrder(['profileId','directorProfileId','model']));
+    expect(settings.toJson().containsKey('style'),isFalse);
     expect(()=>const ImageGenerationOptions(
-      maximumCostUsd:-1).validate(),throwsFormatException);
+      model:'x' * 120).validate(),throwsFormatException);
   });
 }
