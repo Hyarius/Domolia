@@ -149,6 +149,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
       'source_hash TEXT NOT NULL, state TEXT NOT NULL, '
       'provider TEXT NOT NULL, model TEXT NOT NULL, '
       'created_at INTEGER NOT NULL, prompt TEXT NOT NULL, '
+      'negative_prompt TEXT NOT NULL DEFAULT \'\', '
       'files_json TEXT NOT NULL, mime_type TEXT, error TEXT, cost_usd REAL, '
       'FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE)',
     );
@@ -204,6 +205,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
           createdAtUtc: DateTime.fromMicrosecondsSinceEpoch(
             row['created_at'] as int, isUtc: true),
           prompt: row['prompt'] as String,
+          negativePrompt: row['negative_prompt'] as String? ?? '',
           fileNames: (jsonDecode(row['files_json'] as String) as List)
               .cast<String>(),
           mimeType: row['mime_type'] as String?,
@@ -255,6 +257,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
         'model': record.model,
         'created_at': record.createdAtUtc.microsecondsSinceEpoch,
         'prompt': record.prompt,
+        'negative_prompt': record.negativePrompt,
         'files_json': jsonEncode(record.fileNames),
         'mime_type': record.mimeType,
         'error': record.error,
@@ -448,7 +451,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
     return _db ??= await (_factoryOverride ?? databaseFactory).openDatabase(
       location,
       options: OpenDatabaseOptions(
-      version: 13,
+      version: 14,
       onConfigure: (db) async =>
           db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, version) async {
@@ -484,6 +487,10 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 13) await _createIllustrations(db);
+        if (oldVersion >= 13 && oldVersion < 14) {
+          await db.execute('ALTER TABLE illustration_generations '
+              "ADD COLUMN negative_prompt TEXT NOT NULL DEFAULT ''");
+        }
         if (oldVersion < 12) {
           final sessions = await db.rawQuery(
               "SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'");
