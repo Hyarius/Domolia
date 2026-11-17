@@ -10,6 +10,7 @@ import '../chat/narrative_tuning_editor.dart';
 import '../chat/narrator.dart';
 import '../chat/chat_protocol.dart';
 import '../logging/app_logger.dart';
+import '../illustration/image_preferences.dart';
 import 'book_cover_loader.dart';
 import 'book_definition.dart';
 import 'book_lore.dart';
@@ -25,12 +26,16 @@ class BookEditorPage extends StatefulWidget {
     required this.library,
     required this.ai,
     required this.onPlay,
+    this.initialTab = 0,
+    this.imagePreferences,
   });
 
   final BookDefinition book;
   final BookLibraryController library;
   final AiConnectionController ai;
   final Future<void> Function(BookDefinition book, BookSession session) onPlay;
+  final int initialTab;
+  final ImagePreferences? imagePreferences;
 
   @override
   State<BookEditorPage> createState() => BookEditorPageState();
@@ -49,12 +54,13 @@ class BookEditorPageState extends State<BookEditorPage> {
   int _editRevision = 0;
   int _savedRevision = 0;
   String? _profileId;
-  int _tab = 0;
+  late int _tab;
 
   @override
   void initState() {
     super.initState();
     _book = widget.book;
+    _tab = widget.initialTab;
     _title = TextEditingController(text: _book.title);
     _style = TextEditingController(text: _book.narrativeStyle);
     _keywords = TextEditingController(
