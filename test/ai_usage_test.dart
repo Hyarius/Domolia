@@ -56,11 +56,11 @@ void main() {
 
   test('Responses completed event meters Live Memory and diagnostics export', () {
     final exchange = _exchange(
-      'data: {"type":"response.output_text.delta","delta":"{}"}\\n'
+      'data: {"type":"response.output_text.delta","delta":"{}"}\n'
       'data: {"type":"response.completed","response":{"usage":{'
       '"input_tokens":1280,"output_tokens":820,"total_tokens":2100,'
       '"input_tokens_details":{"cached_tokens":120},'
-      '"output_tokens_details":{"reasoning_tokens":35}}}}\\n',
+      '"output_tokens_details":{"reasoning_tokens":35}}}}\n',
       stage: 'live_memory',
     );
     exchange.playerEventId = 101;
@@ -98,8 +98,8 @@ void main() {
 
   test('Incomplete Responses SSE does not invent a zero-token bill', () {
     final exchange = _exchange(
-      'data: {"type":"response.in_progress"}\\n'
-      'data: {"type":"response.failed","response":{"error":{}}}\\n',
+      'data: {"type":"response.in_progress"}\n'
+      'data: {"type":"response.failed","response":{"error":{}}}\n',
       stage: 'live_memory',
     );
     final record = AiUsageRecord.fromExchange('party', exchange);
