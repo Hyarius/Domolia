@@ -1,7 +1,7 @@
 {
   "format": "domolia-conversation-v1",
-  "exportedAtUtc": "2026-11-17T00:00:00.000Z",
-  "bookTitle": "Livre modèle - Le Port de Brume",
+  "exportedAtUtc": "2026-01-01T00:00:00.000Z",
+  "bookTitle": "Livre de démonstration",
   "sessionTitle": "Partie exemple",
   "selection": {
     "scope": "complete"
@@ -10,26 +10,22 @@
   "exportedEvents": 3,
   "events": [
     {
-      "id": 0,
-      "type": "message",
-      "speaker": "narrator",
-      "name": "Narrateur",
-      "text": "La pluie frappe les vitres."
-    },
-    {
       "id": 1,
       "type": "message",
       "speaker": "player",
       "name": "Vous",
-      "text": "Je promets de revenir avant minuit."
+      "text": "Je regarde l'horloge."
     },
     {
       "id": 2,
       "type": "message",
-      "speaker": "character",
-      "name": "Tomas",
-      "text": "Je vous attends.",
-      "status": "calme"
+      "speaker": "narrator",
+      "name": "Narrateur",
+      "text": "L'aiguille est immobile."
+    },
+    {
+      "id": 3,
+      "type": "scene_change"
     }
   ]
 }

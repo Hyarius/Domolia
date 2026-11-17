@@ -1,6 +1,6 @@
 # Domolia — Format portable des Livres
 
-> Modèles JSON complets et vérifiés : [`template/livre_template.json`](../../template/livre_template.json) (import direct) et [`template/README.md`](../../template/README.md) (autres formats).
+> Exemple prêt à importer : [`template/livre_template.json`](../../template/livre_template.json). Voir [tous les modèles JSON](../../template/README.md).
 
 ## Contrat v2 (Lore canonique)
 

@@ -1,39 +1,44 @@
-# Modèles des formats Domolia
+# Templates de formats Domolia
 
-Ce répertoire rassemble les modèles des formats réellement utilisés par Domolia. **Seul le Livre peut être importé directement.**
+Ce dossier contient des **exemples conformes aux formats actuellement utilisés** par Domolia, sans données privées.
 
-| Fichier | Utilisation | Import dans l'application |
+| Fichier | Usage | Importable ? |
 | --- | --- | --- |
-| `livre_template.json` | Livre complet `domolia.book` v2, avec Lore, personnages, lieux, scénario et événements | **Oui** : Livres → Importer JSON |
-| `lore_template.json` | Objet `lore` isolé, à intégrer au Livre | Non, fragment |
-| `narration_stream_template.ndjson` | Sortie du narrateur structuré, un objet par ligne | Non, sortie IA |
-| `conversation_template.json` | Export `domolia-conversation-v1` | Non, export en lecture seule |
-| `echange_ia_template.json` | Trace HTTP `domolia-ai-exchange-v1` | Non, diagnostic |
-| `diagnostic_ia_template.json` | Export agrégé `domolia-ai-pipeline-trace-v1` | Non, diagnostic |
-| `live_memory_operations_template.json` | Format de sortie IA de l'extracteur de mémoire | Non, sortie IA |
-| `app_logs_template.jsonl` | Journal applicatif, un objet JSON par ligne | Non, log |
+| `livre_template.json` | Définition portable d'un Livre v2 avec Lore et références | **Oui**, via Livres → Importer JSON |
+| `conversation_template.json` | Exemple d'export de conversation | **Non** : format d'export, pas de fonction d'import |
+| `diagnostic_ia_template.json` | Exemple d'export de diagnostic IA | **Non** : format d'export, pas de fonction d'import |
+| `narrateur_streaming_template.ndjson` | Exemples de messages structurés émis en streaming | **Non** : sortie du modèle, une ligne JSON par événement |
+| `lore_template.json` | Fragment Lore autonome identique au `lore` du Livre | **Non** : à insérer dans le Livre |
+| `echange_ia_template.json` | Un échange HTTP/SSE `domolia-ai-exchange-v1` | **Non** : diagnostic individuel |
+| `live_memory_operations_template.json` | JSON d'opérations renvoyé par l'extracteur Live Memory | **Non** : sortie de modèle IA |
+| `app_logs_template.jsonl` | Journal applicatif : un objet JSON par ligne | **Non** : export de logs |
 
-## Modèle de Livre
+## Règles importantes
 
-Copier `livre_template.json`, modifier `id`, `title`, `narrative`, `openingMessages` et `lore`, puis importer le JSON UTF-8. Conserver les champs exigés par `BookDefinition.importJson`.
+- Le format de Livre est `domolia.book` v2. Le champ `tags` au niveau du Livre n'accepte actuellement que `nsfw` ; les genres et thèmes vont dans `lore.global` et les tags libres des fiches de Lore.
+- `extensions` doit être un objet vide. `cover` peut être `null` ou un objet `{ "mime": "...", "base64": "..." }` contenant une vraie image PNG/JPEG/WebP.
+- Tous les champs des fiches de Lore sont obligatoires dans le JSON, même lorsqu'ils sont vides. Les références sont des identifiants de fiches existantes, jamais des noms.
+- Les scénarios et événements définissent un **cadre narratif**, pas des événements déjà survenus. La mémoire dynamique reste propre à chaque Partie.
+- Les dates et échanges dans les exports d'exemple sont **fictifs** ; ne pas les utiliser comme métriques de production.
+- Le streaming NDJSON ne doit pas contenir de message `player`. Un `scene_change` est un événement distinct.
 
-- `format` vaut **`domolia.book`**, `version` vaut **2**.
-- `id` : 1 à 100 caractères ASCII, lettres, chiffres, `_` ou `-`.
-- **`tags` au niveau du Livre accepte uniquement `"nsfw"`** actuellement ; les autres catégories sont des tags *de fiches de Lore*.
-- `cover: null` sans image ; sinon `mime` + `base64` d'une image PNG/JPEG/WebP réelle (taille limitée à 1 Mio).
-- `extensions` doit être **`{}`** : les extensions non vides sont refusées.
-- Tous les identifiants référencés dans le Lore doivent exister. Laisser `null` pour `homePlaceId` lorsqu'il n'y a pas de lieu.
-- Le Livre ne contient pas les Parties, les souvenirs dynamiques, les profils IA, ni les clés API.
+## Sources de vérité
 
-## Autres formats
+- `lib/books/book_definition.dart` et `lib/books/book_lore.dart` : schéma et validation des Livres.
+- `lib/chat/chat_exports.dart` : export conversation et diagnostic.
+- `lib/chat/chat_protocol.dart` : décodage NDJSON.
+- `docs/books/format.md` : contrat du Livre.
 
-- `.ndjson` et `.jsonl` = **un objet JSON par ligne**, pas un tableau JSON.
-- Les sorties du narrateur sont décodées par `ChatLineDecoder`. Les rôles IA autorisés sont `narrator` et `character`, jamais `player`.
-- Les opérations de mémoire sont validées par `LiveMemoryOperation.parse`, avec une citation `quote` exactement présente dans le texte du joueur ou dans la narration finalisée. L'exemple correspond à `Je promets de revenir avant minuit.`.
-- Les formats de conversation, d'échange IA et de diagnostic sont des **exports**. Aucune fonctionnalité de réimport de Partie ou de diagnostic n'existe à ce jour.
-- Dans `diagnostic_ia_template.json`, le statut `jsonified` est un **nom historique** de l'export pour un RAW validé, y compris avec le nouveau narrateur structuré. Il n'implique pas un deuxième appel IA.
-- Les diagnostics d'exemple sont fictifs et ne doivent jamais être remplacés par de vraies clés API.
+## Modèles complémentaires
 
-Le test `test/template_formats_test.dart` vérifie les modèles d'après les parseurs de production. Si un schéma évolue, mettre à jour **le modèle et son test**.
+Le fragment `lore_template.json` correspond exactement au champ `lore` du Livre importable. Il n'existe **pas** d'import autonome de Lore.
 
-Voir aussi : [format des Livres](../docs/books/format.md), [diagnostics](../docs/books/diagnostics.md), [Live Memory](../docs/live_memory.md).
+`live_memory_operations_template.json` démontre le contrat `LiveMemoryOperation.parse` : les champs `sourceSide` et `quote` doivent identifier une citation présente **à l'identique** dans la narration validée ou le message du joueur. L'exemple suppose un message joueur : « Je promets de revenir avant minuit. » ; ce n'est pas un export de souvenir stocké en base.
+
+`echange_ia_template.json` montre une trace HTTP factice avec les identifiants expurgés. Ces diagnostics ne doivent jamais contenir de vraies clés.
+
+`app_logs_template.jsonl` contient des entrées factices conforme au journal local (JSONL : un objet par ligne).
+
+Les exemples de conversation, diagnostics et mémoire **ne peuvent pas être importés** dans l'application : seuls les Livres portables le peuvent.
+
+**Maintenance :** mettre à jour ces exemples et leurs tests lorsqu'un format évolue. Les exports ne sont pas des fichiers à réimporter dans l'application.

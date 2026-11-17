@@ -1,169 +1,95 @@
 {
   "global": {
-    "universe": "Port de Brume",
-    "overview": "Une ville côtière. L'horloge du port est arrêtée.",
+    "universe": "Le Port des Brumes",
+    "overview": "Une petite cité portuaire dont l'ancienne horloge s'arrête chaque soir.",
     "genre": "Mystère",
-    "era": "Époque préindustrielle",
-    "initialContext": "Le joueur entre à l'auberge. Aucun objet ni promesse acquis.",
-    "history": "Le port possède des archives et une horloge ancienne.",
-    "rules": "Ne jamais jouer le personnage du joueur; distinguer rumeurs et faits.",
-    "conflicts": "Les habitants s'interrogent sur la panne.",
-    "directions": "Respecter les découvertes du joueur.",
-    "secrets": "Un mécanisme se trouve sous le quai; ne pas révéler sans le plan et la clé."
+    "era": "Époque industrielle fictive",
+    "initialContext": "Le joueur entre dans l'auberge. Il ne possède aucun objet de quête et n'a encore fait aucune promesse.",
+    "history": "L'horloge fut construite pour synchroniser les marées.",
+    "rules": "Ne pas imposer les actions du joueur. Les rumeurs ne deviennent pas des faits. Les secrets restent inconnus avant découverte.",
+    "conflicts": "Certains habitants pensent que l'horloge est maudite.",
+    "directions": "Permettre une enquête libre à travers les dialogues et les objets.",
+    "secrets": "La panne vient d'un mécanisme hydraulique caché. Ne pas révéler sans preuve."
   },
   "characters": [
     {
       "id": "tomas",
       "name": "Tomas",
-      "description": "Aubergiste prudent.",
-      "aliases": [
-        "le patron"
-      ],
-      "tags": [
-        "auberge"
-      ],
-      "secrets": "Le ticket bleu numéro 47 est dans un tiroir.",
-      "appearance": "Manteau gris.",
-      "personality": "Prudent.",
-      "background": "Vient du port.",
-      "role": "Aubergiste",
-      "motivations": "Protéger son auberge.",
-      "values": "Confiance.",
-      "relatedCharacterIds": [
-        "eline"
-      ],
+      "description": "Tenancier de l'auberge, témoin des arrêts de l'horloge.",
+      "aliases": [],
+      "tags": [],
+      "secrets": "Il conserve un ticket bleu numéro 47, mais ne le remet que s'il accepte.",
+      "appearance": "Tablier sombre et mains tachées d'encre.",
+      "personality": "Prudent et chaleureux.",
+      "background": "Ancien horloger.",
+      "role": "Tenancier",
+      "motivations": "Comprendre la panne.",
+      "values": "La parole donnée.",
+      "relatedCharacterIds": [],
       "homePlaceId": "auberge"
-    },
-    {
-      "id": "eline",
-      "name": "Éline Varre",
-      "description": "Archiviste du port.",
-      "aliases": [
-        "l'archiviste"
-      ],
-      "tags": [
-        "archives"
-      ],
-      "secrets": "Sa montre porte CUIVRE-318.",
-      "appearance": "Veste noire.",
-      "personality": "Méthodique.",
-      "background": "Formée aux Archives.",
-      "role": "Archiviste",
-      "motivations": "Comprendre l'horloge.",
-      "values": "Vérification.",
-      "relatedCharacterIds": [
-        "tomas"
-      ],
-      "homePlaceId": "archives"
     }
   ],
   "places": [
     {
       "id": "auberge",
-      "name": "Auberge du Phare",
-      "description": "Auberge face aux quais.",
+      "name": "L'Auberge du Cadran",
+      "description": "Point de départ de l'aventure.",
       "aliases": [],
       "tags": [],
-      "secrets": "",
-      "type": "Intérieur",
-      "atmosphere": "Pluie sur les vitres.",
-      "history": "Vieux bâtiment.",
+      "secrets": "Un compartiment est caché sous le comptoir.",
+      "type": "auberge",
+      "atmosphere": "Pluie, lampes à huile et odeur de café.",
+      "history": "Ancien relais de marins.",
       "features": "Une horloge arrêtée à 21 h 17.",
       "characterIds": [
         "tomas"
       ],
-      "placeIds": [
-        "archives"
-      ]
-    },
-    {
-      "id": "archives",
-      "name": "Archives du Port",
-      "description": "Plans et registres.",
-      "aliases": [],
-      "tags": [],
-      "secrets": "",
-      "type": "Bâtiment",
-      "atmosphere": "Papier ancien.",
-      "history": "Fondées après une tempête.",
-      "features": "Tiroirs de plans.",
-      "characterIds": [
-        "eline"
-      ],
-      "placeIds": [
-        "auberge"
-      ]
+      "placeIds": []
     }
   ],
   "scenarios": [
     {
       "id": "enquete",
-      "name": "Horloge immobile",
-      "description": "Enquête à choix libres.",
+      "name": "L'horloge immobile",
+      "description": "Enquête sur les arrêts de l'horloge.",
       "aliases": [],
       "tags": [],
-      "secrets": "Ne pas révéler le mécanisme avant sa découverte.",
-      "summary": "Comprendre le mystère.",
+      "secrets": "La cause est mécanique, pas surnaturelle.",
+      "summary": "Interroger Tomas, explorer le port et examiner les indices.",
       "importance": "main",
-      "initialContext": "Au début, le joueur est à l'auberge.",
-      "objectives": "Questionner et rassembler des indices.",
-      "introduction": "La pendule indique 21 h 17.",
-      "characterIds": [
-        "tomas",
-        "eline"
-      ],
-      "placeIds": [
-        "auberge",
-        "archives"
-      ],
-      "eventIds": [
-        "aveu",
-        "entree"
-      ]
-    }
-  ],
-  "events": [
-    {
-      "id": "aveu",
-      "name": "Un témoignage",
-      "description": "Tomas donne un témoignage incertain.",
-      "aliases": [],
-      "tags": [],
-      "secrets": "",
-      "trigger": "optional",
-      "condition": "Le joueur interroge Tomas.",
-      "mandatory": false,
-      "timing": "À l'auberge.",
-      "consequences": "Une rumeur est rapportée, sans preuve.",
-      "priority": 2,
+      "initialContext": "Le joueur arrive à l'auberge.",
+      "objectives": "Comprendre la panne sans forcer la progression.",
+      "introduction": "Une horloge immobile attire l'attention.",
       "characterIds": [
         "tomas"
       ],
       "placeIds": [
         "auberge"
       ],
-      "scenarioIds": [
-        "enquete"
+      "eventIds": [
+        "ticket"
       ]
-    },
+    }
+  ],
+  "events": [
     {
-      "id": "entree",
-      "name": "Accès secret",
-      "description": "Découverte possible de la maintenance.",
+      "id": "ticket",
+      "name": "Remise du ticket",
+      "description": "Tomas peut confier un ticket bleu numéro 47 au joueur.",
       "aliases": [],
       "tags": [],
-      "secrets": "Accès sous le quai.",
+      "secrets": "Le ticket donne accès à une consigne.",
       "trigger": "conditional",
-      "condition": "Le joueur possède effectivement le plan ET la clé.",
+      "condition": "Le joueur demande le ticket et Tomas accepte explicitement.",
       "mandatory": false,
-      "timing": "Après acquisition des deux objets.",
-      "consequences": "L'accès devient découvrable sans imposer une action au joueur.",
+      "timing": "Pendant une conversation avec Tomas.",
+      "consequences": "Le joueur possède alors le ticket bleu numéro 47, uniquement si la remise a été narrée.",
       "priority": 5,
       "characterIds": [
-        "eline"
+        "tomas"
       ],
       "placeIds": [
-        "archives"
+        "auberge"
       ],
       "scenarioIds": [
         "enquete"
