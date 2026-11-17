@@ -1,3 +1,4 @@
+// ignore_for_file: curly_braces_in_flow_control_structures
 import 'package:material_ui/material_ui.dart';
 
 import '../ai/ai_controller.dart';
@@ -212,7 +213,7 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
         else ...[
           DropdownButtonFormField<String>(
             key: const ValueKey('imageProviderProfile'),
-            value: _imageProfile?.id,
+            initialValue: _imageProfile?.id,
             decoration: const InputDecoration(labelText: 'Profil graphique'),
             items: [
               for (final p in widget.ai.profiles)
@@ -233,7 +234,7 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             key: const ValueKey('imageDirectorProfile'),
-            value: widget.ai.profiles.any(
+            initialValue: widget.ai.profiles.any(
                 (p) => p.id == _options.directorProfileId)
                 ? _options.directorProfileId : null,
             decoration: const InputDecoration(labelText: 'Metteur en scène IA'),
@@ -250,7 +251,7 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           if (_loadingModels) const LinearProgressIndicator(),
           DropdownButtonFormField<String>(
             key: const ValueKey('imageModel'),
-            value: model?.id,
+            initialValue: model?.id,
             decoration: const InputDecoration(labelText: 'Modèle graphique'),
             items: [
               for (final m in _models)
@@ -265,7 +266,7 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             key: const ValueKey('imageSize'),
-            value: formats.contains(_options.size) ? _options.size : null,
+            initialValue: formats.contains(_options.size) ? _options.size : null,
             decoration: const InputDecoration(labelText: 'Format / ratio'),
             items: [
               for (final size in formats)
@@ -279,7 +280,7 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             key: const ValueKey('imageQuality'),
-            value: quality == 'auto' ||
+            initialValue: quality == 'auto' ||
                 (model?.qualities.contains(quality) ?? false) ? quality : 'auto',
             decoration: const InputDecoration(labelText: 'Qualité'),
             items: [
@@ -295,7 +296,7 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
             key: const ValueKey('imageCount'),
-            value: _options.count <= (model?.maximumImages ?? 1)
+            initialValue: _options.count <= (model?.maximumImages ?? 1)
                 ? _options.count : 1,
             decoration: const InputDecoration(labelText: 'Nombre d’images'),
             items: [

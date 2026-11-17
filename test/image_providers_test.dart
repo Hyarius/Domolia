@@ -1,3 +1,4 @@
+// ignore_for_file: prefer_interpolation_to_compose_strings, curly_braces_in_flow_control_structures
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -141,7 +142,7 @@ void main() {
   test('Oversized response rejected', () async {
     final provider=OpenAiImageGenerationProvider(client:MockClient(
       (_) async => http.Response('{"data":[{"b64_json":"' +
-        'A' * (23*1024*1024) + '"}]}',200)));
+        List.filled(23*1024*1024, 'A').join() + '"}]}',200)));
     await expectLater(provider.generate(
       const ImageGenerationRequest(model:'gpt-image-2',prompt:'Harbor'),
       apiKey:'key',

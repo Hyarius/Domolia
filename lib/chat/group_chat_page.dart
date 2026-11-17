@@ -403,7 +403,9 @@ class _GroupChatPageState extends State<GroupChatPage> {
   Future<void> _generateImage(int intentId) async {
     final illustrations = widget.illustrations;
     if (illustrations == null || illustrations.isBusy(intentId) ||
-        _imageDialogOpen) return;
+        _imageDialogOpen) {
+      return;
+    }
     _imageDialogOpen = true;
     try {
       final accepted = await showDialog<bool>(

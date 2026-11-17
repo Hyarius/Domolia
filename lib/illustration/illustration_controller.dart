@@ -1,3 +1,4 @@
+// ignore_for_file: prefer_interpolation_to_compose_strings, curly_braces_in_flow_control_structures
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
