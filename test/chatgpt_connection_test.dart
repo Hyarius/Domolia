@@ -143,6 +143,7 @@ void main() {
         final payload = jsonDecode(request.body) as Map<String, dynamic>;
         expect(payload['stream'], true);
         expect(payload['store'], false);
+        expect(payload.containsKey('max_output_tokens'), false);
         expect(payload['input'], isA<List>());
         return http.Response(
           'data: {"type":"response.output_text.delta","delta":"Bonjour"}\n\n'
@@ -194,7 +195,7 @@ void main() {
       )),
     );
   });
-  test('Responses API forwards task budget and reasoning, not credentials', () async {
+  test('OSS Responses omits unsupported budget, preserves reasoning', () async {
     final bodies = <Map<String, dynamic>>[];
     final provider = ChatGptResponsesProvider(
       client: MockClient((request) async {
@@ -225,11 +226,134 @@ void main() {
       outputs.add(chunks.map((chunk) => chunk.text).join());
     }
     expect(outputs, ['Reponse', 'Reponse', 'Reponse']);
-    expect(bodies.map((b) => b['max_output_tokens']), [8192, 4096, 16384]);
+    expect(bodies.every((b) => !b.containsKey('max_output_tokens')), true);
     expect((bodies[0]['reasoning'] as Map)['effort'], 'low');
     expect((bodies[1]['reasoning'] as Map)['effort'], 'none');
     expect(bodies[2].containsKey('reasoning'), false);
     expect(jsonEncode(bodies), isNot(contains('test-secret')));
+  });
+
+  test('OSS Responses puts system guidance into instructions', () async {
+    final provider = ChatGptResponsesProvider(
+      client: MockClient((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['instructions'], 'Consigne A\n\nConsigne B');
+        expect(body['input'], [
+          {'role': 'user', 'content': 'Bonjour'},
+        ]);
+        expect(body.containsKey('max_output_tokens'), false);
+        return http.Response(
+          'data: {"type":"response.output_text.delta","delta":"Salut"}\n\n'
+          'data: {"type":"response.completed","response":{}}\n\n',
+          200,
+        );
+      }),
+    );
+    final answer = await provider.complete(
+      const AiConfiguration(
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'test-model', apiKey: 'test-secret',
+      ),
+      messages: const [
+        AiMessage(role: 'system', content: 'Consigne A'),
+        AiMessage(role: 'user', content: 'Bonjour'),
+        AiMessage(role: 'system', content: 'Consigne B'),
+      ],
+    );
+    expect(answer, 'Salut');
+  });
+
+  test('Same tool protocol works over Responses and feeds result back', () async {
+    final recorded = <Map<String, dynamic>>[];
+    final provider = ChatGptResponsesProvider(
+      client: MockClient((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        recorded.add(body);
+        expect(body['store'], false);
+        expect(body['stream'], true);
+        expect(body.containsKey('max_output_tokens'), false);
+        expect(body['instructions'], 'Recherche le lore pertinent.');
+        if (recorded.length == 1) {
+          expect(body['input'], [
+            {'role': 'user', 'content': 'Trouve le dragon.'},
+          ]);
+          final namespace = (body['tools'] as List).single as Map;
+          expect(namespace['type'], 'namespace');
+          expect(namespace['name'], 'domolia');
+          expect((namespace['tools'] as List).single['name'], 'lore');
+          return http.Response(
+            'data: {"type":"response.output_item.added",'
+            '"output_index":1,"item":{"type":"function_call",'
+            '"call_id":"call1","namespace":"domolia",'
+            '"name":"lore","arguments":""}}\n\n'
+            'data: {"type":"response.function_call_arguments.delta",'
+            '"output_index":1,"delta":"{\"query\":"}\n\n'
+            'data: {"type":"response.function_call_arguments.delta",'
+            '"output_index":1,"delta":"\"dragon\"}"}\n\n'
+            'data: {"type":"response.output_item.done",'
+            '"output_index":1,"item":{"type":"function_call",'
+            '"call_id":"call1","name":"lore","arguments":"{\"query\":\"dragon\"}"}}\n\n'
+            'data: {"type":"response.completed","response":{"usage":'
+            '{"input_tokens":8,"output_tokens":4}}}\n\n',
+            200,
+          );
+        }
+        expect(body.containsKey('tools'), false);
+        final input = body['input'] as List;
+        expect(input[1], {
+          'type': 'function_call', 'namespace': 'domolia',
+          'call_id': 'call1', 'name': 'lore',
+          'arguments': '{"query":"dragon"}',
+        });
+        expect(input[2], {
+          'type': 'function_call_output',
+          'call_id': 'call1',
+          'output': '{"name":"Aile rouge"}',
+        });
+        return http.Response(
+          'data: {"type":"response.output_text.delta",'
+          '"delta":"Le dragon est rouge."}\n\n'
+          'data: {"type":"response.completed",'
+          '"response":{"usage":{"input_tokens":12,"output_tokens":7}}}\n\n',
+          200,
+        );
+      }),
+    );
+    const config = AiConfiguration(baseUrl: 'https://api.openai.com/v1',
+        model: 'test-model', apiKey: 'test-secret');
+    const definitions = [
+      AiToolDefinition('lore', 'Chercher le lore', {
+        'type': 'object',
+        'properties': {'query': {'type': 'string'}},
+        'required': ['query'],
+      }),
+    ];
+    final first = await provider.streamToolChat(config, messages: const [
+      AiToolMessage(role: 'system', content: 'Recherche le lore pertinent.'),
+      AiToolMessage(role: 'user', content: 'Trouve le dragon.'),
+    ], tools: definitions).toList();
+    expect(first.where((v) => v.callIndex != null).length, 4);
+    expect(first.where((v) => v.callName != null).first.callName, 'lore');
+    expect(first.where((v) => v.argumentsDelta != null)
+        .map((v) => v.argumentsDelta).join(), '{"query":"dragon"}');
+    expect(first.last.finishReason, 'tool_calls');
+    expect(first.last.promptTokens, 8);
+
+    final second = await provider.streamToolChat(config, messages: const [
+      AiToolMessage(role: 'system', content: 'Recherche le lore pertinent.'),
+      AiToolMessage(role: 'user', content: 'Trouve le dragon.'),
+      AiToolMessage(role: 'assistant', calls: [
+        AiToolInvocation(
+          id: 'call1', name: 'lore', arguments: '{"query":"dragon"}'),
+      ]),
+      AiToolMessage(role: 'tool', toolCallId: 'call1',
+          content: '{"name":"Aile rouge"}'),
+    ], tools: []).toList();
+    expect(second.map((v) => v.text).join(), 'Le dragon est rouge.');
+    expect(second.last.finishReason, 'stop');
+    expect(second.last.promptTokens, 12);
+    expect(recorded.length, 2);
+    expect(jsonEncode(recorded), isNot(contains('test-secret')));
   });
 
   test('Bad budgets and effort are rejected before an HTTP request', () async {
