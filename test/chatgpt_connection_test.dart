@@ -281,20 +281,45 @@ void main() {
           expect(namespace['type'], 'namespace');
           expect(namespace['name'], 'domolia');
           expect((namespace['tools'] as List).single['name'], 'lore');
+          final events = [
+            {
+              'type': 'response.output_item.added',
+              'output_index': 1,
+              'item': {
+                'type': 'function_call',
+                'call_id': 'call1',
+                'namespace': 'domolia',
+                'name': 'lore',
+                'arguments': '',
+              },
+            },
+            {
+              'type': 'response.function_call_arguments.delta',
+              'output_index': 1,
+              'delta': '{"query":',
+            },
+            {
+              'type': 'response.function_call_arguments.delta',
+              'output_index': 1,
+              'delta': '"dragon"}',
+            },
+            {
+              'type': 'response.output_item.done',
+              'output_index': 1,
+              'item': {
+                'type': 'function_call',
+                'call_id': 'call1',
+                'name': 'lore',
+                'arguments': '{"query":"dragon"}',
+              },
+            },
+            {
+              'type': 'response.completed',
+              'response': {'usage': {'input_tokens': 8, 'output_tokens': 4}},
+            },
+          ];
           return http.Response(
-            'data: {"type":"response.output_item.added",'
-            '"output_index":1,"item":{"type":"function_call",'
-            '"call_id":"call1","namespace":"domolia",'
-            '"name":"lore","arguments":""}}\n\n'
-            'data: {"type":"response.function_call_arguments.delta",'
-            '"output_index":1,"delta":"{\"query\":"}\n\n'
-            'data: {"type":"response.function_call_arguments.delta",'
-            '"output_index":1,"delta":"\"dragon\"}"}\n\n'
-            'data: {"type":"response.output_item.done",'
-            '"output_index":1,"item":{"type":"function_call",'
-            '"call_id":"call1","name":"lore","arguments":"{\"query\":\"dragon\"}"}}\n\n'
-            'data: {"type":"response.completed","response":{"usage":'
-            '{"input_tokens":8,"output_tokens":4}}}\n\n',
+            events.map((event) => 'data: ${jsonEncode(event)}\n\n').join(),
             200,
           );
         }
