@@ -3,60 +3,44 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// No credentials or book canon are stored here, only profile references.
+/// API-only image configuration. Art direction and output format live in a
+/// portable BookDefinition instead of global or per-Party preferences.
 class ImageGenerationOptions {
   const ImageGenerationOptions({
     this.profileId = '',
     this.directorProfileId = '',
     this.model = '',
-    this.size = '1024x1024',
-    this.quality,
-    this.style = 'illustration cinématographique',
-    this.count = 1,
-    this.maximumCostUsd,
   });
-  final String profileId, directorProfileId, model, size, style;
-  final String? quality;
-  final int count;
-  final double? maximumCostUsd;
+  final String profileId, directorProfileId, model;
 
   ImageGenerationOptions copyWith({
     String? profileId, String? directorProfileId, String? model,
-    String? size, String? quality, bool clearQuality = false,
-    String? style, int? count, double? maximumCostUsd,
-    bool clearMaximumCost = false,
   }) => ImageGenerationOptions(
     profileId: profileId ?? this.profileId,
     directorProfileId: directorProfileId ?? this.directorProfileId,
     model: model ?? this.model,
-    size: size ?? this.size,
-    quality: clearQuality ? null : quality ?? this.quality,
-    style: style ?? this.style,
-    count: count ?? this.count,
-    maximumCostUsd: clearMaximumCost ? null
-        : maximumCostUsd ?? this.maximumCostUsd,
   );
 
-  Map<String, dynamic> toJson() => {
-    'profileId': profileId, 'directorProfileId': directorProfileId,
-    'model': model, 'size': size, 'quality': quality, 'style': style,
-    'count': count, 'maximumCostUsd': maximumCostUsd,
+  Map<String, Object?> toJson() => {
+    'profileId': profileId,
+    'directorProfileId': directorProfileId,
+    'model': model,
   };
 
   factory ImageGenerationOptions.fromJson(Object? value) {
-    if (value is! Map<String, dynamic>) {
-      throw const FormatException('Options d’illustration invalides.');
+    if (value is! Map<String, dynamic> ||
+        (value['profileId'] != null && value['profileId'] is! String) ||
+        (value['directorProfileId'] != null &&
+            value['directorProfileId'] is! String) ||
+        (value['model'] != null && value['model'] is! String)) {
+      throw const FormatException('Configuration API des images invalide.');
     }
-    final cost = value['maximumCostUsd'];
+    // Legacy preview installs may have style/size/quality/count keys.
+    // They are intentionally ignored; those choices now belong to the Book.
     final result = ImageGenerationOptions(
       profileId: value['profileId'] as String? ?? '',
       directorProfileId: value['directorProfileId'] as String? ?? '',
       model: value['model'] as String? ?? '',
-      size: value['size'] as String? ?? '1024x1024',
-      quality: value['quality'] as String?,
-      style: value['style'] as String? ?? 'illustration cinématographique',
-      count: value['count'] as int? ?? 1,
-      maximumCostUsd: cost is num ? cost.toDouble() : null,
     );
     result.validate();
     return result;
@@ -64,13 +48,8 @@ class ImageGenerationOptions {
 
   void validate() {
     if (profileId.length > 150 || directorProfileId.length > 150 ||
-        model.length > 100 || size.length > 30 ||
-        style.trim().isEmpty || style.length > 160 ||
-        count < 1 || count > 4 ||
-        (quality != null && quality!.length > 30) ||
-        (maximumCostUsd != null &&
-            (maximumCostUsd! <= 0 || maximumCostUsd! > 100))) {
-      throw const FormatException('Options de génération d’images invalides.');
+        model.length > 100) {
+      throw const FormatException('Configuration API des images invalide.');
     }
   }
 }
