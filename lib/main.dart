@@ -300,14 +300,23 @@ class _HomePageState extends State<HomePage> {
     unawaited(_navigateTo(_Page.books));
   }
 
-  void _openBook(BookDefinition book) {
+  int _bookEditorInitialTab = 0;
+
+  void _openBook(BookDefinition book, {int initialTab = 0}) {
     unawaited(_ai.initialize());
     setState(() {
       _history.add(_page);
       _selectedBookId = book.id;
+      _bookEditorInitialTab = initialTab;
       _bookEditorKey = GlobalKey<BookEditorPageState>();
       _page = _Page.book;
     });
+  }
+
+  void _openCurrentBookLore() {
+    final bookId = _selectedBookId;
+    final book = bookId == null ? null : _books.byId(bookId);
+    if (book != null) _openBook(book, initialTab: 1);
   }
 
   Future<void> _createBookFromHome() async {
@@ -540,6 +549,8 @@ class _HomePageState extends State<HomePage> {
           records: store,
           timeline: () => _chat.timeline,
           lore: () => _books.byId(book.id)?.lore ?? book.lore,
+          visualSettings: () => _books.byId(book.id)?.illustrationSettings ??
+              book.illustrationSettings,
           memory: () => _liveMemory?.facts ?? const [],
           awaitNarrativeWrites: () => _awaitSessionWrites?.call()
               ?? Future<void>.value(),
@@ -622,6 +633,13 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         actions: [
+          if (_page == _Page.chat && _selectedBookId != null)
+            IconButton(
+              key: const ValueKey('chatBookLoreAppBar'),
+              tooltip: 'Lore du Livre',
+              onPressed: _openCurrentBookLore,
+              icon: const Icon(Icons.auto_stories_outlined),
+            ),
           if (_page == _Page.chat)
             IconButton(
               key: const ValueKey('chatSettingsAppBar'),
@@ -651,6 +669,8 @@ class _HomePageState extends State<HomePage> {
               ? BookEditorPage(
                   key: _bookEditorKey,
                   book: _books.byId(_selectedBookId!)!,
+                  initialTab: _bookEditorInitialTab,
+                  imagePreferences: _imagePreferences,
                   library: _books,
                   ai: _ai,
                   onPlay: _openBookSession,
@@ -869,7 +889,7 @@ class _HomePageState extends State<HomePage> {
           key: const ValueKey('settingsImages'),
           leading: const Icon(Icons.brush_outlined, color: DomoliaColors.gold),
           title: const Text('Génération d’images'),
-          subtitle: const Text('Fournisseur, modèle, cadrage et style'),
+          subtitle: const Text('Fournisseur, modèle et metteur en scène IA'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => _openImageSettings(),
         ),
