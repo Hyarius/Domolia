@@ -7,6 +7,7 @@ import '../ai/ai_controller.dart';
 import '../ai/ai_provider.dart';
 import '../ai/ai_usage.dart';
 import '../books/book_lore.dart';
+import '../books/book_definition.dart';
 import '../chat/chat_protocol.dart';
 import '../memory/live_memory.dart';
 import 'illustration_records.dart';
@@ -30,6 +31,7 @@ class IllustrationController extends ChangeNotifier {
     required this.records,
     required this.timeline,
     required this.lore,
+    this.visualSettings,
     required this.memory,
     required this.awaitNarrativeWrites,
     required this.files,
@@ -44,6 +46,7 @@ class IllustrationController extends ChangeNotifier {
   final IllustrationRecordStore records;
   final List<ChatTimelineEvent> Function() timeline;
   final BookLore Function() lore;
+  final BookIllustrationSettings Function()? visualSettings;
   final Iterable<LiveMemoryFact> Function() memory;
   final Future<void> Function() awaitNarrativeWrites;
   final LocalIllustrationFiles files;
@@ -195,6 +198,8 @@ class IllustrationController extends ChangeNotifier {
       );
       final options = await preferences.forSession(sessionId);
       options.validate();
+      final art = visualSettings?.call() ?? const BookIllustrationSettings();
+      art.validate();
       final profiles = ai.profiles.where((e) => e.id == options.profileId);
       if (profiles.isEmpty || options.model.isEmpty) {
         throw StateError('Configurez un profil et un modèle graphique.');
@@ -209,7 +214,7 @@ class IllustrationController extends ChangeNotifier {
       final imageProvider = _provider(providerId);
       // Price estimates are deliberately null until an actual, reliable
       // maximum cost is provided by the selected backend.
-      if (options.maximumCostUsd != null) {
+      if (art.maximumCostUsd != null) {
         throw StateError('Plafond strict impossible : coût maximal inconnu. '
             'Désactivez le plafond ou choisissez un modèle à prix garanti.');
       }
@@ -236,9 +241,11 @@ class IllustrationController extends ChangeNotifier {
       );
       await _directionUsage(start: start, failed: false);
       directorRecorded = true;
-      final prompt = validatedImagePrompt(scene, direction, style: options.style);
+      final prompt = validatedImagePrompt(scene, direction,
+          style: art.style, negativePrompt: art.negativePrompt);
       current = current.copyWith(
-          state: IllustrationJobState.generating, prompt: prompt);
+          state: IllustrationJobState.generating, prompt: prompt,
+          negativePrompt: art.negativePrompt);
       if (!await records.saveIllustrationIfCurrent(current)) {
         throw StateError('Scène invalidée avant la génération.');
       }
@@ -249,8 +256,8 @@ class IllustrationController extends ChangeNotifier {
       providerInvoked = true;
       final result = await imageProvider.generate(
         ImageGenerationRequest(
-          model: options.model, prompt: prompt, size: options.size,
-          quality: options.quality, count: options.count,
+          model: options.model, prompt: prompt, size: art.size,
+          quality: art.quality, count: art.count,
         ),
         apiKey: profile.apiKey,
       );
