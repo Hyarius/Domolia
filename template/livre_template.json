@@ -125,6 +125,7 @@
     "count": 1,
     "style": "illustration cinématographique, aquarelle sombre et lumière diffuse",
     "negativePrompt": "texte incrusté, sous-titres, bulles de dialogue, signatures, filigranes, logos, interface utilisateur",
-    "maximumCostUsd": null
+    "maximumCostUsd": null,
+    "coverPrompt": "Vue verticale de l'Auberge du Cadran sous la pluie, une horloge ancienne arrêtée visible à travers une fenêtre éclairée, ambiance portuaire mystérieuse, sans inscriptions ni texte."
   }
 }
