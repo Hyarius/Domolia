@@ -753,15 +753,17 @@ class NarrativeChatController extends ChangeNotifier {
     var resultCharacters = 0;
     var totalPrompt = 0, totalCompletion = 0;
     var cycles = 0;
+    var toolsExhaustedNotified = false;
     for (var round = 0; round < 4; round++) {
       _check(token);
       final allowed = cycles < 2
           ? NarrativeReferenceTools.definitions
           : const <AiToolDefinition>[];
-      if (allowed.isEmpty) {
-        context.add(const AiToolMessage(role: 'system',
-            content: 'Budget de consultation épuisé. '
-                'Termine la réponse narrative sans nouvel outil.'));
+      if (allowed.isEmpty && !toolsExhaustedNotified) {
+        toolsExhaustedNotified = true;
+        context[0] = AiToolMessage(role: 'system',
+            content: '${context.first.content}\n'
+                'Budget de consultation épuisé : termine sans nouvel outil.');
       }
       final before = diagnostics?.last;
       _ToolTurn? turn;
