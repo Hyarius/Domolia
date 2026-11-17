@@ -498,6 +498,7 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
     }
 
     var done = false;
+    String? finishReason;
     var receivedText = 0;
     try {
       await for (final line in response.stream
@@ -547,6 +548,9 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
         if (choices is! List || choices.isEmpty) continue;
         final first = choices.first;
         if (first is! Map<String, dynamic>) continue;
+        if (first['finish_reason'] is String) {
+          finishReason = first['finish_reason'] as String;
+        }
         final delta = first['delta'];
         if (delta is! Map<String, dynamic>) continue;
         final text = delta['content'];
@@ -561,6 +565,11 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
       if (!done) {
         throw const AiProviderException(
           'Le flux IA s’est interrompu avant la fin de la réponse.',
+        );
+      }
+      if (finishReason == 'length' || finishReason == 'content_filter') {
+        throw const AiProviderException(
+          'La réponse narrative est incomplète ou a été filtrée. Réessayez.',
         );
       }
     } on AiProviderException {
@@ -674,6 +683,7 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
     }
 
     var done = false;
+    String? finishReason;
     var totalBytes = 0;
     await for (final line in response.stream
         .map((bytes) {
@@ -717,9 +727,8 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
       final choice = choices.first;
       if (choice is! Map<String, dynamic>) continue;
       if (choice['finish_reason'] is String) {
-        yield AiToolStreamChunk(
-          finishReason: choice['finish_reason'] as String,
-        );
+        finishReason = choice['finish_reason'] as String;
+        yield AiToolStreamChunk(finishReason: finishReason);
       }
       final delta = choice['delta'];
       if (delta is! Map<String, dynamic>) continue;
@@ -745,6 +754,11 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
     }
     if (!done) {
       throw const AiProviderException('Flux IA incomplet : outils non exécutés.');
+    }
+    if (finishReason == 'length' || finishReason == 'content_filter') {
+      throw const AiProviderException(
+        'La réponse narrative est incomplète ou a été filtrée. Réessayez.',
+      );
     }
   }
 

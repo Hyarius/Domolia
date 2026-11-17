@@ -648,6 +648,9 @@ class NarrativeChatController extends ChangeNotifier {
     _done = null;
     _check(token);
     if (failure != null) throw failure!;
+    if (finishReason == 'length' || finishReason == 'content_filter') {
+      throw const FormatException('Le modèle a interrompu sa narration. Réessayez.');
+    }
     if (fragments.isNotEmpty && finishReason != 'tool_calls') {
       throw const FormatException('Appel de fonction incomplet.');
     }
