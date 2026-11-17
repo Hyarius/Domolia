@@ -13,6 +13,7 @@ class BookIllustrationSettings {
     this.count = 1,
     this.style = 'illustration cinématographique',
     this.negativePrompt = defaultNegativePrompt,
+    this.coverPrompt = defaultCoverPrompt,
     this.maximumCostUsd,
   });
 
@@ -20,6 +21,10 @@ class BookIllustrationSettings {
       'texte imprimé dans l’image, sous-titres, bulles de dialogue, '
       'légendes, filigranes, signatures, interface utilisateur, '
       'lettres et mots flottants';
+  static const defaultCoverPrompt =
+      'Une scène emblématique de l’univers du Livre, avec un cadrage '
+      'cinématographique vertical et une atmosphère immersive, '
+      'sans titre ni texte incrusté.';
   static const supportedSizes = [
     '1024x1024', '1024x1536', '1536x1024',
     '512x512', '1024x1792', '1792x1024', 'auto',
@@ -28,7 +33,7 @@ class BookIllustrationSettings {
     'low', 'medium', 'high', 'xhigh', 'max',
   ];
 
-  final String size, style, negativePrompt;
+  final String size, style, negativePrompt, coverPrompt;
   final String? quality;
   final int count;
   /// A hard spending limit cannot be enforced without a reliable quote.
@@ -37,13 +42,14 @@ class BookIllustrationSettings {
   BookIllustrationSettings copyWith({
     String? size, String? quality, bool clearQuality = false,
     int? count, String? style, String? negativePrompt,
-    double? maximumCostUsd, bool clearMaximumCost = false,
+    String? coverPrompt, double? maximumCostUsd, bool clearMaximumCost = false,
   }) => BookIllustrationSettings(
     size: size ?? this.size,
     quality: clearQuality ? null : quality ?? this.quality,
     count: count ?? this.count,
     style: style ?? this.style,
     negativePrompt: negativePrompt ?? this.negativePrompt,
+    coverPrompt: coverPrompt ?? this.coverPrompt,
     maximumCostUsd: clearMaximumCost ? null
         : maximumCostUsd ?? this.maximumCostUsd,
   );
@@ -54,6 +60,7 @@ class BookIllustrationSettings {
     'count': count,
     'style': style,
     'negativePrompt': negativePrompt,
+    'coverPrompt': coverPrompt,
     'maximumCostUsd': maximumCostUsd,
   };
 
@@ -62,7 +69,7 @@ class BookIllustrationSettings {
     if (value is! Map<String, dynamic> ||
         value.keys.any((key) => !const {
           'size', 'quality', 'count', 'style',
-          'negativePrompt', 'maximumCostUsd',
+          'negativePrompt', 'coverPrompt', 'maximumCostUsd',
         }.contains(key)) ||
         (value['size'] != null && value['size'] is! String) ||
         (value['quality'] != null && value['quality'] is! String) ||
@@ -70,6 +77,8 @@ class BookIllustrationSettings {
         (value['style'] != null && value['style'] is! String) ||
         (value['negativePrompt'] != null &&
             value['negativePrompt'] is! String) ||
+        (value['coverPrompt'] != null &&
+            value['coverPrompt'] is! String) ||
         (value['maximumCostUsd'] != null &&
             value['maximumCostUsd'] is! num)) {
       throw const FormatException('Configuration d’illustrations invalide.');
@@ -82,6 +91,8 @@ class BookIllustrationSettings {
           'illustration cinématographique',
       negativePrompt: value['negativePrompt'] as String? ??
           defaultNegativePrompt,
+      coverPrompt: value['coverPrompt'] as String? ??
+          defaultCoverPrompt,
       maximumCostUsd: (value['maximumCostUsd'] as num?)?.toDouble(),
     );
     result.validate();
@@ -94,6 +105,7 @@ class BookIllustrationSettings {
         count < 1 || count > 4 ||
         style.trim().isEmpty || style.length > 160 ||
         negativePrompt.length > 1500 ||
+        coverPrompt.trim().isEmpty || coverPrompt.length > 2000 ||
         (maximumCostUsd != null &&
             (maximumCostUsd! <= 0 || maximumCostUsd! > 100))) {
       throw const FormatException('Paramètres artistiques du Livre invalides.');
