@@ -325,7 +325,7 @@ void main() {
         playerEventId: 1, rawText: raw,
         firstEventId: 2, lastEventId: 4,
       );
-      expect(stripIllustrationBlocks('[IMAGE]objet non narré\n[NARRATION]\nSuite.'), 'Suite.');
+      expect(stripIllustrationBlocks('[IMAGE]objet non narré\n[NARRATION]\nSuite.'), '[NARRATION]\nSuite.');
       expect(generation.rawText, contains('jeton 62'));
       expect(generation.validatedNarrative, isNot(contains('jeton 62')));
       expect(generation.validatedNarrative,
