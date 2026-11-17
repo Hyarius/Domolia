@@ -169,6 +169,15 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('imageGenerate')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('imageConfirmGenerate')));
+    await tester.pump();
+    // Indeterminate progress indicators schedule endless frames.
+    // Wait for real asynchronous file IO outside FakeAsync before settling.
+    await tester.runAsync(() async {
+      final deadline = DateTime.now().add(const Duration(seconds: 10));
+      while (images.isBusy(2) && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
     await tester.pumpAndSettle();
     expect(image.calls,1);
     expect(find.byKey(const ValueKey('chatGeneratedImage')),findsOneWidget);
