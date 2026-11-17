@@ -295,8 +295,8 @@ class NarrativeReferenceTools {
       throw const FormatException('Invalid global Lore section or offset');
     }
     final value = fields[section] as String;
-    final start = offset.clamp(0, value.length);
-    final end = (start + 2600).clamp(0, value.length);
+    final start = offset.clamp(0, value.length).toInt();
+    final end = (start + 2600).clamp(0, value.length).toInt();
     return jsonEncode({
       'source': 'book_canon',
       'section': section,
