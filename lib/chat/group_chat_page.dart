@@ -272,9 +272,10 @@ class _GroupChatPageState extends State<GroupChatPage> {
       await showModalBottomSheet<void>(
       context: context,
       builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             ListTile(
               title: Text(isPlayer ? 'Mon message' : entry.name),
               subtitle: Text(entry.text,
@@ -383,6 +384,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
                 ),
             ],
           ],
+        ),
         ),
       ),
       );

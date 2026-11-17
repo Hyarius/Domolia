@@ -15,6 +15,7 @@ import 'package:domolia/chat/theatrical_narrator_protocol.dart';
 import 'package:domolia/chat/theatrical_script_decoder.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 const _config = AiConfiguration(
@@ -421,6 +422,193 @@ void main() {
       expect(theatricalIllustrationInstruction, contains('au plus un'));
       expect(theatricalIllustrationInstruction, contains('secrets'));
     });
+  });
+
+  group('Manual [IMAGE] intent', () {
+    test('inserts after chosen AI bubble, preserves RAW and avoids duplicates',
+        () async {
+      final provider = _ScriptProvider('[NARRATION]\nUnused.');
+      List<ChatTimelineEvent>? saved;
+      List<RawGeneration>? savedRaw;
+      final chat = _chat(provider, IllustrationMode.disabled,
+          save: (timeline, raw) async {
+            saved = List.of(timeline);
+            savedRaw = List.of(raw);
+          });
+      addTearDown(chat.dispose);
+      chat.restoreTimeline(const [
+        ChatEntry(id: 1, speaker: ChatSpeaker.player,
+            name: 'Vous', text: 'Je les observe.'),
+        ChatEntry(id: 2, speaker: ChatSpeaker.narrator,
+            name: 'Narrateur', text: 'Soren referme lentement le tiroir.'),
+        ChatEntry(id: 3, speaker: ChatSpeaker.character,
+            name: 'Soren', text: '« Une simple rumeur. »'),
+        ChatEntry(id: 4, speaker: ChatSpeaker.player,
+            name: 'Vous', text: 'Je patiente.'),
+        ChatEntry(id: 5, speaker: ChatSpeaker.narrator,
+            name: 'Narrateur', text: 'Le silence retombe.'),
+      ], rawGenerations: const [
+        RawGeneration(playerEventId: 1,
+            rawText: '[NARRATION]\nSoren referme lentement le tiroir.',
+            compactText: 'Soren referme lentement le tiroir.',
+            firstEventId: 2, lastEventId: 3),
+      ]);
+      expect(chat.canIllustrateMessage(2), isTrue);
+      expect(await chat.illustrateMessage(2), isTrue);
+      expect(chat.timeline.map((e) => e.id),
+          [1, 2, 6, 3, 4, 5]);
+      final intent = chat.timeline[2] as ChatIllustrationIntent;
+      expect(intent.playerEventId, 1);
+      expect(intent.description, 'Soren referme lentement le tiroir.');
+      expect(intent.state, IllustrationIntentState.proposed);
+      expect(saved, hasLength(6));
+      expect(savedRaw!.single.rawText, contains('Soren referme'));
+      expect(chat.rawGenerations.single.rawText, contains('[NARRATION]'));
+      expect(chat.canIllustrateMessage(2), isFalse);
+      expect(await chat.illustrateMessage(2), isFalse);
+      expect(provider.calls, 0);
+      expect(await chat.illustrateMessage(3), isTrue);
+      expect(chat.timeline[4], isA<ChatIllustrationIntent>());
+      expect((chat.timeline[4] as ChatIllustrationIntent).playerEventId, 1);
+      expect(await chat.illustrateMessage(5), isTrue);
+      expect((chat.timeline.last as ChatIllustrationIntent).playerEventId, 4);
+    });
+
+    test('rejects opening and player texts; truncates long descriptions', () async {
+      final chat = _chat(_ScriptProvider('[NARRATION]\nUnused.'),
+          IllustrationMode.suggestions);
+      addTearDown(chat.dispose);
+      chat.restoreTimeline([
+        const ChatEntry(id: 0, speaker: ChatSpeaker.narrator,
+            name: 'Narrateur', text: 'Introduction.'),
+        const ChatEntry(id: 1, speaker: ChatSpeaker.player,
+            name: 'Vous', text: 'Je regarde.'),
+        ChatEntry(id: 2, speaker: ChatSpeaker.narrator,
+            name: 'Narrateur', text: List.filled(520, 'A').join()),
+      ]);
+      expect(chat.canIllustrateMessage(0), isFalse);
+      expect(chat.canIllustrateMessage(1), isFalse);
+      expect(chat.canIllustrateMessage(2), isTrue);
+      expect(await chat.illustrateMessage(2), isTrue);
+      expect((chat.timeline.last as ChatIllustrationIntent).description,
+          hasLength(500));
+    });
+
+    test('failed atomic write leaves no partial manual intention', () async {
+      final chat = _chat(_ScriptProvider('[NARRATION]\nUnused.'),
+          IllustrationMode.suggestions,
+          save: (_, __) async => throw StateError('disk full'));
+      addTearDown(chat.dispose);
+      chat.restoreTimeline(const [
+        ChatEntry(id: 1, speaker: ChatSpeaker.player,
+            name: 'Vous', text: 'Regarde.'),
+        ChatEntry(id: 2, speaker: ChatSpeaker.narrator,
+            name: 'Narrateur', text: 'Soren referme le tiroir.'),
+      ]);
+      await expectLater(chat.illustrateMessage(2), throwsStateError);
+      expect(chat.timeline, hasLength(2));
+      expect(chat.canIllustrateMessage(2), isTrue);
+    });
+
+    test('SQLite persists manual intent and rewind removes it', () async {
+      sqfliteFfiInit();
+      final dir = await Directory.systemTemp.createTemp('domolia-manual-');
+      final store = SqliteBookStore(factory: databaseFactoryFfi,
+          databasePath: '${dir.path}/part.sqlite');
+      addTearDown(() async {
+        await store.close();
+        await dir.delete(recursive: true);
+      });
+      await store.putBook(const BookDefinition(
+          id: 'livre', title: 'Le Registre de Sel'));
+      const timeline = [
+        ChatEntry(id: 0, speaker: ChatSpeaker.player,
+            name: 'Vous', text: 'Je les observe.'),
+        ChatEntry(id: 1, speaker: ChatSpeaker.narrator,
+            name: 'Narrateur', text: 'Soren referme le tiroir.'),
+      ];
+      const part = BookSession(id: 'part', bookId: 'livre',
+          title: 'Partie', timeline: timeline);
+      await store.putSession(part);
+      final provider = _ScriptProvider('[NARRATION]\nLe silence revient.');
+      final chat = _chat(provider, IllustrationMode.suggestions,
+          save: (events, raws) async {
+            await store.saveNarrativeSnapshot(
+                part.copyWith(timeline: events), raws);
+          });
+      addTearDown(chat.dispose);
+      chat.restoreTimeline(timeline);
+      expect(await chat.illustrateMessage(1), isTrue);
+      var loaded = (await store.findSession('part'))!;
+      expect(loaded.timeline[2], isA<ChatIllustrationIntent>());
+      expect((loaded.timeline[2] as ChatIllustrationIntent).description,
+          'Soren referme le tiroir.');
+      expect(provider.calls, 0);
+      await chat.resumeFromPlayerMessage(0);
+      loaded = (await store.findSession('part'))!;
+      expect(loaded.timeline.whereType<ChatIllustrationIntent>(), isEmpty);
+      expect(loaded.timeline.whereType<ChatEntry>().last.text,
+          'Le silence revient.');
+    });
+  });
+
+  testWidgets('long press highlights text and supports copy and illustration',
+      (tester) async {
+    String? copied;
+    final messenger = TestDefaultBinaryMessengerBinding.instance
+        .defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(
+      SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String?;
+        }
+        return null;
+      },
+    );
+    addTearDown(() => messenger.setMockMethodCallHandler(
+        SystemChannels.platform, null));
+    final chat = _chat(_ScriptProvider('[NARRATION]\nUnused.'),
+        IllustrationMode.suggestions);
+    addTearDown(chat.dispose);
+    chat.restoreTimeline(const [
+      ChatEntry(id: 0, speaker: ChatSpeaker.player,
+          name: 'Vous', text: 'Je les regarde discuter.'),
+      ChatEntry(id: 1, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Soren referme lentement le tiroir derrière lui.'),
+      ChatEntry(id: 2, speaker: ChatSpeaker.character,
+          name: 'Soren', text: '« Une rumeur avec une lanterne. »'),
+    ]);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body:
+        GroupChatPage(controller: chat, onOpenSettings: () {}))));
+    await tester.pumpAndSettle();
+    await tester.longPress(
+        find.text('Soren referme lentement le tiroir derrière lui.'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('chatHighlightedMessage-1')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('chatActionCopy')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chatActionIllustrate')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('chatActionCopy')));
+    await tester.tap(find.byKey(const ValueKey('chatActionCopy')));
+    await tester.pumpAndSettle();
+    expect(copied, 'Soren referme lentement le tiroir derrière lui.');
+    expect(find.byKey(const ValueKey('chatHighlightedMessage-1')),
+        findsNothing);
+
+    await tester.longPress(
+        find.text('Soren referme lentement le tiroir derrière lui.'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+        find.byKey(const ValueKey('chatActionIllustrate')));
+    await tester.tap(find.byKey(const ValueKey('chatActionIllustrate')));
+    await tester.pumpAndSettle();
+    expect(chat.timeline[2], isA<ChatIllustrationIntent>());
+    expect((chat.timeline[2] as ChatIllustrationIntent).description,
+        'Soren referme lentement le tiroir derrière lui.');
+    expect(find.byKey(const ValueKey('chatIllustrationPlaceholder')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('chatHighlightedMessage-1')),
+        findsNothing);
   });
 
   testWidgets('chat renders a discreet inline illustration, not a button',
