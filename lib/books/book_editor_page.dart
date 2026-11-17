@@ -515,7 +515,8 @@ class BookEditorPageState extends State<BookEditorPage> {
               key: const ValueKey('bookPlay'),
               onPressed: _play,
               icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text('Commencer ou reprendre une partie'),
+              label: const Text('Commencer ou reprendre une partie',
+                textAlign: TextAlign.center),
             ),
           ),
           const SizedBox(height: 10),
@@ -588,7 +589,8 @@ class BookEditorPageState extends State<BookEditorPage> {
       key: const ValueKey('bookGenerateCover'),
       onPressed: _coverBusy ? null : _generateCover,
       icon: const Icon(Icons.auto_awesome_outlined),
-      label: const Text('Générer une couverture avec l’IA'),
+      label: const Text('Générer une couverture avec l’IA',
+        textAlign: TextAlign.center),
     ),
     if (_coverBusy)
       const Padding(
@@ -683,9 +685,11 @@ class BookEditorPageState extends State<BookEditorPage> {
         DropdownMenuItem(value: IllustrationMode.disabled,
             child: Text('Désactivées')),
         DropdownMenuItem(value: IllustrationMode.suggestions,
-            child: Text('Suggestions (sans génération)')),
+            child: Text('Suggestions (sans génération)',
+              overflow: TextOverflow.ellipsis)),
         DropdownMenuItem(value: IllustrationMode.automatic,
-            child: Text('Automatique (préparation uniquement)')),
+            child: Text('Automatique (préparation uniquement)',
+              overflow: TextOverflow.ellipsis)),
       ],
       onChanged: (mode) {
         if (mode == null || mode == _book.illustrationMode) return;
@@ -702,7 +706,8 @@ class BookEditorPageState extends State<BookEditorPage> {
       minLines: 2, maxLines: 4,
       decoration: const InputDecoration(
         labelText: 'Style graphique',
-        helperText: 'Direction artistique commune aux illustrations du Livre'),
+        helperText: 'Direction artistique commune aux illustrations du Livre',
+        helperMaxLines: 3),
       onChanged: (_) => _queueSave(),
     ),
     const SizedBox(height: DomoliaSpacing.section),
@@ -712,6 +717,7 @@ class BookEditorPageState extends State<BookEditorPage> {
       minLines: 3, maxLines: 7,
       decoration: const InputDecoration(
         labelText: 'Éléments à éviter (negative prompt)',
+        helperMaxLines: 4,
         helperText: 'Par exemple : texte, sous-titres, bulles, '
           'filigranes et signatures. Les modèles peuvent encore produire '
           'des éléments indésirables.'),
@@ -739,6 +745,7 @@ class BookEditorPageState extends State<BookEditorPage> {
     DropdownButtonFormField<String>(
       key: const ValueKey('bookImageQuality'),
       initialValue: _book.illustrationSettings.quality ?? 'auto',
+      isExpanded: true,
       decoration: const InputDecoration(labelText: 'Qualité graphique'),
       items: [
         const DropdownMenuItem(value: 'auto',
@@ -758,6 +765,7 @@ class BookEditorPageState extends State<BookEditorPage> {
     DropdownButtonFormField<int>(
       key: const ValueKey('bookImageCount'),
       initialValue: _book.illustrationSettings.count,
+      isExpanded: true,
       decoration: const InputDecoration(labelText: 'Images par demande'),
       items: [
         for (var count = 1; count <= 4; count++)

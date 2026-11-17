@@ -377,7 +377,7 @@ void main() {
       find.byKey(const ValueKey('bookNsfw')), 180,
       scrollable: find.descendant(
         of: find.byKey(const ValueKey('bookTab-0')),
-        matching: find.byType(Scrollable)),
+        matching: find.byType(Scrollable)).first,
     );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('bookNsfw')));

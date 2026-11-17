@@ -137,7 +137,7 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
               FutureBuilder<Uint8List?>(
                 future: _image(file),
                 builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
+                  if (snapshot.connectionState != ConnectionState.done) {
                     return const Padding(
                       padding: EdgeInsets.all(8),
                       child: Text('Chargement de l’image…'),
@@ -176,9 +176,13 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
               const SizedBox(width: 18, height: 18,
                 child: CircularProgressIndicator(strokeWidth: 2)),
               const SizedBox(width: 12),
-              Text(record?.state == IllustrationJobState.generating
-                  ? 'Génération de l’image…'
-                  : 'Préparation de la mise en scène…'),
+              Expanded(
+                child: Text(
+                  record?.state == IllustrationJobState.generating
+                      ? 'Génération de l’image…'
+                      : 'Préparation de la mise en scène…',
+                ),
+              ),
             ]),
           ] else ...[
             if (record?.state == IllustrationJobState.failed) ...[

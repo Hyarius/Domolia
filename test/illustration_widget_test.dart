@@ -373,9 +373,12 @@ void main() {
     expect(find.text('Illustrateur dessine…'),findsOneWidget);
     expect(image.calls,1);
     image.gate!.complete(_result());
-    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(images.forIntent(2)?.state, IllustrationJobState.available);
     expect(find.byKey(const ValueKey('chatIllustratorIndicator')),
       findsNothing);
     expect(find.byKey(const ValueKey('chatGeneratedImage')),findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
