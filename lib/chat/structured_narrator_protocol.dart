@@ -1,6 +1,9 @@
 /// Narrator output protocol. One validated final UI event per NDJSON line.
 const structuredNarratorProtocol = '''
 FORMAT OBLIGATOIRE : NDJSON, un objet JSON complet par ligne.
+Le premier caractère non blanc de la réponse doit être {.
+N'écris jamais de prose en dehors du champ « text » d'un objet JSON.
+Ce format reste obligatoire même si tu n'utilises aucun outil.
 Aucun préambule, aucune balise Markdown, aucun tableau JSON.
 Formats autorisés :
 {"type":"message","speaker":"narrator","name":"Narrateur","text":"Description littéraire..."}

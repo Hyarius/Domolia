@@ -128,6 +128,83 @@ void main() {
     expect(saves, 2);
   });
 
+  test('literary prose fallback streams as narrator and persists once', () async {
+    final pending = chat.send('Je regarde Tomas.');
+    await _tick();
+    provider.fragments.add(const AiStreamChunk(
+      text: "L'homme soutient votre regard un instant.",
+    ));
+    await _tick();
+    expect(chat.timeline.whereType<ChatEntry>().last.text,
+        "L'homme soutient votre regard un instant.");
+    expect(chat.timeline.whereType<ChatEntry>().last.inProgress, true);
+    expect(persisted.whereType<ChatEntry>().length, 1);
+    provider.fragments.add(const AiStreamChunk(
+      text: '\n\n— Bonsoir, répond Tomas.',
+    ));
+    await provider.fragments.close();
+    await pending;
+    expect(chat.error, isNull);
+    expect(provider.calls, 1);
+    expect(chat.messages.last.text, contains('Bonsoir, répond Tomas.'));
+    expect(chat.messages.last.speaker, ChatSpeaker.narrator);
+    expect(chat.messages.last.inProgress, false);
+    expect(persistedRaw, hasLength(1));
+    expect(persistedRaw.single.rawText,
+        "L'homme soutient votre regard un instant.\n\n— Bonsoir, répond Tomas.");
+    expect(persistedRaw.single.validatedNarrative,
+        persistedRaw.single.rawText);
+    expect(saves, 2);
+  });
+
+  test('malformed JSON must not silently fall back to prose', () async {
+    final pending = chat.send('Je regarde la porte.');
+    await _tick();
+    provider.fragments.add(const AiStreamChunk(
+      text: '{"type":"message","speaker":"narrator","text":\n',
+    ));
+    await provider.fragments.close();
+    await pending;
+    expect(chat.error, isNotNull);
+    expect(persistedRaw, isEmpty);
+    expect(chat.messages.length, 1);
+  });
+
+  test('tool round discards free-text draft before final NDJSON', () async {
+    final tool = _ToolNarrator();
+    addTearDown(tool.close);
+    final toolChat = NarrativeChatController(
+      provider: tool, configuration: () => _config,
+      structuredStreamingEnabled: true,
+      resolveConnection: () async => NarrativeAiEndpoint(
+        provider: tool, configuration: _config, toolCallingEnabled: true),
+    );
+    addTearDown(toolChat.dispose);
+    final pending = toolChat.send('Je cherche une information.');
+    await _tick();
+    tool.first.add(const AiToolStreamChunk(text: 'Brouillon littéraire.'));
+    await _tick();
+    expect(toolChat.timeline.whereType<ChatEntry>().last.inProgress, true);
+    tool.first.add(const AiToolStreamChunk(callIndex: 0,
+      callId: 'search', callName: 'search_lore',
+      argumentsDelta: '{"query":"Tomas"}',
+    ));
+    await _tick();
+    expect(toolChat.timeline.whereType<ChatEntry>().length, 1);
+    tool.first.add(const AiToolStreamChunk(finishReason: 'tool_calls'));
+    await tool.first.close();
+    await _tick();
+    tool.finalTurn.add(const AiToolStreamChunk(text:
+      '{"type":"message","speaker":"narrator","name":"Narrateur",'
+      '"text":"Réponse après recherche."}\n'));
+    await tool.finalTurn.close();
+    await pending;
+    expect(toolChat.error, isNull);
+    expect(toolChat.messages.last.text, 'Réponse après recherche.');
+    expect(toolChat.messages.last.text, isNot(contains('Brouillon')));
+    expect(tool.calls, 2);
+  });
+
   test('malformed second line discards the entire provisional reply', () async {
     final pending = chat.send('Je regarde.');
     await _tick();

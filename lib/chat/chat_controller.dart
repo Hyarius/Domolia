@@ -896,6 +896,7 @@ class NarrativeChatController extends ChangeNotifier {
     var decoder = ChatLineDecoder();
     final accepted = <ChatOutputEvent>[];
     final raw = StringBuffer();
+    var literaryFallback = false;
 
     void renderDraft() {
       if (_closed || token != _generationToken) return;
@@ -920,6 +921,35 @@ class NarrativeChatController extends ChangeNotifier {
     void consume(String fragment) {
       if (_closed || token != _generationToken) return;
       raw.write(fragment);
+      // Some models ignore NDJSON and emit free-form literary prose.
+      // Preserve it as one narrator bubble without an extra AI call.
+      // Invalid JSON and mixed structured responses remain strict errors.
+      if (!literaryFallback && accepted.isEmpty) {
+        final prefix = raw.toString().trimLeft();
+        if (prefix.isNotEmpty && !'{[\`"'.contains(prefix[0])) {
+          literaryFallback = true;
+          AppLogger.warning(
+            'Réponse en texte libre au lieu du format NDJSON',
+            component: 'chat',
+          );
+        }
+      }
+      if (literaryFallback) {
+        if (raw.length > 6000) {
+          throw const FormatException('Narration en texte libre trop longue.');
+        }
+        _draft
+          ..clear()
+          ..add(ChatEntry(
+            id: _nextId,
+            speaker: ChatSpeaker.narrator,
+            name: 'Narrateur',
+            text: raw.toString().trim(),
+            inProgress: true,
+          ));
+        _notify();
+        return;
+      }
       accepted.addAll(decoder.add(fragment));
       renderDraft();
     }
@@ -928,6 +958,7 @@ class NarrativeChatController extends ChangeNotifier {
       if (_closed || token != _generationToken) return;
       raw.clear();
       accepted.clear();
+      literaryFallback = false;
       decoder = ChatLineDecoder();
       _draft.clear();
       _notify();
@@ -973,7 +1004,18 @@ class NarrativeChatController extends ChangeNotifier {
               endpoint.maxOutputTokens ?? 2400, onFragment: consume);
         }
         _check(token);
-        accepted.addAll(decoder.finish());
+        if (literaryFallback) {
+          final prose = raw.toString().trim();
+          if (prose.isEmpty) {
+            throw const FormatException('Le narrateur n’a produit aucun message.');
+          }
+          accepted.add(ChatLine(
+              speaker: ChatSpeaker.narrator,
+              name: 'Narrateur',
+              text: prose));
+        } else {
+          accepted.addAll(decoder.finish());
+        }
         if (!accepted.any((e) => e is ChatLine)) {
           throw const FormatException('Le narrateur n’a produit aucun message.');
         }
