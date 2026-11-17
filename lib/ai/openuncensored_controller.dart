@@ -152,11 +152,11 @@ class OuCreditsController extends ChangeNotifier {
       if (selected != null) {
         final managed = ai.profiles.where((profile) =>
             profile.id == AiConnectionController.ouNarratorProfileId).toList();
-        if (managed.isEmpty ||
-            managed.first.apiKey != selected.secret ||
-            routing.profileFor(AiNarrativeTask.narrator) !=
-                AiConnectionController.ouNarratorProfileId) {
-          if (!await _configure(state)) {
+        if (managed.isEmpty || managed.first.apiKey != selected.secret) {
+          // Repair the managed key without overwriting an explicit ChatGPT
+          // narrator, JSONifier or memory routing chosen by the user.
+          if (!await _configure(state,
+              activateProfile: false, routeTasks: false)) {
             error = 'Clé conservée, mais configuration du narrateur à reprendre.';
           }
         }
@@ -250,7 +250,10 @@ class OuCreditsController extends ChangeNotifier {
       (model.inputPerTokenUsd ?? 0.000001) +
       (model.outputPerTokenUsd ?? 0.000005);
 
-  Future<bool> _configure(OuVaultState snapshot) async {
+  Future<bool> _configure(OuVaultState snapshot, {
+    bool activateProfile = true,
+    bool routeTasks = true,
+  }) async {
     final key = snapshot.find(snapshot.activeKeyId);
     if (key == null) return true;
     final models = snapshot.models.isEmpty ?
@@ -276,8 +279,10 @@ class OuCreditsController extends ChangeNotifier {
       narratorToolCompatibility: support,
       jsonifierModel: models['jsonifier'] ?? defaultAiModel,
       optimizerModel: models['optimizer'] ?? defaultAiModel,
+      activateManagedProfile: activateProfile,
     );
     if (!applied) return false;
+    if (!routeTasks) return true;
     await routing.setProfile(
       AiNarrativeTask.narrator, AiConnectionController.ouNarratorProfileId);
     await routing.setProfile(
