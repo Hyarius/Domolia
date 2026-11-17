@@ -163,6 +163,20 @@ class _TheatricalLines {
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
       throw const FormatException('Format narratif invalide : utilise le script théâtral.');
     }
+    // Some models omit [NARRATION] after a quoted PNJ reply.
+    // Only recover an unmarked, separate prose paragraph after a *closed*
+    // guillemet. Continued quoted dialogue stays with the same character.
+    if (_speaker == ChatSpeaker.character &&
+        _currentText.endsWith('\n') &&
+        _currentText.trimRight().endsWith('»') &&
+        trimmed.isNotEmpty &&
+        !trimmed.startsWith('«') &&
+        !trimmed.startsWith('—')) {
+      _flush(output);
+      _speaker = ChatSpeaker.narrator;
+      _name = 'Narrateur';
+      _status = null;
+    }
     // A bare literary response remains narration; never guess speakers.
     _append(line);
   }

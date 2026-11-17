@@ -410,6 +410,9 @@ class _HomePageState extends State<HomePage> {
           // The usage ledger is separate from bounded, purgeable diagnostics.
           // A tool round is one billed LLM request, not another fee per tool.
           final usage = AiUsageRecord.fromExchange(session.id, exchange);
+          // Freeze the payload synchronously: queued SQLite writes must not
+          // accidentally serialize a later mutation of the same HTTP record.
+          final diagnosticJson = exchange.exportJson();
           if (exchange.stage == 'narrator_structured' ||
               (exchange.stage?.startsWith('narrator_tool_round_') ?? false)) {
             final key = _credits.active;
@@ -425,7 +428,7 @@ class _HomePageState extends State<HomePage> {
                 id: 'exchange-${exchange.createdAtUtc.microsecondsSinceEpoch}',
                 sessionId: session.id,
                 createdAtUtc: exchange.createdAtUtc,
-                content: exchange.exportJson(),
+                content: diagnosticJson,
               ),
               retention,
             );

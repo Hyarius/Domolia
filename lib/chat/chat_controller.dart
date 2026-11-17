@@ -837,13 +837,48 @@ class NarrativeChatController extends ChangeNotifier {
     throw const FormatException('Le narrateur ne termine pas sa réponse RAW.');
   }
 
+  List<Map<String, dynamic>> _diagnosticEvents(
+      List<ChatTimelineEvent> events) => [
+    for (final event in events)
+      if (event is ChatSceneChange)
+        <String, dynamic>{'id': event.id, 'type': 'scene_change'}
+      else if (event is ChatIllustrationIntent)
+        <String, dynamic>{
+          'id': event.id, 'type': 'image_intent',
+          'player_event_id': event.playerEventId,
+          'description': event.description,
+          'state': event.state.name,
+        }
+      else if (event is ChatEntry)
+        <String, dynamic>{
+          'id': event.id, 'type': 'message',
+          'speaker': event.speaker.name, 'name': event.name,
+          'text': event.text,
+          if (event.status != null) 'status': event.status,
+        },
+  ];
+
   void _capture(String stage, AiExchange? before,
       {Object? failure, List<ChatTimelineEvent> events = const [],
       int? stagePromptTokens, int? stageCompletionTokens,
       int? stageToolCalls}) {
     final current = diagnostics?.last;
-    if (current == null || identical(before, current) ||
-        current.completedAtUtc != null) {
+    if (current == null || identical(before, current)) return;
+    if (current.completedAtUtc != null) {
+      // The final Tool Calling round was already counted as one HTTP request.
+      // Attach committed bubbles and illustration intents to that *same*
+      // exchange and persist the diagnostic again, without another charge.
+      if (events.isNotEmpty &&
+          current.stage?.startsWith('narrator_tool_round_') == true &&
+          current.playerEventId == _playerEventId) {
+        current.attachInterpretedEvents(_diagnosticEvents(events));
+        lastExchange = current;
+        try {
+          onExchangeCaptured?.call(current);
+        } catch (_) {
+          // Diagnostics never invalidate a completed narration.
+        }
+      }
       return;
     }
     current.stage = stage;
@@ -854,25 +889,7 @@ class NarrativeChatController extends ChangeNotifier {
       toolCalls: stageToolCalls ?? 0,
       error: failure?.toString(),
       cancelled: failure is _Cancelled,
-      interpretedEvents: [
-        for (final event in events)
-          if (event is ChatSceneChange)
-            <String, dynamic>{'id': event.id, 'type': 'scene_change'}
-          else if (event is ChatIllustrationIntent)
-            <String, dynamic>{
-              'id': event.id, 'type': 'image_intent',
-              'player_event_id': event.playerEventId,
-              'description': event.description,
-              'state': event.state.name,
-            }
-          else if (event is ChatEntry)
-            <String, dynamic>{
-              'id': event.id, 'type': 'message',
-              'speaker': event.speaker.name, 'name': event.name,
-              'text': event.text,
-              if (event.status != null) 'status': event.status,
-            },
-      ],
+      interpretedEvents: _diagnosticEvents(events),
     );
     lastExchange = current;
     try {
@@ -1071,8 +1088,10 @@ class NarrativeChatController extends ChangeNotifier {
         _draft.clear();
         _timelineChanged();
         _notify();
-        if (memory != null) unawaited(memory!.analyzePending());
+        // Complete / enrich the narrator diagnostic BEFORE the asynchronous
+        // Live Memory request can replace the shared recorder.last pointer.
         _capture('narrator_structured', before, events: prepared);
+        if (memory != null) unawaited(memory!.analyzePending());
       } catch (e) {
         failure = e;
         _capture('narrator_structured', before, failure: failure);

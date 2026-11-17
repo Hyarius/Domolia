@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:domolia/ai/ai_provider.dart';
+import 'package:domolia/ai/ai_diagnostics.dart';
 import 'package:domolia/books/book_definition.dart';
 import 'package:domolia/books/book_session.dart';
 import 'package:domolia/books/book_store.dart';
@@ -33,11 +34,14 @@ List<ChatOutputEvent> _decode(String text, {
   return result;
 }
 
-class _ScriptProvider implements AiChatProvider, AiStreamingChatProvider {
+class _ScriptProvider implements AiChatProvider, AiStreamingChatProvider,
+    AiToolCallingChatProvider {
   _ScriptProvider(this.script);
   String script;
   int calls = 0;
   List<AiMessage>? prompt;
+  List<AiToolMessage>? toolPrompt;
+  AiExchangeRecorder? recorder;
 
   @override
   Future<List<AiModel>> listModels(AiConfiguration configuration) async => [];
@@ -54,6 +58,24 @@ class _ScriptProvider implements AiChatProvider, AiStreamingChatProvider {
     calls++;
     prompt = messages;
     yield AiStreamChunk(text: script);
+  }
+
+  @override
+  Stream<AiToolStreamChunk> streamToolChat(AiConfiguration configuration, {
+    required List<AiToolMessage> messages,
+    required List<AiToolDefinition> tools, int maxTokens = 1200,
+  }) async* {
+    calls++;
+    toolPrompt = messages;
+    final exchange = recorder?.begin(
+      provider: 'test-tool-provider', method: 'POST',
+      url: 'https://example.invalid/v1/responses',
+      requestBody: '{"model":"test"}', secret: 'simulated',
+      accept: 'text/event-stream',
+    );
+    exchange?.statusCode = 200;
+    exchange?.addRawResponse(utf8.encode(script));
+    yield AiToolStreamChunk(text: script, finishReason: 'stop');
   }
 }
 
@@ -279,6 +301,45 @@ void main() {
       expect(savedRaw.single.rawText, contains('[IMAGE]'));
       expect(savedRaw.single.compactText, isNot(contains('[IMAGE]')));
       expect(savedRaw.single.compactText, isNot(contains('sacoche orange')));
+    });
+
+    test('Tool Calling records bubbles and image on the billed narrator exchange',
+        () async {
+      final recorder = AiExchangeRecorder();
+      final captured = <AiExchange>[];
+      final provider = _ScriptProvider(
+        '[NARRATION]\nLéa arrive sur le quai.\n'
+        '[IMAGE]\nLéa Monel avec sa sacoche orange dans la brume.\n'
+        '[PERSONNAGE:Léa Monel]\\n« Je suis ici. »',
+      )..recorder = recorder;
+      final chat = NarrativeChatController(
+        provider: provider, configuration: () => _config,
+        structuredStreamingEnabled: true,
+        illustrationMode: IllustrationMode.suggestions,
+        diagnostics: recorder, onExchangeCaptured: captured.add,
+        resolveConnection: () async => NarrativeAiEndpoint(
+          provider: provider, configuration: _config,
+          toolCallingEnabled: true),
+      );
+      addTearDown(chat.dispose);
+      await chat.send('Je regarde son arrivée.');
+      expect(chat.error, isNull);
+      expect(provider.calls, 1);
+      expect(provider.toolPrompt!.first.content,
+          contains(theatricalIllustrationInstruction));
+      expect(chat.timeline.whereType<ChatIllustrationIntent>(), hasLength(1));
+      expect(captured, hasLength(2)); // Initial billed round + enrichment.
+      final saved = captured.last;
+      expect(saved.stage, 'narrator_tool_round_0');
+      expect(saved.completedAtUtc, isNotNull);
+      expect(saved.interpretedEvents.where(
+          (e) => e['type'] == 'image_intent'), hasLength(1));
+      final stored = StoredAiDiagnostic(
+        id: 'test', sessionId: 'part', createdAtUtc: saved.createdAtUtc,
+        content: saved.exportJson(),
+      );
+      expect(stored.isNarratorForTurn(0), isTrue);
+      expect(stored.containsMessage(1), isTrue);
     });
 
     test('Automatic is a future mode, not an image provider call', () async {

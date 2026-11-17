@@ -5,6 +5,8 @@ SCRIPT THÉÂTRAL EN TEXTE SIMPLE, sans JSON ni Markdown.
 [NARRATION] : description, action du monde ou didascalie.
 [PERSONNAGE:Nom] : réplique d'un PNJ ; [PERSONNAGE:Nom|émotion] si utile.
 [SCENE] : transition de scène seule, suivie d'un nouveau bloc.
+Après une réplique, tout geste ou description reprend avec [NARRATION].
+Ne place jamais de didascalie dans une bulle [PERSONNAGE].
 
 Exemple de FORME uniquement (noms et faits fictifs, pas du Lore) :
 [NARRATION]
@@ -18,7 +20,7 @@ Regroupe les phrases en quelques blocs cohérents et rends la main au joueur.
 
 /// Added only for Suggestions/Automatic; absent in Disabled mode.
 const theatricalIllustrationInstruction =
-    'Illustrations facultatives : au plus un [IMAGE] suivi d’une brève '
-    'description visible pour un moment marquant, sans répéter une scène. '
-    'N’invente ni faits, secrets, possessions ni actions du joueur. '
-    'Sinon, aucun [IMAGE].';
+    'Pour une arrivée, découverte ou scène visuelle marquante, propose '
+    'au plus un [IMAGE] sur sa propre ligne, puis une description brève '
+    'et visible. Pas de répétition. N’invente ni fait, secret, possession '
+    'ni action du joueur. Sinon, aucun [IMAGE].';
