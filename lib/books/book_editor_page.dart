@@ -200,35 +200,41 @@ class BookEditorPageState extends State<BookEditorPage> {
 
   Future<void> _generateCover() async {
     if (_coverBusy) return;
+    if (!await _save() || !mounted) return;
+
+    // The editor opens with the Book's portable JSON value, not an
+    // ephemeral global preference. Cancelling does not change the Book.
+    final description = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => _BookCoverPromptDialog(
+        initialPrompt: _book.illustrationSettings.coverPrompt,
+        replacingCover: _book.coverBase64 != null,
+      ),
+    );
+    if (description == null || !mounted) return;
+    try {
+      await _persist((current) => current.copyWith(
+        illustrationSettings: current.illustrationSettings.copyWith(
+          coverPrompt: description)));
+    } on FormatException catch (failure) {
+      _show(failure.message);
+      return;
+    } catch (failure, stackTrace) {
+      AppLogger.error('Sauvegarde de description de couverture échouée',
+          component: 'cover', error: failure, stackTrace: stackTrace);
+      _show('Impossible d’enregistrer la description de couverture.');
+      return;
+    }
+
+    // Save the text even if no image API is configured, so the author
+    // can return to it later without an unwanted network operation.
     if (widget.imagePreferences == null) {
       _show('Génération d’image non configurée. '
           'Ouvrez les réglages des IA graphiques.');
       return;
     }
-    if (!await _save() || !mounted) return;
+
     final snapshot = _book;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Générer la couverture du Livre ?'),
-        content: Text(
-          'Le fournisseur graphique peut facturer cette opération. '
-          'Coût : inconnu. Une seule image sera demandée, sans génération '
-          'automatique. '
-          '${snapshot.coverBase64 != null ? "La couverture actuelle sera remplacée après succès. " : ""}'
-          'Continuer ?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Annuler')),
-          FilledButton(
-            key: const ValueKey('bookCoverConfirmGeneration'),
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Générer')),
-        ],
-      ),
-    ) ?? false;
-    if (!confirmed || !mounted) return;
     setState(() => _coverBusy = true);
     try {
       await widget.ai.initialize();
@@ -839,4 +845,84 @@ class BookEditorPageState extends State<BookEditorPage> {
       ),
     };
   }
+}
+
+class _BookCoverPromptDialog extends StatefulWidget {
+  const _BookCoverPromptDialog({
+    required this.initialPrompt,
+    required this.replacingCover,
+  });
+
+  final String initialPrompt;
+  final bool replacingCover;
+
+  @override
+  State<_BookCoverPromptDialog> createState() => _BookCoverPromptDialogState();
+}
+
+class _BookCoverPromptDialogState extends State<_BookCoverPromptDialog> {
+  late final TextEditingController _description;
+
+  @override
+  void initState() {
+    super.initState();
+    _description = TextEditingController(text: widget.initialPrompt);
+  }
+
+  @override
+  void dispose() {
+    _description.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Description de la couverture'),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('Décrivez ce que l’illustrateur doit dessiner. '
+            'Cette description vient du JSON du Livre et y sera '
+            'enregistrée si vous confirmez.'),
+          const SizedBox(height: 14),
+          TextField(
+            key: const ValueKey('bookCoverDescription'),
+            controller: _description,
+            minLines: 4,
+            maxLines: 8,
+            maxLength: 2000,
+            autofocus: false,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Image à générer',
+              hintText: 'Personnages visibles, décor, ambiance, cadrage…'),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 8),
+          const Text('Le style graphique et les éléments à exclure '
+            'proviennent aussi des paramètres du Livre.'),
+          const SizedBox(height: 8),
+          Text('Génération facturable : coût avant requête inconnu. '
+            'Une seule image sera demandée. '
+            '${widget.replacingCover ? "L’ancienne couverture sera remplacée uniquement après succès." : ""}'),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        key: const ValueKey('bookCoverCancel'),
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Annuler'),
+      ),
+      FilledButton(
+        key: const ValueKey('bookCoverConfirmGeneration'),
+        onPressed: _description.text.trim().isEmpty ||
+                _description.text.length > 2000
+            ? null : () => Navigator.pop(context, _description.text.trim()),
+        child: const Text('Générer la couverture'),
+      ),
+    ],
+  );
 }
