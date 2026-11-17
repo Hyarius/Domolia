@@ -69,7 +69,7 @@ class _TwoCycleProvider extends _OfflineProvider
       );
     } else {
       yield const AiToolStreamChunk(
-        text: '[NARRATION]\\nL’archiviste attend une réponse.',
+        text: '[NARRATION]\nL’archiviste attend une réponse.',
         finishReason: 'stop',
       );
     }
