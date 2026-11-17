@@ -43,13 +43,22 @@ chaînes constantes (ou, si indiqué, du code source Dart) de `main` et de
 
 | Poste | Avant | Après | Variation | Nature |
 |---|---:|---:|---:|---|
-| Règles de rôle par défaut | 391 | 285 | −106 | Chaîne réelle |
-| Règles narratives par défaut | 531 | 599 | +68 | Chaîne réelle : protections explicitées |
+| Règles de rôle par défaut | 391 | 148 | −243 | Chaîne réelle |
+| Style narratif par défaut | 531 | 168 | −363 | Chaîne réelle |
+| Invariants de jeu (appliqués même aux Livres personnalisés) | 0 | 567 | +567 | Nouvelle chaîne réelle |
+| **Sous-total règles permanentes (hors espaces)** | **922** | **883** | **−39** | Chaînes constantes réellement injectées |
 | Protocole théâtral | 1 502 | 511 | −991 | Chaîne réelle |
-| Réglages longueur/rythme | 1 653 | 913 | −740 | Taille du getter Dart, **proxy**, pas texte construit |
+| Réglages longueur/rythme | 1 653 | 924 | −729 | Taille du getter Dart, **proxy**, pas texte construit |
 | Guide de départ | 736 | 214 | −522 | Code source Dart, **proxy**, pas texte construit |
 | Huit déclarations d'outils | 3 217 | 2 945 | −272 | Code source Dart ; schémas inchangés, descriptions raccourcies |
 | Assemblage du système narrateur | 801 | 479 | −322 | Code source Dart, **proxy**, pas texte construit |
+
+Les règles fondamentales sont désormais injectées dans un bloc non
+personnalisable : même si un Livre remplace le rôle ou le style, il reçoit
+les invariants (joueur, Lore/Partie, secrets, rumeurs, engagements).
+Le sous-total ci-dessus confirme que les économies proviennent surtout
+du protocole et de la réduction des répétitions, pas d'une suppression
+des garde-fous.
 
 **Attention :** le briefing reste plafonné à **3 600 caractères**, et
 l'espace libéré dans son guide peut être rempli par plus de canon. Le gain
