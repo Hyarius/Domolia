@@ -51,7 +51,7 @@ class ConversationSettingsPage extends StatefulWidget {
 
 class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   String? _selected;
-  String? _optimizerProfile;
+
   String? _memoryProfile;
   bool _memoryEnabled = true;
   String? _inheritedNarratorProfile;
@@ -77,7 +77,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       if (mounted) {
         setState(() {
           _selected = session?.aiProfileId;
-          _optimizerProfile = session?.optimizerProfileId;
+
           _memoryProfile = session?.memoryProfileId;
           _memoryEnabled = session?.memoryEnabled ?? true;
           _toolCallingEnabled = session?.toolCallingEnabled ?? true;
@@ -158,9 +158,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       );
       if (mounted) {
         setState(() {
-          if (task == 'optimizer') {
-            _optimizerProfile = selected;
-          } else if (task == 'memory') {
+          if (task == 'memory') {
             _memoryProfile = selected;
           }
         });
@@ -276,8 +274,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
         throw StateError('Une génération est en cours.');
       }
       if (mounted) setState(() => _cachedLoreCharacters = 0);
-      _notify('Lore à recompiler au prochain message, '
-          'si un profil optimiseur est configuré.');
+      _notify('Contexte de départ à préparer localement au prochain message.');
     } catch (_) {
       _notify('Impossible de réinitialiser le cache de Lore.');
     } finally {
@@ -542,7 +539,12 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           'Raisonnement déclaré : ${all.reasoningTokensKnown}',
         style: const TextStyle(color: DomoliaColors.muted, fontSize: 12)),
       const SizedBox(height: 6),
-      const Text('Tokens : mesures fournies par le fournisseur, parfois estimées par lui. '
+      Text('Usage fournisseur : ${all.providerReportedUsage}/${all.calls} appels · '
+           'JSON envoyé : ${all.requestBytesKnown} octets connus',
+        style: const TextStyle(color: DomoliaColors.muted, fontSize: 12)),
+      const SizedBox(height: 6),
+      const Text('Tokens : déclarés par le fournisseur si disponibles, '
+           'sinon diagnostics ou valeurs inconnues. '
           'Un « + » signale des appels sans usage disponible. '
           'Le coût est affiché seulement si le fournisseur le fournit ; '
           '« ≥ » signifie que le total est incomplet. '
@@ -631,20 +633,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                       ? null : _setProfile,
                 ),
                 const SizedBox(height: DomoliaSpacing.field),
-                _taskProfileField(
-                  task: 'optimizer',
-                  label: 'Optimiseur de Lore — profil de cette Partie',
-                  value: _optimizerProfile,
-                  profiles: profiles,
-                  inheritedLabel: 'Hériter des paramètres généraux',
-                  additional: const [
-                    DropdownMenuItem(
-                      value: '#disabled',
-                      child: Text('Désactiver pour cette Partie'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: DomoliaSpacing.field),
+
                 SwitchListTile(
                   key: const ValueKey('conversationMemoryEnabled'),
                   title: const Text('Mémoire automatique'),
@@ -699,17 +688,18 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                   style: TextStyle(color: DomoliaColors.goldLight,
                       fontSize: 17)),
                 const SizedBox(height: DomoliaSpacing.compact),
-                for (final task in AiNarrativeTask.values
-                    .where((task) => task != AiNarrativeTask.jsonifier)) ...[
+                for (final task in AiNarrativeTask.values.where(
+                    (task) => task != AiNarrativeTask.jsonifier &&
+                        task != AiNarrativeTask.optimizer)) ...[
                   _taskGenerationControls(task),
                   const SizedBox(height: DomoliaSpacing.field),
                 ],
                 const SizedBox(height: 12),
                 Text(
                   _cachedLoreCharacters > 0
-                      ? 'Lore compilé : $_cachedLoreCharacters caractères '
-                        'conservés pour cette Partie.'
-                      : 'Pas de résumé optimisé disponible pour cette Partie.',
+                      ? 'Contexte de départ : $_cachedLoreCharacters caractères '
+                        'préparés localement pour cette Partie.'
+                      : 'Contexte de départ préparé automatiquement au premier tour.',
                   key: const ValueKey('conversationLoreCacheStatus'),
                   style: const TextStyle(color: DomoliaColors.muted),
                 ),
@@ -719,14 +709,14 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                   onPressed: _saving || widget.chat.busy ||
                       widget.chat.pendingRaw != null ? null : _recompileLore,
                   icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Recompiler le Lore au prochain message'),
+                  label: const Text('Repréparer le contexte au prochain message'),
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Chaque tâche peut hériter de sa configuration générale '
-                  'ou utiliser un profil existant. Le JSONificateur peut '
-                  'également réutiliser le narrateur. L’optimisation du Lore '
-                  'est facultative et ne modifie jamais le Livre original.',
+                  'Le contexte de départ est préparé localement, sans appel '
+                   'à une IA de compression. Les scénarios détaillés restent '
+                   'dans le Livre et sont recherchés au besoin. Le profil '
+                   'd’optimiseur historique n’est plus utilisé.',
                   style: TextStyle(color: DomoliaColors.muted),
                 ),
               ],

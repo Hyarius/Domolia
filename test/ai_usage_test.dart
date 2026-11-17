@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:domolia/ai/ai_diagnostics.dart';
 import 'package:domolia/ai/ai_usage.dart';
+import 'package:domolia/chat/chat_exports.dart';
 import 'package:domolia/books/book_definition.dart';
 import 'package:domolia/books/book_session.dart';
 import 'package:domolia/books/book_store.dart';
@@ -51,6 +52,61 @@ void main() {
     expect(routed.providerCostUsd, closeTo(0.00042, 1e-8));
     expect(routed.usageEstimated, true);
     expect(record.toJson().toString(), isNot(contains('not-stored-secret')));
+  });
+
+  test('Responses completed event meters Live Memory and diagnostics export', () {
+    final exchange = _exchange(
+      'data: {"type":"response.output_text.delta","delta":"{}"}\n'
+      'data: {"type":"response.completed","response":{"usage":{'
+      '"input_tokens":1280,"output_tokens":820,"total_tokens":2100,'
+      '"input_tokens_details":{"cached_tokens":120},'
+      '"output_tokens_details":{"reasoning_tokens":35}}}}\n',
+      stage: 'live_memory',
+    );
+    exchange.playerEventId = 101;
+    final record = AiUsageRecord.fromExchange('party', exchange);
+    expect(record.task, 'Live Memory');
+    expect(record.inputTokens, 1280);
+    expect(record.outputTokens, 820);
+    expect(record.cachedTokens, 120);
+    expect(record.reasoningTokens, 35);
+    expect(record.totalTokens, 2100);
+    expect(record.usageSource, 'provider');
+    expect(record.playerEventId, 101);
+    expect(record.requestCharacters, greaterThan(0));
+    expect(record.requestBytes, greaterThan(0));
+
+    final exported = exportAiPipelineTrace(
+      const [], const [],
+      [StoredAiDiagnostic(
+        id: 'exchange-101', sessionId: 'party',
+        createdAtUtc: exchange.createdAtUtc,
+        content: exchange.exportJson(),
+      )],
+    );
+    final turns = exported['turns'] as List;
+    final usage = (turns.single as Map<String, dynamic>)['usage']
+        as Map<String, dynamic>;
+    expect(usage['memoryRequests'], 1);
+    expect(usage['totalTokensKnown'], 2100);
+    expect(usage['requestsWithoutTokenUsage'], 0);
+    expect(usage['providerReportedUsageRequests'], 1);
+    expect(usage['cachedTokensKnown'], 120);
+    expect(usage['reasoningTokensKnown'], 35);
+    expect(usage['requestBytesKnown'], greaterThan(0));
+  });
+
+  test('Incomplete Responses SSE does not invent a zero-token bill', () {
+    final exchange = _exchange(
+      'data: {"type":"response.in_progress"}\n'
+      'data: {"type":"response.failed","response":{"error":{}}}\n',
+      stage: 'live_memory',
+    );
+    final record = AiUsageRecord.fromExchange('party', exchange);
+    expect(record.inputTokens, isNull);
+    expect(record.outputTokens, isNull);
+    expect(record.totalTokens, isNull);
+    expect(record.usageSource, 'unknown');
   });
 
   test('Non-stream extraction and unknown provider usage remain distinct', () {

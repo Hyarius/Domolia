@@ -1,4 +1,5 @@
 import '../ai/ai_diagnostics.dart';
+import '../ai/ai_usage.dart';
 import 'chat_protocol.dart';
 import 'raw_generation.dart';
 
@@ -148,7 +149,10 @@ Map<String, dynamic> exportAiPipelineTrace(
   for (final item in turns.values) {
     final phases = item['phases'] as List<Map<String, dynamic>>;
     var prompt = 0, completion = 0, missing = 0;
+    var cached = 0, reasoning = 0, toolCalls = 0, duration = 0;
+    var payloadCharacters = 0, payloadBytes = 0, reported = 0;
     var narratorRequests = 0, jsonifierRequests = 0, optimizerRequests = 0;
+    var memoryRequests = 0;
     for (final phase in phases) {
       final name = phase['stage']?.toString() ?? '';
       if (name.startsWith('narrator_')) {
@@ -157,17 +161,20 @@ Map<String, dynamic> exportAiPipelineTrace(
         jsonifierRequests++;
       } else if (name == 'context_optimizer') {
         optimizerRequests++;
+      } else if (name == 'live_memory') {
+        memoryRequests++;
       }
-      final interpretation = phase['interpretation'];
-      if (interpretation is Map) {
-        final input = interpretation['promptTokens'];
-        final output = interpretation['completionTokens'];
-        if (input is int && output is int) {
-          prompt += input;
-          completion += output;
-        } else {
-          missing++;
-        }
+      final record = AiUsageRecord.fromDiagnosticJson('export', phase);
+      toolCalls += record.toolCalls;
+      duration += record.durationMs ?? 0;
+      payloadCharacters += record.requestCharacters ?? 0;
+      payloadBytes += record.requestBytes ?? 0;
+      cached += record.cachedTokens ?? 0;
+      reasoning += record.reasoningTokens ?? 0;
+      if (record.usageSource == 'provider') reported++;
+      if (record.inputTokens != null && record.outputTokens != null) {
+        prompt += record.inputTokens!;
+        completion += record.outputTokens!;
       } else {
         missing++;
       }
@@ -177,6 +184,14 @@ Map<String, dynamic> exportAiPipelineTrace(
       'narratorRequests': narratorRequests,
       'jsonifierRequests': jsonifierRequests,
       'optimizerRequests': optimizerRequests,
+      'memoryRequests': memoryRequests,
+      'toolCalls': toolCalls,
+      'durationMsKnown': duration,
+      'requestCharactersKnown': payloadCharacters,
+      'requestBytesKnown': payloadBytes,
+      'providerReportedUsageRequests': reported,
+      'cachedTokensKnown': cached,
+      'reasoningTokensKnown': reasoning,
       'promptTokensKnown': prompt,
       'completionTokensKnown': completion,
       'totalTokensKnown': prompt + completion,

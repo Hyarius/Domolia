@@ -15,7 +15,7 @@ import 'raw_generation.dart';
 import 'narrative_reference_tools.dart';
 import '../memory/live_memory_coordinator.dart';
 import '../books/book_lore.dart';
-import '../books/lore_context_builder.dart';
+import '../books/lore_startup_context.dart';
 import '../books/lore_context_optimizer.dart';
 
 class NarrativeAiEndpoint {
@@ -61,7 +61,8 @@ class NarrativeChatController extends ChangeNotifier {
     this.loreProvider,
     this.loreContextBudget = 8000,
     this.narratorRecentBudget = 16000,
-    this.hybridRecentBudget = 7000,
+    // Older verbatim turns stay available through the local history tools.
+    this.hybridRecentBudget = 5200,
     this.onTimelineChanged,
     this.memory,
     this.onPersistState,
@@ -486,25 +487,30 @@ class NarrativeChatController extends ChangeNotifier {
       used += entry.content.length;
     }
     final lore = loreProvider?.call();
-    final optimizer = const LoreContextOptimizer();
-    final compact = lore != null &&
-        _optimizedHash == optimizer.sourceHash(lore) &&
-        _optimizedLore != null && _optimizedLore!.isNotEmpty;
-    final loreContext = lore == null ? '' : compact
-        ? 'LORE CANONIQUE RÉSUMÉ (réservé au narrateur)\\n'
-          'Ne révèle pas les secrets. Les événements potentiels ne '
-          'se sont pas nécessairement produits. '
-          'Ne décide aucune action du joueur.\\n'
-          '${_optimizedLore!}'
-        : LoreContextBuilder(
-            maxCharacters: loreContextBudget,
-          ).build(lore, selected.reversed.map((entry) => entry.content));
+    final builder = LoreStartupContextBuilder(
+      maxCharacters: min(loreContextBudget, 3600),
+    );
+    final startupHash = lore == null ? null :
+        'startup-v2-${const LoreContextOptimizer().sourceHash(lore)}';
+    // The first turn saves this exact local briefing. Legacy/invalid caches
+    // are ignored, never used as a reason to load the entire Book.
+    final loreContext = lore == null ? '' :
+        (_optimizedHash == startupHash && _optimizedLore != null &&
+            _optimizedLore!.isNotEmpty
+            ? _optimizedLore! : builder.build(lore));
+    final nearbyLore = lore == null ? '' : builder.relevant(
+      lore, selected.take(4).map((entry) => entry.content),
+      maxCharacters: hybrid ? 850 : 1600,
+    );
     final memories = memory?.context(
       selected.map((m) => m.content), budget: 3600) ?? '';
     return [
       AiMessage(role: 'system', content: [
         (narratorProvider?.call() ?? narrator).systemPrompt,
-        if (loreContext.isNotEmpty) loreContext,
+        if (loreContext.isNotEmpty)
+          'CONTEXTE INITIAL PRÉPARÉ LOCALEMENT (canon, non vécu)\n$loreContext',
+        if (nearbyLore.isNotEmpty)
+          'FICHES CANONIQUES PERTINENTES (non vécues)\n$nearbyLore',
         if (memories.isNotEmpty)
           'LIVE MEMORY — faits rapportés de CETTE Partie uniquement. '
           'Chaque ligne indique la certitude et la visibilité. '
@@ -866,61 +872,31 @@ class NarrativeChatController extends ChangeNotifier {
   }
 
   Future<void> _ensureOptimizedContext(int token) async {
-    if (_optimizationChecked || resolveOptimizerConnection == null) return;
+    if (_optimizationChecked) return;
     _optimizationChecked = true;
     final lore = loreProvider?.call();
-    if (lore == null) return;
-    const optimizer = LoreContextOptimizer();
-    final hash = optimizer.sourceHash(lore);
-    // A disabled or inaccessible task must never use a previously cached
-    // summary: prefer the canonical deterministic Lore selector.
-    final endpoint = await resolveOptimizerConnection!();
-    _check(token);
-    if (endpoint == null || endpoint.configuration.apiKey.isEmpty) {
-      _optimizedLore = null;
-      _optimizedHash = null;
+    if (lore == null || lore.isEmpty) return;
+    final hash = 'startup-v2-${const LoreContextOptimizer().sourceHash(lore)}';
+    if (!_forceOptimization && _optimizedHash == hash &&
+        _optimizedLore != null && _optimizedLore!.isNotEmpty) {
       return;
     }
-    if (!_forceOptimization && _optimizedHash == hash) return;
     _forceOptimization = false;
-    if (!optimizer.canOptimize(lore)) {
-      _optimizedLore = null;
-      _optimizedHash = null;
-      return;
-    }
 
-    final before = diagnostics?.last;
-    Object? failed;
-    String summary = '';
-    try {
-      final raw = await _requestText(
-        endpoint, optimizer.request(lore), token,
-        endpoint.maxOutputTokens ?? 2400,
-      );
-      _check(token);
-      final validated = optimizer.validate(lore, raw);
-      if (validated == null) {
-        throw const FormatException('Résumé de Lore incomplet ou non économique.');
-      }
-      summary = validated;
-      AppLogger.info('Lore compact validé', component: 'lore',
-          details: {'summaryCharacters': summary.length});
-    } on _Cancelled {
-      rethrow;
-    } catch (error) {
-      failed = error;
-      AppLogger.warning('Optimisation du Lore rejetée : sélection classique',
-          component: 'lore');
-    } finally {
-      _capture('context_optimizer', before, failure: failed);
-    }
-    // Never allow an optimization error to invalidate the narrative turn.
+    // No AI request, regardless of the configured legacy optimizer profile.
+    // This is a bounded briefing; all original canon stays in the Book.
+    final briefing = LoreStartupContextBuilder(
+      maxCharacters: min(loreContextBudget, 3600),
+    ).build(lore);
+    _check(token);
+    _optimizedLore = briefing;
     _optimizedHash = hash;
-    _optimizedLore = summary;
+    AppLogger.info('Contexte de départ préparé localement',
+        component: 'lore', details: {'characters': briefing.length});
     try {
-      await onOptimizedLore?.call(hash, summary);
+      await onOptimizedLore?.call(hash, briefing);
     } catch (_) {
-      AppLogger.warning('Sauvegarde du Lore compact impossible',
+      AppLogger.warning('Sauvegarde du contexte de départ impossible',
           component: 'lore');
     }
     _check(token);

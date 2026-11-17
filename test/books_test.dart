@@ -829,7 +829,7 @@ void main() {
 
 
 
-  testWidgets('Each Party overrides formatter and optimizer independently',
+  testWidgets('Local starter context replaces legacy optimizer selector',
       (tester) async {
     tester.view.physicalSize = const Size(340, 820);
     tester.view.devicePixelRatio = 1;
@@ -872,15 +872,9 @@ void main() {
     expect(stored.formatterProfileId, isNull);
     expect(stored.optimizerProfileId, isNull);
 
-    final optimizerSelector = find.byKey(
-      const ValueKey('conversationTask-optimizer-'));
-    await tester.scrollUntilVisible(optimizerSelector, 210);
-    await tester.tap(optimizerSelector);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Désactiver pour cette Partie').last);
-    await tester.pumpAndSettle();
-    stored = (await library.session(session.id))!;
-    expect(stored.optimizerProfileId, '#disabled');
+    expect(find.byKey(
+      const ValueKey('conversationTask-optimizer-')), findsNothing);
+    expect(stored.optimizerProfileId, isNull);
     expect(stored.formatterProfileId, isNull);
     expect(stored.aiProfileId, isNull);
 
