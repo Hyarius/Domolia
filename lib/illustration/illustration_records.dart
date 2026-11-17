@@ -20,7 +20,7 @@ class StoredIllustration {
     required this.model,
     required this.createdAtUtc,
     this.prompt = '',
-    this.fileName,
+    this.fileNames = const [],
     this.mimeType,
     this.error,
     this.costUsd,
@@ -29,19 +29,21 @@ class StoredIllustration {
   final int intentId;
   final IllustrationJobState state;
   final DateTime createdAtUtc;
-  final String? fileName, mimeType, error;
+  final List<String> fileNames;
+  String? get fileName => fileNames.isEmpty ? null : fileNames.first;
+  final String? mimeType, error;
   final double? costUsd;
 
   StoredIllustration copyWith({
     IllustrationJobState? state,
-    String? prompt, String? fileName, String? mimeType, String? error,
+    String? prompt, List<String>? fileNames, String? mimeType, String? error,
     double? costUsd,
   }) => StoredIllustration(
     requestId: requestId, sessionId: sessionId, intentId: intentId,
     sourceHash: sourceHash, state: state ?? this.state,
     provider: provider, model: model,
     createdAtUtc: createdAtUtc, prompt: prompt ?? this.prompt,
-    fileName: fileName ?? this.fileName,
+    fileNames: fileNames ?? this.fileNames,
     mimeType: mimeType ?? this.mimeType,
     error: error ?? this.error, costUsd: costUsd ?? this.costUsd,
   );
