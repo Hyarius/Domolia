@@ -1,0 +1,31 @@
+{
+  "format": "domolia-conversation-v1",
+  "exportedAtUtc": "2026-01-01T00:00:00.000Z",
+  "bookTitle": "Livre de démonstration",
+  "sessionTitle": "Partie exemple",
+  "selection": {
+    "scope": "complete"
+  },
+  "totalEventsInConversation": 3,
+  "exportedEvents": 3,
+  "events": [
+    {
+      "id": 1,
+      "type": "message",
+      "speaker": "player",
+      "name": "Vous",
+      "text": "Je regarde l'horloge."
+    },
+    {
+      "id": 2,
+      "type": "message",
+      "speaker": "narrator",
+      "name": "Narrateur",
+      "text": "L'aiguille est immobile."
+    },
+    {
+      "id": 3,
+      "type": "scene_change"
+    }
+  ]
+}

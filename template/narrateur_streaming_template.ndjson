@@ -1,0 +1,3 @@
+{"type":"message","speaker":"narrator","name":"Narrateur","text":"La pluie frappe les vitres."}
+{"type":"message","speaker":"character","name":"Tomas","text":"Vous cherchez quelque chose ?","status":"intrigué"}
+{"type":"scene_change"}
