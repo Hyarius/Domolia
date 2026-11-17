@@ -540,7 +540,16 @@ class NarrativeChatController extends ChangeNotifier {
               completionTokens = chunk.completionTokens;
             }
             buffer.write(chunk.text);
-            if (chunk.text.isNotEmpty) onFragment?.call(chunk.text);
+            if (chunk.text.isNotEmpty) {
+              try {
+                onFragment?.call(chunk.text);
+              } catch (e) {
+                failure = e;
+                unawaited(_subscription?.cancel() ?? Future<void>.value());
+                if (!finished.isCompleted) finished.complete();
+                return;
+              }
+            }
             if (buffer.length > 131072) {
               failure = const FormatException('Réponse IA trop volumineuse.');
               unawaited(_subscription?.cancel() ?? Future<void>.value());
@@ -685,7 +694,12 @@ class NarrativeChatController extends ChangeNotifier {
         if (round == 0) {
           _capture('narrator_tool_unsupported', before,
               failure: const AiToolsUnsupportedException());
-          return _requestText(endpoint, buildNarratorContext(), token, maxTokens);
+          final fallback = buildNarratorContext();
+          if (structuredOutput) {
+            fallback[0] = AiMessage(role: 'system',
+                content: '${fallback.first.content}\n\n$structuredNarratorProtocol');
+          }
+          return _requestText(endpoint, fallback, token, maxTokens);
         }
         rethrow;
       } catch (error) {
@@ -1167,6 +1181,7 @@ class NarrativeChatController extends ChangeNotifier {
   @override
   void dispose() {
     _closed = true;
+    _draft.clear();
     ++_generationToken;
     unawaited(_subscription?.cancel() ?? Future<void>.value());
     unawaited(_toolSubscription?.cancel() ?? Future<void>.value());
