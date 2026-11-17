@@ -87,7 +87,9 @@ class _ImageRecords implements IllustrationRecordStore {
   @override
   Future<bool> saveIllustrationIfCurrent(StoredIllustration record) async {
     if (!(timeline?.call().whereType<ChatIllustrationIntent>()
-      .any((e)=>e.id==record.intentId) ?? false)) return false;
+      .any((e)=>e.id==record.intentId) ?? false)) {
+      return false;
+    }
     jobs[record.requestId]=record;
     return true;
   }
