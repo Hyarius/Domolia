@@ -926,7 +926,8 @@ class NarrativeChatController extends ChangeNotifier {
       // Invalid JSON and mixed structured responses remain strict errors.
       if (!literaryFallback && accepted.isEmpty) {
         final prefix = raw.toString().trimLeft();
-        if (prefix.isNotEmpty && !'{[\`"'.contains(prefix[0])) {
+        if (prefix.isNotEmpty &&
+            !'{["'.contains(prefix[0]) && prefix.codeUnitAt(0) != 96) {
           literaryFallback = true;
           AppLogger.warning(
             'Réponse en texte libre au lieu du format NDJSON',
