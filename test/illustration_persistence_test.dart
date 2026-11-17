@@ -26,7 +26,7 @@ void main() {
 
   test('SQLite persists image records and rejects a rewound result', () async {
     final dir = await Directory.systemTemp.createTemp('domolia-img-sql-');
-    final file = dir.path + '/books.sqlite';
+    final file = '${dir.path}/books.sqlite';
     final first = SqliteBookStore(
       factory: databaseFactoryFfi, databasePath: file);
     addTearDown(() async {
@@ -69,7 +69,7 @@ void main() {
     final dir = await Directory.systemTemp.createTemp('domolia-img-hash-');
     final db = SqliteBookStore(
       factory: databaseFactoryFfi,
-      databasePath: dir.path + '/books.sqlite');
+      databasePath: '${dir.path}/books.sqlite');
     addTearDown(() async {
       await db.close();
       await dir.delete(recursive: true);
