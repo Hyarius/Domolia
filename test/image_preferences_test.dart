@@ -40,7 +40,7 @@ void main() {
     expect(settings.toJson().keys,
       containsAllInOrder(['profileId','directorProfileId','model']));
     expect(settings.toJson().containsKey('style'),isFalse);
-    expect(()=>const ImageGenerationOptions(
+    expect(()=>ImageGenerationOptions(
       model:'x' * 120).validate(),throwsFormatException);
   });
 }
