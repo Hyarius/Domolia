@@ -500,29 +500,31 @@ void main() {
   });
 
 
-  test('Lore optimization is compiled once, cached across turns and restarts',
+  test('Starter briefing is compiled locally once, cached across restarts',
       () async {
     final lore = _largeLore();
-    final summary = 'Skogheim. Astrid, prêtresse principale. '
-        '${List.filled(75, "Vie ordinaire").join(" ")}';
-    final optimizer = _ContextProvider(summary);
+    final optimizer = _ContextProvider('SHOULD NEVER RUN');
     String? cached, hash;
+    var saveCount = 0;
     final local = NarrativeChatController(
       provider: provider, configuration: () => credentials,
       loreProvider: () => lore,
       resolveOptimizerConnection: () async =>
           NarrativeAiEndpoint(provider: optimizer, configuration: credentials),
-      onOptimizedLore: (h, s) async { hash = h; cached = s; },
+      onOptimizedLore: (h, s) async {
+        hash = h; cached = s; saveCount++;
+      },
     );
     addTearDown(local.dispose);
     await local.send('Bonjour');
-    expect(optimizer.calls, 1);
-    expect(cached, summary);
-    expect(hash, const LoreContextOptimizer().sourceHash(lore));
+    expect(optimizer.calls, 0);
+    expect(cached, isNotEmpty);
+    expect(cached!.length, lessThanOrEqualTo(3600));
+    expect(hash, 'startup-v2-${const LoreContextOptimizer().sourceHash(lore)}');
     expect(provider.narrativeContext!.first.content,
-      contains('LORE CANONIQUE RÉSUMÉ'));
+        contains('CONTEXTE INITIAL PRÉPARÉ LOCALEMENT'));
     await local.send('Je m’assieds.');
-    expect(optimizer.calls, 1);
+    expect(saveCount, 1);
 
     final reopened = NarrativeChatController(
       provider: provider, configuration: () => credentials,
@@ -533,15 +535,16 @@ void main() {
     );
     addTearDown(reopened.dispose);
     await reopened.send('Je regarde dehors.');
-    expect(optimizer.calls, 1);
+    expect(optimizer.calls, 0);
     expect(reopened.messages.last.text, provider.raw);
 
     expect(local.requestLoreRecompilation(), true);
     await local.send('Une nouvelle journée commence.');
-    expect(optimizer.calls, 2);
+    expect(saveCount, 2);
+    expect(optimizer.calls, 0);
   });
 
-  test('Invalid summary never prevents storytelling or replaces canonical Lore',
+  test('Oversized canon never blocks a RAW turn or triggers paid optimization',
       () async {
     final lore = _largeLore();
     final optimizer = _ContextProvider('Résumé incomplet');
@@ -555,40 +558,39 @@ void main() {
     );
     addTearDown(local.dispose);
     await local.send('Un pas.');
-    expect(optimizer.calls, 1);
-    expect(persisted, isEmpty);
+    expect(optimizer.calls, 0);
+    expect(persisted, isNotEmpty);
+    expect(persisted!.length, lessThanOrEqualTo(3600));
     expect(local.messages.last.text, provider.raw);
     expect(provider.narrativeContext!.first.content,
-      contains('CANON DU MONDE'));
+        contains('CONTEXTE INITIAL PRÉPARÉ LOCALEMENT'));
     expect(provider.narrativeContext!.first.content,
-      isNot(contains('LORE CANONIQUE RÉSUMÉ')));
+        isNot(contains('LORE CANONIQUE RÉSUMÉ')));
   });
 
-  test('Disabling optimization ignores an existing cached summary',
+  test('Old remote optimizer cache is replaced by deterministic startup canon',
       () async {
     final lore = _largeLore();
     final local = NarrativeChatController(
       provider: provider, configuration: () => credentials,
       loreProvider: () => lore,
-      initialOptimizedLore: 'Skogheim Astrid résumé ancien. '
-        '${List.filled(75, "Résumé").join(" ")}',
+      initialOptimizedLore: 'Stale unverified remote output',
       initialOptimizedLoreHash:
-        const LoreContextOptimizer().sourceHash(lore),
+          const LoreContextOptimizer().sourceHash(lore),
       resolveOptimizerConnection: () async => null,
     );
     addTearDown(local.dispose);
     await local.send('Je me présente.');
     expect(local.messages.last.text, provider.raw);
     expect(provider.narrativeContext!.first.content,
-      contains('CANON DU MONDE'));
+        contains('CONTEXTE INITIAL PRÉPARÉ LOCALEMENT'));
     expect(provider.narrativeContext!.first.content,
-      isNot(contains('LORE CANONIQUE RÉSUMÉ')));
+        isNot(contains('Stale unverified remote output')));
   });
 
-  test('All three real pipeline stages use independent output budgets', () async {
+  test('Narrator and formatter retain budgets; no optimizer API call', () async {
     final source = _largeLore();
-    final summary = 'Skogheim Astrid. ${List.filled(80, "Vie quotidienne").join(" ")}';
-    final optimizer = _ContextProvider(summary);
+    final optimizer = _ContextProvider('SHOULD NEVER RUN');
     final formatter = _Provider()..structured = format(provider.raw);
     const config = AiConfiguration(
       baseUrl: defaultAiBaseUrl, model: 'gpt-5.6-luna',
@@ -615,13 +617,12 @@ void main() {
     );
     addTearDown(local.dispose);
     await local.send('Bonjour');
-    expect(optimizer.outputBudgets, [16384]);
+    expect(optimizer.outputBudgets, isEmpty);
     expect(provider.outputBudgets, [8192]);
     expect(formatter.outputBudgets, [4096]);
     expect(local.messages.last.text, provider.raw);
     await local.send('Encore');
-    expect(optimizer.outputBudgets, [16384],
-      reason: 'Never redo a successful compilation per scene.');
+    expect(optimizer.outputBudgets, isEmpty);
     expect(provider.outputBudgets, [8192, 8192]);
     expect(formatter.outputBudgets, [4096, 4096]);
   });
