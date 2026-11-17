@@ -577,10 +577,13 @@ class NarrativeChatController extends ChangeNotifier {
   }
 
 
-  /// Assemble all SSE deltas before any local tool is executed.
+  /// Tool arguments are assembled before execution; narrative fragments can
+  /// be previewed immediately and discarded if this turn requests tools.
   Future<_ToolTurn> _requestToolTurn(
       NarrativeAiEndpoint endpoint, List<AiToolMessage> messages,
-      List<AiToolDefinition> tools, int token, int maxTokens) async {
+      List<AiToolDefinition> tools, int token, int maxTokens,
+      {void Function(String)? onFragment,
+       void Function()? onToolDetected}) async {
     final provider = endpoint.provider as AiToolCallingChatProvider;
     final done = Completer<void>();
     final narrative = StringBuffer();
@@ -588,6 +591,7 @@ class NarrativeChatController extends ChangeNotifier {
     String? finishReason;
     Object? failure;
     int? usedPrompt, usedCompletion;
+    var hasToolCall = false;
     _done = done;
     _toolSubscription = provider.streamToolChat(endpoint.configuration,
       messages: messages, tools: tools, maxTokens: maxTokens).listen((chunk) {
@@ -596,6 +600,19 @@ class NarrativeChatController extends ChangeNotifier {
       if (chunk.completionTokens != null) usedCompletion = chunk.completionTokens;
       if (chunk.finishReason != null) finishReason = chunk.finishReason;
       narrative.write(chunk.text);
+      // An assistant may emit text and later request tools in the same
+      // response. Such text is provisional, never a committed story turn.
+      try {
+        if (chunk.callIndex != null && !hasToolCall) {
+          hasToolCall = true;
+          onToolDetected?.call();
+        }
+        if (!hasToolCall && chunk.text.isNotEmpty) {
+          onFragment?.call(chunk.text);
+        }
+      } catch (error) {
+        failure = error;
+      }
       if (narrative.length > 131072) {
         failure = const FormatException('RAW trop volumineux.');
       }
@@ -649,7 +666,9 @@ class NarrativeChatController extends ChangeNotifier {
 
   Future<String> _requestHybrid(
       NarrativeAiEndpoint endpoint, int token, int maxTokens,
-      {bool structuredOutput = false}) async {
+      {bool structuredOutput = false,
+       void Function(String)? onFragment,
+       void Function()? onToolTurnDiscarded}) async {
     final references = NarrativeReferenceTools(
       lore: () => loreProvider?.call() ?? const BookLore(),
       timeline: () => _timeline,
@@ -689,7 +708,9 @@ class NarrativeChatController extends ChangeNotifier {
       Object? failed;
       try {
         turn = await _requestToolTurn(
-            endpoint, context, allowed, token, maxTokens);
+            endpoint, context, allowed, token, maxTokens,
+            onFragment: onFragment,
+            onToolDetected: onToolTurnDiscarded);
       } on AiToolsUnsupportedException {
         if (round == 0) {
           _capture('narrator_tool_unsupported', before,
@@ -699,7 +720,8 @@ class NarrativeChatController extends ChangeNotifier {
             fallback[0] = AiMessage(role: 'system',
                 content: '${_structuredInstructions(fallback.first.content)}\n\n$structuredNarratorProtocol');
           }
-          return _requestText(endpoint, fallback, token, maxTokens);
+          return _requestText(endpoint, fallback, token, maxTokens,
+              onFragment: onFragment);
         }
         rethrow;
       } catch (error) {
@@ -720,6 +742,9 @@ class NarrativeChatController extends ChangeNotifier {
         completionTokens = totalCompletion == 0 ? null : totalCompletion;
         return complete.text;
       }
+      // Even providers that delivered tool metadata only at completion must
+      // roll back their tentative content before the next tool round.
+      onToolTurnDiscarded?.call();
       context.add(AiToolMessage(
           role: 'assistant', content: complete.text, calls: complete.calls));
       for (var i = 0; i < complete.calls.length; i++) {
@@ -866,7 +891,7 @@ class NarrativeChatController extends ChangeNotifier {
     completionTokens = null;
     _draft.clear();
     _notify();
-    final decoder = ChatLineDecoder();
+    var decoder = ChatLineDecoder();
     final accepted = <ChatOutputEvent>[];
     final raw = StringBuffer();
 
@@ -895,6 +920,15 @@ class NarrativeChatController extends ChangeNotifier {
       raw.write(fragment);
       accepted.addAll(decoder.add(fragment));
       renderDraft();
+    }
+
+    void discardToolDraft() {
+      if (_closed || token != _generationToken) return;
+      raw.clear();
+      accepted.clear();
+      decoder = ChatLineDecoder();
+      _draft.clear();
+      _notify();
     }
 
     try {
@@ -928,10 +962,10 @@ class NarrativeChatController extends ChangeNotifier {
             endpoint.provider is AiToolCallingChatProvider) {
           // Tool rounds are validated separately; their intermediate content
           // must never be rendered as a narrative message.
-          final output = await _requestHybrid(endpoint, token,
-              endpoint.maxOutputTokens ?? 2400, structuredOutput: true);
+          await _requestHybrid(endpoint, token,
+              endpoint.maxOutputTokens ?? 2400, structuredOutput: true,
+              onFragment: consume, onToolTurnDiscarded: discardToolDraft);
           _check(token);
-          consume(output);
         } else {
           await _requestText(endpoint, context, token,
               endpoint.maxOutputTokens ?? 2400, onFragment: consume);
