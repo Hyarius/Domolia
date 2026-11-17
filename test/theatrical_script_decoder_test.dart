@@ -105,7 +105,7 @@ void main() {
   });
 
   test('excessive block length and event count are rejected', () {
-    expect(() => parse('[NARRATION]\n' + List.filled(6001, 'a').join()),
+    expect(() => parse("[NARRATION]\n${List.filled(6001, 'a').join()}"),
         throwsFormatException);
     expect(
       () => parse(List.generate(21, (i) => '[NARRATION]\n$i\n').join()),
