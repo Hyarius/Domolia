@@ -60,6 +60,8 @@ class BookCoverGenerator {
           'de fiction. Composition verticale, une seule image, '
           'scène visuelle cohérente et attrayante. '
           'Aucune typographie, ni titre, ni texte sur l’image.',
+      'DESCRIPTION DE LA COUVERTURE DEMANDÉE : ' +
+          art.coverPrompt.trim(),
       'Titre du Livre (contexte uniquement, NE PAS dessiner les mots) : ' +
           book.title,
       'Univers : ' + excerpt(global.universe),
