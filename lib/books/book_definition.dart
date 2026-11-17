@@ -18,6 +18,7 @@ class BookDefinition {
     this.detailLevel = 3,
     this.tuning = const NarrativeTuning(),
     this.illustrationMode = IllustrationMode.suggestions,
+    this.illustrationNegativePrompt = defaultIllustrationNegativePrompt,
     this.openingMessages = defaultNarratorOpeningMessages,
     this.extensions = const <String, Object?>{},
     this.lore = const BookLore(),
@@ -27,6 +28,11 @@ class BookDefinition {
   static const version = 3;
   static const maxJsonBytes = 2 * 1024 * 1024;
   static const maxCoverBytes = 1024 * 1024;
+  /// This is part of the portable Book, not a per-device API preference.
+  static const defaultIllustrationNegativePrompt =
+      'texte imprimé dans l’image, sous-titres, bulles de dialogue, '
+      'légendes, filigranes, signatures, interface utilisateur, '
+      'lettres et mots flottants';
   static const _allowedMime = {'image/png', 'image/jpeg', 'image/webp'};
   static const _allowedTags = {'nsfw'};
 
@@ -39,6 +45,7 @@ class BookDefinition {
   final int detailLevel;
   final NarrativeTuning tuning;
   final IllustrationMode illustrationMode;
+  final String illustrationNegativePrompt;
   final List<String> openingMessages;
   /// Reserved for future versioned, explicitly safe scenario/character data.
   final Map<String, Object?> extensions;
@@ -88,6 +95,7 @@ class BookDefinition {
     int? detailLevel,
     NarrativeTuning? tuning,
     IllustrationMode? illustrationMode,
+    String? illustrationNegativePrompt,
     List<String>? openingMessages,
     Map<String, Object?>? extensions,
     BookLore? lore,
@@ -101,6 +109,8 @@ class BookDefinition {
         detailLevel: detailLevel ?? this.detailLevel,
         tuning: tuning ?? this.tuning,
         illustrationMode: illustrationMode ?? this.illustrationMode,
+        illustrationNegativePrompt:
+            illustrationNegativePrompt ?? this.illustrationNegativePrompt,
         openingMessages: openingMessages ?? this.openingMessages,
         extensions: extensions ?? this.extensions,
         lore: lore ?? this.lore,
@@ -128,6 +138,7 @@ class BookDefinition {
           'detailLevel': detailLevel,
           ...tuning.toJson(),
           'illustrationMode': illustrationMode.name,
+          'illustrationNegativePrompt': illustrationNegativePrompt,
         },
         'openingMessages': openingMessages,
         'extensions': extensions,
@@ -147,6 +158,7 @@ class BookDefinition {
     if (!RegExp(r'^[A-Za-z0-9_-]{1,100}$').hasMatch(id) ||
         title.trim().isEmpty || title.length > 120 ||
         narrativeStyle.trim().isEmpty || narrativeStyle.length > 8000 ||
+        illustrationNegativePrompt.length > 1500 ||
         detailLevel < 1 || detailLevel > 5 ||
         openingMessages.isEmpty || openingMessages.length > 30 ||
         openingMessages.any((s) => s.trim().isEmpty || s.length > 2000) ||
@@ -227,7 +239,10 @@ class BookDefinition {
         narrative.keys.any((key) => !const {
           'style', 'detailLevel', 'responseLength',
           'scenePacing', 'styleKeywords', 'illustrationMode',
+          'illustrationNegativePrompt',
         }.contains(key)) ||
+        (narrative.containsKey('illustrationNegativePrompt') &&
+            narrative['illustrationNegativePrompt'] is! String) ||
         narrative['style'] is! String ||
         narrative['detailLevel'] is! int) {
       throw const FormatException('Champs narratifs invalides.');
@@ -256,6 +271,9 @@ class BookDefinition {
           ? parsed['version'] == version
               ? IllustrationMode.suggestions : IllustrationMode.disabled
           : IllustrationMode.values.byName(modeValue as String),
+      illustrationNegativePrompt:
+          narrative['illustrationNegativePrompt'] as String? ??
+              defaultIllustrationNegativePrompt,
       openingMessages: List<String>.unmodifiable(openings.cast<String>()),
       extensions: Map<String, Object?>.unmodifiable(
         parsed['extensions'] as Map<String, dynamic>,
