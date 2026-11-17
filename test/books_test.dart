@@ -392,6 +392,57 @@ void main() {
       findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('Les paramètres artistiques et la description de couverture '
+      'sont propres au Livre', (tester) async {
+    tester.view.physicalSize = const Size(430, 1100);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final library = BookLibraryController(store: _MemoryBooks());
+    addTearDown(library.dispose);
+    await library.initialize();
+    final book = await library.create('Livre illustré');
+    final ai = AiConnectionController(
+      store: _Profiles(const AiProfilesState(
+        profiles: [_profile], selectedId: 'profile-1')),
+      provider: _NoNetwork(),
+    );
+    addTearDown(ai.dispose);
+    await tester.pumpWidget(MaterialApp(theme: DomoliaTheme.dark,
+      home: BookEditorPage(book: book, library: library,
+        ai: ai, onPlay: (_, session) async {}, initialTab: 4)));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('bookImageStyle')),
+      'Aquarelle nocturne');
+    await tester.enterText(
+      find.byKey(const ValueKey('bookImageNegativePrompt')), 'texte, logos');
+    await tester.pump(const Duration(milliseconds: 650));
+    await tester.pumpAndSettle();
+    expect(library.byId(book.id)!.illustrationSettings.style,
+      'Aquarelle nocturne');
+    expect(library.byId(book.id)!.illustrationSettings.negativePrompt,
+      'texte, logos');
+
+    await tester.tap(find.byKey(const ValueKey('bookNav-0')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('bookGenerateCover')));
+    await tester.tap(find.byKey(const ValueKey('bookGenerateCover')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(
+      find.byKey(const ValueKey('bookCoverDescription'))).controller!.text,
+      book.illustrationSettings.coverPrompt);
+    await tester.enterText(find.byKey(const ValueKey('bookCoverDescription')),
+      'Un phare dans la brume');
+    await tester.tap(find.byKey(const ValueKey('bookCoverConfirmGeneration')));
+    await tester.pumpAndSettle();
+    expect(library.byId(book.id)!.illustrationSettings.coverPrompt,
+      'Un phare dans la brume');
+    expect(library.byId(book.id)!.coverBase64, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Une partie peut être supprimée après confirmation, sans toucher aux autres',
       (tester) async {
     final store = _MemoryBooks();

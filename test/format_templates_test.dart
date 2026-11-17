@@ -18,6 +18,8 @@ void main() {
         contains('sous-titres'));
     expect(book.illustrationSettings.size, '1024x1536');
     expect(book.illustrationSettings.style, contains('aquarelle'));
+    expect(book.illustrationSettings.coverPrompt, isNotEmpty);
+    expect(book.illustrationSettings.toJson().keys, contains('coverPrompt'));
     expect(jsonDecode(source)['version'], BookDefinition.version);
     expect(BookDefinition.importJson(book.exportJson()).toPortableJson(),
         book.toPortableJson());

@@ -19,6 +19,7 @@ Un Livre exporté est un JSON UTF-8 `domolia.book` **version 3**, limité à **2
     "count": 1,
     "style": "Aquarelle sombre, lumière diffuse",
     "negativePrompt": "texte, sous-titres, bulles, filigranes, signatures",
+    "coverPrompt": "Une tour d'ambre émergeant de la brume",
     "maximumCostUsd": null
   },
   "openingMessages": ["Une porte s'ouvre."],
@@ -51,7 +52,7 @@ La suppression d'une fiche référencée nécessite confirmation et détache les
 
 ### Paramètres artistiques et génération des couvertures
 
-Le bloc portable `illustration` décrit **les choix propres au Livre**, et non une connexion API : `style` (1 à 160 caractères), `negativePrompt` (0 à 1 500 caractères), `size` (format admis par Domolia), `quality` (optionnelle), `count` (1 à 4) et `maximumCostUsd` (optionnel). Un plafond strict sans prix garanti bloque la génération. Certains formats ou qualités peuvent être incompatibles avec le modèle sélectionné ; Domolia vérifie cette compatibilité avant l'appel payant.
+Le bloc portable `illustration` décrit **les choix propres au Livre**, et non une connexion API : `style` (1 à 160 caractères), `negativePrompt` (0 à 1 500 caractères), `coverPrompt` (1 à 2 000 caractères, éditable avant chaque génération de couverture), `size` (format admis par Domolia), `quality` (optionnelle), `count` (1 à 4) et `maximumCostUsd` (optionnel). Un plafond strict sans prix garanti bloque la génération. Certains formats ou qualités peuvent être incompatibles avec le modèle sélectionné ; Domolia vérifie cette compatibilité avant l'appel payant.
 
 Les informations de fournisseur, modèle, metteur en scène IA et clé sont **locales**, dans les paramètres graphiques de l'application (surcharge éventuelle par Partie pour les connexions). Elles ne se trouvent ni dans le Livre exporté ni dans le Lore.
 

@@ -311,6 +311,22 @@ void main() {
     expect(find.text('Mes Parties'), findsOneWidget);
   });
 
+  testWidgets('Depuis une Partie, le raccourci ouvre le Lore du Livre',
+      (tester) async {
+    await _showApp(tester, withSession: true);
+    await tester.tap(find.byKey(const ValueKey('recentSession-journey')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('groupChatInput')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('chatBookLoreAppBar')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('bookLoreTab')), findsOneWidget);
+    expect(tester.widget<NavigationBar>(
+        find.byKey(const ValueKey('bookTabs'))).selectedIndex, 1);
+    await _systemBack(tester);
+    expect(find.byKey(const ValueKey('groupChatInput')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Retour protège un Livre dont la sauvegarde a échoué',
       (tester) async {
     await _showApp(tester);

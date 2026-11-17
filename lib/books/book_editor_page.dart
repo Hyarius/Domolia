@@ -116,6 +116,11 @@ class BookEditorPageState extends State<BookEditorPage> {
 
   /// The host asks before leaving. Pending edits are saved or explicitly discarded.
   Future<bool> prepareToLeave() async {
+    if (_coverBusy) {
+      _show('Une couverture est en cours de génération. '
+          'Attendez sa sauvegarde avant de quitter le Livre.');
+      return false;
+    }
     _saveDelay?.cancel();
     await _saveTail;
     if (_savedRevision == _editRevision) return true;
@@ -326,6 +331,10 @@ class BookEditorPageState extends State<BookEditorPage> {
   }
 
   Future<void> _play() async {
+    if (_coverBusy) {
+      _show('Une couverture est en cours de génération.');
+      return;
+    }
     _saveDelay?.cancel();
     if (!await _save()) return;
     try {
@@ -570,7 +579,7 @@ class BookEditorPageState extends State<BookEditorPage> {
     const SizedBox(height: 12),
     OutlinedButton.icon(
       key: const ValueKey('bookChooseCover'),
-      onPressed: _chooseCover,
+      onPressed: _coverBusy ? null : _chooseCover,
       icon: const Icon(Icons.photo_library_outlined),
       label: const Text('Choisir une image locale'),
     ),

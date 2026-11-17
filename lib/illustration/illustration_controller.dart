@@ -222,6 +222,21 @@ class IllustrationController extends ChangeNotifier {
         throw StateError('Plafond strict impossible : coût maximal inconnu. '
             'Désactivez le plafond ou choisissez un modèle à prix garanti.');
       }
+      final models = await imageProvider.listModels(profile.apiKey);
+      final matching = models.where((model) => model.id == options.model);
+      if (matching.isEmpty) {
+        throw const ImageGenerationFailure(ImageFailureKind.unsupported,
+            'Modèle graphique indisponible. Vérifiez les réglages IA.');
+      }
+      final capability = matching.first;
+      if (!capability.sizes.contains(art.size) ||
+          art.count > capability.maximumImages ||
+          (art.quality != null &&
+              !capability.qualities.contains(art.quality))) {
+        throw const ImageGenerationFailure(ImageFailureKind.unsupported,
+            'Format, qualité ou quantité incompatible avec le modèle '
+            'graphique. Modifiez les paramètres Images du Livre.');
+      }
       final unique = 'request-' +
           DateTime.now().microsecondsSinceEpoch.toString() + '-' +
           Random.secure().nextInt(0x7fffffff).toString();
