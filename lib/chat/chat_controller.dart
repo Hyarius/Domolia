@@ -385,11 +385,63 @@ class NarrativeChatController extends ChangeNotifier {
     return true;
   }
 
+  /// Reuse the validated timeline as few-shot theatrical dialogue, never the
+  /// prose compactText ("Résumé narratif ...", "Nom : réplique") generated for
+  /// memory. This stops long conversations from teaching the model the wrong
+  /// output format. A full turn becomes one assistant message.
+  List<AiMessage> _buildTheatricalHistory() {
+    final history = <AiMessage>[];
+    final stage = StringBuffer();
+
+    void flushStage() {
+      final text = stage.toString().trim();
+      if (text.isNotEmpty) {
+        history.add(AiMessage(role: 'assistant', content: text));
+      }
+      stage.clear();
+    }
+
+    for (final event in _timeline) {
+      if (event is ChatEntry && event.speaker == ChatSpeaker.player) {
+        flushStage();
+        history.add(AiMessage(role: 'user', content: event.text));
+      } else if (event is ChatSceneChange) {
+        stage.writeln('[SCENE]');
+      } else if (event is ChatEntry) {
+        final text = event.text.replaceFirst(
+          RegExp(r'^Résumé narratif factuel du tour\s*:\s*',
+            caseSensitive: false), '').trim();
+        if (text.isEmpty) continue;
+        final name = event.name.trim();
+        final status = event.status?.trim();
+        if (event.speaker == ChatSpeaker.character &&
+            name.isNotEmpty && name.length <= 50 &&
+            !name.contains(RegExp(r'[\]\r\n|]')) &&
+            !{'vous', 'joueur', 'player', 'narrateur', 'narrator'}
+                .contains(name.toLowerCase()) &&
+            (status == null || (status.length <= 50 &&
+                !status.contains(RegExp(r'[\]\r\n]'))))) {
+          stage.writeln(
+            '[PERSONNAGE:$name${status == null || status.isEmpty ? '' : '|$status'}]');
+        } else {
+          stage.writeln('[NARRATION]');
+        }
+        stage.writeln(text);
+        stage.writeln();
+      }
+    }
+    flushStage();
+    return history;
+  }
+
   /// The last 24 conversational turns / 16k UTF-16 units are retained.
   /// Compact narration replaces that turn's RAW when available; RAW is the fallback.
   /// Legacy sessions without RAW fall back to their structured history.
-  List<AiMessage> buildNarratorContext({bool hybrid = false}) {
-    final history = <AiMessage>[];
+  List<AiMessage> buildNarratorContext({bool hybrid = false,
+      bool theatricalOutput = false}) {
+    final history = theatricalOutput
+        ? _buildTheatricalHistory() : <AiMessage>[];
+    if (!theatricalOutput) {
     final raws = {for (final r in _generations)
       if (r.isStructured) r.playerEventId: r};
     RawGeneration? active;
@@ -420,6 +472,7 @@ class NarrativeChatController extends ChangeNotifier {
               content: 'Une nouvelle scène commence.'));
         }
       }
+    }
     }
     final selected = <AiMessage>[];
     var used = 0;
@@ -683,7 +736,8 @@ class NarrativeChatController extends ChangeNotifier {
       memoryHistory: () => memory?.history ?? const [],
     );
     final context = <AiToolMessage>[
-      for (final message in buildNarratorContext(hybrid: true))
+      for (final message in buildNarratorContext(
+        hybrid: true, theatricalOutput: structuredOutput))
         AiToolMessage(role: message.role, content: message.content),
     ];
     if (structuredOutput) {
@@ -721,7 +775,8 @@ class NarrativeChatController extends ChangeNotifier {
         if (round == 0) {
           _capture('narrator_tool_unsupported', before,
               failure: const AiToolsUnsupportedException());
-          final fallback = buildNarratorContext();
+          final fallback = buildNarratorContext(
+              theatricalOutput: structuredOutput);
           if (structuredOutput) {
             fallback[0] = AiMessage(role: 'system',
                 content: '${_structuredInstructions(fallback.first.content)}\n\n$theatricalNarratorProtocol');
@@ -958,7 +1013,7 @@ class NarrativeChatController extends ChangeNotifier {
       modelUsed = endpoint.configuration.model;
       await _ensureOptimizedContext(token);
       _check(token);
-      final context = buildNarratorContext();
+      final context = buildNarratorContext(theatricalOutput: true);
       context[0] = AiMessage(role: 'system',
           content: '${_structuredInstructions(context.first.content)}\n\n$theatricalNarratorProtocol');
       final before = diagnostics?.last;
