@@ -12,6 +12,8 @@ import '../chat/chat_protocol.dart';
 import '../logging/app_logger.dart';
 import '../illustration/image_preferences.dart';
 import 'book_cover_loader.dart';
+import 'book_cover_generation.dart';
+import '../illustration/image_providers.dart';
 import 'book_definition.dart';
 import 'book_lore.dart';
 import 'book_lore_tab.dart';
@@ -54,6 +56,7 @@ class BookEditorPageState extends State<BookEditorPage> {
   int _editRevision = 0;
   int _savedRevision = 0;
   String? _profileId;
+  bool _coverBusy = false;
   late int _tab;
 
   @override
@@ -193,6 +196,74 @@ class BookEditorPageState extends State<BookEditorPage> {
         negativePrompt: _negativePrompt.text.trim()),
       lore: lore,
     ));
+  }
+
+  Future<void> _generateCover() async {
+    if (_coverBusy) return;
+    if (widget.imagePreferences == null) {
+      _show('Génération d’image non configurée. '
+          'Ouvrez les réglages des IA graphiques.');
+      return;
+    }
+    if (!await _save() || !mounted) return;
+    final snapshot = _book;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Générer la couverture du Livre ?'),
+        content: Text(
+          'Le fournisseur graphique peut facturer cette opération. '
+          'Coût : inconnu. Une seule image sera demandée, sans génération '
+          'automatique. '
+          '${snapshot.coverBase64 != null ? "La couverture actuelle sera remplacée après succès. " : ""}'
+          'Continuer ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler')),
+          FilledButton(
+            key: const ValueKey('bookCoverConfirmGeneration'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Générer')),
+        ],
+      ),
+    ) ?? false;
+    if (!confirmed || !mounted) return;
+    setState(() => _coverBusy = true);
+    try {
+      await widget.ai.initialize();
+      await widget.imagePreferences!.initialize();
+      final generator = BookCoverGenerator();
+      final generated = await generator.generate(
+        book: snapshot,
+        connection: widget.imagePreferences!.application,
+        profiles: widget.ai.profiles);
+      if (!mounted) return;
+      if (BookCoverGenerator.buildPrompt(_book) !=
+          BookCoverGenerator.buildPrompt(snapshot)) {
+        _show('Le Livre a été modifié pendant la génération. '
+            'La couverture n’a pas été remplacée.');
+        return;
+      }
+      await _persist((current) => current.copyWith(
+        coverMime: generated.cover.mime,
+        coverBase64: generated.cover.base64));
+      _show('Couverture générée et enregistrée. '
+          'Coût signalé : ' +
+          (generated.costUsd == null
+              ? 'inconnu.' : '${generated.costUsd} USD.'));
+    } on ImageGenerationFailure catch (failure) {
+      _show(failure.message);
+    } on FormatException catch (failure) {
+      _show(failure.message);
+    } catch (failure, stackTrace) {
+      AppLogger.error('Génération de couverture échouée',
+        component: 'cover', error: failure, stackTrace: stackTrace);
+      _show('Impossible de générer la couverture. '
+          'Vérifiez les réglages graphiques et vos crédits.');
+    } finally {
+      if (mounted) setState(() => _coverBusy = false);
+    }
   }
 
   Future<void> _chooseCover() async {
@@ -493,6 +564,24 @@ class BookEditorPageState extends State<BookEditorPage> {
       icon: const Icon(Icons.photo_library_outlined),
       label: const Text('Choisir une image locale'),
     ),
+    const SizedBox(height: DomoliaSpacing.compact),
+    OutlinedButton.icon(
+      key: const ValueKey('bookGenerateCover'),
+      onPressed: _coverBusy ? null : _generateCover,
+      icon: const Icon(Icons.auto_awesome_outlined),
+      label: const Text('Générer une couverture avec l’IA'),
+    ),
+    if (_coverBusy)
+      const Padding(
+        key: ValueKey('bookCoverGenerating'),
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Row(children: [
+          SizedBox(width: 18, height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2)),
+          SizedBox(width: 12),
+          Expanded(child: Text('Illustrateur dessine la couverture…')),
+        ]),
+      ),
     const SizedBox(height: DomoliaSpacing.compact),
     const SizedBox(height: DomoliaSpacing.section),
     SwitchListTile(
