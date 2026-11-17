@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:domolia/ai/ai_controller.dart';
+import 'package:domolia/ai/ai_settings_panel.dart';
 import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/ai/ai_task_routing.dart';
 import 'package:domolia/ai/openuncensored_api.dart';
@@ -356,7 +357,15 @@ void main() {
 
     await _drawerItem(tester, 'Paramètres');
     expect(find.widgetWithText(ListTile, 'Crédits IA'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Fournisseurs IA'), findsOneWidget);
     expect(find.widgetWithText(ListTile, 'Mises à jour'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('settingsAiProviders')));
+    await tester.pumpAndSettle();
+    expect(find.byType(AiSettingsPanel), findsOneWidget);
+    expect(find.text('Fournisseur IA'), findsOneWidget);
+    await _systemBack(tester);
+    expect(find.widgetWithText(ListTile, 'Crédits IA'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
     await tester.pumpAndSettle();
