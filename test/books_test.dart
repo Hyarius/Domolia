@@ -973,7 +973,7 @@ void main() {
     stored = (await library.session(session.id))!;
     expect(stored.generationOverrides[AiNarrativeTask.narrator]!
         .reasoningEffort, 'none');
-    expect(stored.generationOverrides[AiNarrativeTask.narrator], isNull);
+    expect(stored.generationOverrides[AiNarrativeTask.jsonifier], isNull);
     expect(tester.takeException(), isNull);
   });
 
