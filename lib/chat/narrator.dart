@@ -116,7 +116,7 @@ class NarrativeTuning {
     ][responseLength - 1];
     final pacing = <String>[
       'Une conséquence immédiate, puis la première réaction possible.',
-      'Un seul temps fort, puis rendre la main au joueur.',
+      'Un seul temps fort, puis rends la main au joueur.',
       'Un ou deux temps forts cohérents, puis laisser le joueur agir.',
       'Plusieurs événements liés, sans franchir une décision du joueur.',
       'Une séquence étendue, sans sauter un choix du joueur.',
