@@ -1,5 +1,7 @@
 # Domolia — Format portable des Livres
 
+> Modèles JSON complets et vérifiés : [`template/livre_template.json`](../../template/livre_template.json) (import direct) et [`template/README.md`](../../template/README.md) (autres formats).
+
 ## Contrat v2 (Lore canonique)
 
 Un Livre exporté est un JSON UTF-8 `domolia.book` **version 2**, limité à **2 Mio**. Les anciens fichiers **v1 restent importables** et deviennent v2 à la prochaine sauvegarde, avec un Lore vide. Aucun historique de Partie n'entre dans cette définition.
