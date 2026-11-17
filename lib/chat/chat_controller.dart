@@ -744,7 +744,7 @@ class NarrativeChatController extends ChangeNotifier {
     ];
     if (structuredOutput) {
       context[0] = AiToolMessage(role: 'system',
-          content: '${context[0].content}\n\n$theatricalNarratorProtocol');
+          content: '${_structuredInstructions(context[0].content)}\n\n$theatricalNarratorProtocol');
     }
     context[0] = AiToolMessage(role: 'system',
         content: '${context.first.content}\n'
@@ -781,7 +781,7 @@ class NarrativeChatController extends ChangeNotifier {
               theatricalOutput: structuredOutput);
           if (structuredOutput) {
             fallback[0] = AiMessage(role: 'system',
-                content: '${fallback.first.content}\n\n$theatricalNarratorProtocol');
+                content: '${_structuredInstructions(fallback.first.content)}\n\n$theatricalNarratorProtocol');
           }
           return _requestText(endpoint, fallback, token, maxTokens,
               onFragment: onFragment);
@@ -900,6 +900,21 @@ class NarrativeChatController extends ChangeNotifier {
 
   /// New turns are generated once, decoded incrementally and committed
   /// atomically. The old formatter is used only for pre-migration pending RAW.
+  /// Normalize legacy saved narrator prompts for theatrical output.
+  /// Modern defaults already support these markers without rewriting.
+  String _structuredInstructions(String source) => source
+      .replaceAll(
+        'Tu écris directement une histoire de jeu de rôle en français, en texte libre.',
+        'Tu écris une histoire de jeu de rôle en français.',
+      )
+      .replaceAll(
+        'Exprime naturellement la narration et les dialogues, sans format informatique.',
+        'Conserve une écriture littéraire naturelle dans chaque message.',
+      )
+      .replaceAll(
+        'Ne produis ni JSON, ni balises, ni instructions destinées à une interface.',
+        '');
+
   Future<void> _generateStructured() async {
     if (_closed || busy || _lastPlayerIndex == null) return;
     final token = ++_generationToken;
@@ -973,7 +988,7 @@ class NarrativeChatController extends ChangeNotifier {
       _check(token);
       final context = buildNarratorContext(theatricalOutput: true);
       context[0] = AiMessage(role: 'system',
-          content: '${context.first.content}\n\n$theatricalNarratorProtocol');
+          content: '${_structuredInstructions(context.first.content)}\n\n$theatricalNarratorProtocol');
       final before = diagnostics?.last;
       Object? failure;
       try {
