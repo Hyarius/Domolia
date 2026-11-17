@@ -1,4 +1,5 @@
 import 'chat_protocol.dart';
+import 'theatrical_script_decoder.dart';
 
 /// An original literary reply. Its source is never reconstructed from UI bubbles.
 /// IDs refer to player messages, not to generated timeline event positions.
@@ -22,13 +23,13 @@ class RawGeneration {
 
   /// Human-readable, source-faithful content used for Live Memory quotes.
   /// Historical records contain literary RAW already; new structured turns
-  /// preserve the original NDJSON in [rawText] for diagnostics and auditing.
+  /// preserve the original script or NDJSON in [rawText] for auditing.
   String get validatedNarrative {
-    if (!isStructured || !rawText.trimLeft().startsWith('{"type":')) {
+    if (!isStructured) {
       return rawText;
     }
     try {
-      final parser = ChatLineDecoder();
+      final parser = TheatricalScriptDecoder();
       final events = <ChatOutputEvent>[
         ...parser.add(rawText),
         ...parser.finish(),

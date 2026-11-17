@@ -98,7 +98,7 @@ void main() {
     final pending = chat.send('Je pousse la porte.');
     await _tick();
     expect(provider.calls, 1);
-    expect(provider.lastPrompt!.first.content, contains('NDJSON'));
+    expect(provider.lastPrompt!.first.content, contains('SCRIPT THÉÂTRAL'));
     provider.fragments.add(const AiStreamChunk(
       text: '{"type":"message","speaker":"character",'
           '"name":"Oren","text":"Bonsoir',

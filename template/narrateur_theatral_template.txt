@@ -1,0 +1,9 @@
+[NARRATION]
+La pluie glisse sur les vitres de l'Auberge du Cadran.
+
+[PERSONNAGE:Tomas|inquiet]
+« L'horloge s'est encore arrêtée à 21 h 17. »
+
+[SCENE]
+[NARRATION]
+Les pavés du port brillent sous les réverbères.

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:domolia/books/book_definition.dart';
 import 'package:domolia/chat/chat_protocol.dart';
+import 'package:domolia/chat/theatrical_script_decoder.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -33,8 +34,21 @@ void main() {
     expect(diagnostic['turns'], isNotEmpty);
   });
 
-  test('streaming template decodes all NDJSON lines', () {
-    final decoder = ChatLineDecoder();
+  test('theatrical streaming template preserves scene and speaker order', () {
+    final decoder = TheatricalScriptDecoder();
+    final source = File('template/narrateur_theatral_template.txt')
+        .readAsStringSync();
+    final events = <ChatOutputEvent>[];
+    for (final fragment in source.split('')) {
+      events.addAll(decoder.add(fragment));
+    }
+    events.addAll(decoder.finish());
+    expect(events.whereType<ChatLine>(), hasLength(3));
+    expect(events.whereType<ChatSceneChangeOutput>(), hasLength(1));
+  });
+
+  test('legacy streaming template still decodes all NDJSON lines', () {
+    final decoder = TheatricalScriptDecoder();
     final source = File('template/narrateur_streaming_template.ndjson')
         .readAsStringSync();
     final events = <ChatOutputEvent>[];
