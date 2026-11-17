@@ -562,7 +562,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
     const titles = <AiNarrativeTask, String>{
       AiNarrativeTask.narrator: 'Narrateur',
       AiNarrativeTask.jsonifier: 'JSONificateur',
-      AiNarrativeTask.optimizer: 'Optimiseur de Lore (une fois par Partie)',
+
       AiNarrativeTask.memory: 'Extraction mémoire (à chaque tour)',
     };
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -575,11 +575,11 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
       const SizedBox(height: 8),
       const Text('Choisissez parmi les profils déjà configurés. '
         'Ces paramètres s’appliquent par défaut à toutes les Parties ; '
-        'chaque conversation peut les surcharger. '
-        'L’optimiseur est désactivé tant qu’aucun profil ne lui est assigné.',
+        'chaque conversation peut les surcharger. ''Le contexte initial du Livre est préparé localement, sans IA de compression.',
         style: TextStyle(color: DomoliaColors.muted)),
       const SizedBox(height: DomoliaSpacing.field),
-      for (final task in AiNarrativeTask.values) ...[
+      for (final task in AiNarrativeTask.values.where(
+          (task) => task != AiNarrativeTask.optimizer)) ...[
         Builder(builder: (context) {
           final chosen = routing.profileFor(task);
           final known = chosen != null &&
@@ -595,10 +595,8 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                   : null),
             items: [
               DropdownMenuItem(value: '', child: Text(
-                task == AiNarrativeTask.optimizer
-                    ? 'Désactivé'
-                    : task == AiNarrativeTask.jsonifier || task == AiNarrativeTask.memory
-                        ? 'Même IA que le narrateur' : 'Profil du Livre')),
+                task == AiNarrativeTask.jsonifier || task == AiNarrativeTask.memory
+                    ? 'Même IA que le narrateur' : 'Profil du Livre')),
               for (final profile in controller.profiles)
                 DropdownMenuItem(value: profile.id, child: Text(
                   profile.name, overflow: TextOverflow.ellipsis)),
