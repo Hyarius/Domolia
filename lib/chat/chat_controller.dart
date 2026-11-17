@@ -55,6 +55,7 @@ class NarrativeChatController extends ChangeNotifier {
     this.initialOptimizedLoreHash,
     this.onOptimizedLore,
     this.narrator = const Narrator(),
+    this.structuredStreamingEnabled = false,
     this.narratorProvider,
     this.loreProvider,
     this.loreContextBudget = 8000,
@@ -82,6 +83,8 @@ class NarrativeChatController extends ChangeNotifier {
   /// Stores a summary (or an empty failure sentinel) once per Lore revision.
   final Future<void> Function(String loreHash, String summary)? onOptimizedLore;
   final Narrator narrator;
+  /// Enabled in production; legacy constructor callers retain old behavior.
+  final bool structuredStreamingEnabled;
   final Narrator Function()? narratorProvider;
   final BookLore Function()? loreProvider;
   final int loreContextBudget;
@@ -974,7 +977,9 @@ class NarrativeChatController extends ChangeNotifier {
   }
 
   Future<void> _generate({bool reuseRaw = false}) async {
-    if (!reuseRaw && pendingRaw == null) return _generateStructured();
+    if (structuredStreamingEnabled && !reuseRaw && pendingRaw == null) {
+      return _generateStructured();
+    }
     if (_closed || busy || _lastPlayerIndex == null) return;
     final token = ++_generationToken;
     error = null;
