@@ -878,7 +878,9 @@ class NarrativeChatController extends ChangeNotifier {
     if (lore == null || lore.isEmpty) return;
     final hash = 'startup-v2-${const LoreContextOptimizer().sourceHash(lore)}';
     if (!_forceOptimization && _optimizedHash == hash &&
-        _optimizedLore != null && _optimizedLore!.isNotEmpty) return;
+        _optimizedLore != null && _optimizedLore!.isNotEmpty) {
+      return;
+    }
     _forceOptimization = false;
 
     // No AI request, regardless of the configured legacy optimizer profile.
