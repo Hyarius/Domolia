@@ -104,7 +104,9 @@ class AiUsageRecord {
     } else {
       for (final line in const LineSplitter().convert(raw)) {
         if (!line.startsWith('data:') ||
-            (!line.contains('"usage"') && !line.contains('"ou"'))) continue;
+            (!line.contains('"usage"') && !line.contains('"ou"'))) {
+          continue;
+        }
         try { capture(jsonDecode(line.substring(5).trim())); }
         catch (_) { /* Truncated or malformed stream event. */ }
       }
