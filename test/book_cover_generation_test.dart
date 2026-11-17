@@ -79,7 +79,7 @@ void main() {
     expect(fake.request!.prompt, contains('texte, bulles, filigranes'));
     expect(fake.request!.prompt, contains('gravure au fusain'));
     expect(fake.request!.prompt, isNot(contains('meurtrier')));
-    expect(generated.costUsd, .02);
+    expect(generated.costUsd, 0.02);
     expect(generated.cover.mime, 'image/jpeg');
     final jpg = base64Decode(generated.cover.base64);
     expect(jpg.length, lessThan(BookDefinition.maxCoverBytes));
