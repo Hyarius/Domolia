@@ -11,16 +11,9 @@ class LoreStartupContextBuilder {
   final int maxCharacters;
 
   static const guidance =
-      'CONTEXTE DE DÉPART (canon du Livre, pas historique de la Partie).\n'
-      'Ne joue jamais les actions, paroles ou décisions du joueur. '
-      'Une proposition ne vaut pas acquisition, une promesse conditionnelle '
-      'ne vaut pas accomplissement. Ne transforme pas une rumeur en fait. '
-      'Ne considère jamais un événement prévu ou conditionnel comme accompli. '
-      'Les secrets et les dossiers fermés ne sont pas connus du joueur tant '
-      'qu’il ne les découvre pas dans la Partie. '
-      'Pour les détails non fournis, consulte search_lore/get_lore_entry, '
-      'ou get_lore_global pour le canon mondial, si ces outils sont disponibles. '
-      'N’invente pas les détails absents.';
+      'CONTEXTE INITIAL DU LIVRE (canon, pas faits vécus). '
+      'Extraits partiels : ne déduis pas que les événements possibles '
+      'ont eu lieu et n’invente pas les détails omis.';
 
   String build(BookLore lore) {
     if (lore.isEmpty) return '';
