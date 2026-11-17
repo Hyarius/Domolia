@@ -24,7 +24,7 @@ class ChatIllustrationIntent extends ChatTimelineEvent {
 /// Only validated narrative is reusable as context or evidence. The original
 /// RAW (including optional proposals) remains untouched in diagnostics.
 String stripIllustrationBlocks(String raw) {
-  final image = RegExp(r'^\[\s*IMAGE\s*\](?:\s|$)', caseSensitive: false);
+  final image = RegExp(r'^\[\s*IMAGE\s*\]', caseSensitive: false);
   final narrative = RegExp(
     r'^\[\s*(?:NARRATION|NARRATEUR|PERSONNAGE|CHARACTER|SCENE|SCÈNE|SCENE_CHANGE|CHANGEMENT_DE_SCENE)(?:\s*[:\]])',
     caseSensitive: false,
