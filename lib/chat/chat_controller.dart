@@ -823,7 +823,158 @@ class NarrativeChatController extends ChangeNotifier {
     _check(token);
   }
 
+  /// New turns are generated once, decoded incrementally and committed
+  /// atomically. The old formatter is used only for pre-migration pending RAW.
+  Future<void> _generateStructured() async {
+    if (_closed || busy || _lastPlayerIndex == null) return;
+    final token = ++_generationToken;
+    final playerId = _playerEventId!;
+    error = null;
+    busy = true;
+    promptTokens = null;
+    completionTokens = null;
+    _draft.clear();
+    _notify();
+    final decoder = ChatLineDecoder();
+    final accepted = <ChatOutputEvent>[];
+    final raw = StringBuffer();
+
+    void renderDraft() {
+      if (_closed || token != _generationToken) return;
+      _draft.clear();
+      var id = _nextId;
+      for (final event in accepted) {
+        if (event is ChatSceneChangeOutput) {
+          _draft.add(ChatSceneChange(id: id++));
+        } else if (event is ChatLine) {
+          _draft.add(ChatEntry(id: id++, speaker: event.speaker,
+              name: event.name, text: event.text, status: event.status));
+        }
+      }
+      final partial = decoder.preview;
+      if (partial != null && partial.text.isNotEmpty) {
+        _draft.add(ChatEntry(id: id, speaker: partial.speaker,
+            name: partial.name, text: partial.text, inProgress: true));
+      }
+      _notify();
+    }
+
+    void consume(String fragment) {
+      if (_closed || token != _generationToken) return;
+      raw.write(fragment);
+      accepted.addAll(decoder.add(fragment));
+      renderDraft();
+    }
+
+    try {
+      await _save(_timeline, _generations);
+      _check(token);
+      if (memory != null) {
+        await memory!.analyzePending();
+        await memory!.refresh();
+        _check(token);
+      }
+      final endpoint = resolveConnection != null
+          ? await resolveConnection!()
+          : configuration() == null ? null
+              : NarrativeAiEndpoint(
+                  provider: provider, configuration: configuration()!);
+      _check(token);
+      if (endpoint == null || endpoint.configuration.apiKey.isEmpty) {
+        throw const AiProviderException(
+          'Configurez une connexion IA valide dans les paramètres.');
+      }
+      modelUsed = endpoint.configuration.model;
+      await _ensureOptimizedContext(token);
+      _check(token);
+      final context = buildNarratorContext();
+      context[0] = AiMessage(role: 'system',
+          content: '${context.first.content}\n\n$structuredNarratorProtocol');
+      final before = diagnostics?.last;
+      Object? failure;
+      try {
+        if (endpoint.toolCallingEnabled &&
+            endpoint.provider is AiToolCallingChatProvider) {
+          // Tool rounds are validated separately; their intermediate content
+          // must never be rendered as a narrative message.
+          final output = await _requestHybrid(endpoint, token,
+              endpoint.maxOutputTokens ?? 2400, structuredOutput: true);
+          _check(token);
+          consume(output);
+        } else {
+          await _requestText(endpoint, context, token,
+              endpoint.maxOutputTokens ?? 2400, onFragment: consume);
+        }
+        _check(token);
+        accepted.addAll(decoder.finish());
+        if (!accepted.any((e) => e is ChatLine)) {
+          throw const FormatException('Le narrateur n’a produit aucun message.');
+        }
+        final prepared = <ChatTimelineEvent>[];
+        var id = _nextId;
+        for (final event in accepted) {
+          if (event is ChatSceneChangeOutput) {
+            if ((prepared.isEmpty && _timeline.lastOrNull is ChatSceneChange) ||
+                prepared.lastOrNull is ChatSceneChange) {
+              throw const FormatException('Séparateurs de scène consécutifs.');
+            }
+            prepared.add(ChatSceneChange(id: id++));
+          } else if (event is ChatLine) {
+            prepared.add(ChatEntry(id: id++, speaker: event.speaker,
+                name: event.name, text: event.text, status: event.status));
+          }
+        }
+        final compact = accepted.whereType<ChatLine>().map((e) =>
+            e.speaker == ChatSpeaker.character
+                ? '${e.name} : ${e.text}' : e.text).join('\n');
+        final record = RawGeneration(playerEventId: playerId,
+            rawText: raw.toString()).structured(_nextId, id - 1,
+                compactText: compact);
+        final updated = [
+          ..._generations.where((g) => g.playerEventId != playerId),
+          record,
+        ];
+        _committingSnapshot = true;
+        try {
+          await _save([..._timeline, ...prepared], updated);
+        } finally {
+          _committingSnapshot = false;
+        }
+        _check(token);
+        _nextId = id;
+        _generations..clear()..addAll(updated);
+        _timeline.addAll(prepared);
+        _draft.clear();
+        _timelineChanged();
+        _notify();
+        if (memory != null) unawaited(memory!.analyzePending());
+        _capture('narrator_structured', before, events: prepared);
+      } catch (e) {
+        failure = e;
+        _capture('narrator_structured', before, failure: failure);
+        rethrow;
+      }
+    } on _Cancelled {
+      // A cancelled or invalid draft never becomes durable.
+    } on AiProviderException catch (failure) {
+      error = failure.userMessage;
+    } on FormatException catch (failure) {
+      error = failure.message;
+    } catch (failure, stack) {
+      AppLogger.error('Streaming narratif échoué', component: 'chat',
+          error: failure, stackTrace: stack);
+      error = 'Réponse structurée invalide ou interrompue. Réessayez.';
+    } finally {
+      if (!_closed && token == _generationToken) {
+        _draft.clear();
+        busy = false;
+        _notify();
+      }
+    }
+  }
+
   Future<void> _generate({bool reuseRaw = false}) async {
+    if (!reuseRaw && pendingRaw == null) return _generateStructured();
     if (_closed || busy || _lastPlayerIndex == null) return;
     final token = ++_generationToken;
     error = null;
