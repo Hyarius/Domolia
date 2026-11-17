@@ -78,6 +78,29 @@ ImageGenerationResult _result() {
   );
 }
 
+class _MemoryFiles extends LocalIllustrationFiles {
+  _MemoryFiles() : super(root: () async => Directory('unused'));
+  final Map<String, Uint8List> storage = {};
+
+  @override
+  Future<String> save(String requestId, Uint8List bytes, String mimeType) async {
+    final name = 'img-$requestId.png';
+    storage[name] = bytes;
+    return name;
+  }
+
+  @override
+  Future<Uint8List?> read(String name) async => storage[name];
+
+  @override
+  Future<void> delete(String name) async { storage.remove(name); }
+
+  @override
+  Future<void> pruneOrphans(Set<String> retained) async {
+    storage.removeWhere((name, _) => !retained.contains(name));
+  }
+}
+
 class _ImageRecords implements IllustrationRecordStore {
   final Map<String,StoredIllustration> jobs={};
   List<ChatTimelineEvent> Function()? timeline;
@@ -111,8 +134,7 @@ void main() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
-    final dir=await Directory.systemTemp.createTemp('domolia-slot-widget-');
-    addTearDown(()=>dir.delete(recursive:true));
+    final memoryFiles = _MemoryFiles();
     final text=_Text();
     final ai=AiConnectionController(store:_Store(),provider:text);
     addTearDown(ai.dispose);
@@ -142,7 +164,7 @@ void main() {
       sessionId:'session',ai:ai,preferences:prefs,records:records,
       timeline:()=>chat.timeline,lore:()=>const BookLore(),
       memory:()=>const [],awaitNarrativeWrites:() async {},
-      files:LocalIllustrationFiles(root:() async=>dir),
+      files:memoryFiles,
       providerFactory:(_)=>image,
     );
     addTearDown(images.dispose);
@@ -153,32 +175,24 @@ void main() {
         controller:chat,onOpenSettings:(){},illustrations:images,
       )),
     ));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     expect(find.byKey(const ValueKey('chatIllustrateLastScene')),
       findsOneWidget);
     expect(find.byKey(const ValueKey('imageGenerate')),findsOneWidget);
     expect(image.calls,0);
     await tester.tap(find.byKey(const ValueKey('imageGenerate')));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     expect(find.byKey(const ValueKey('imageConfirmGenerate')),
       findsOneWidget);
     expect(image.calls,0);
     await tester.tap(find.text('Annuler').last);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     expect(image.calls,0);
     await tester.tap(find.byKey(const ValueKey('imageGenerate')));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.byKey(const ValueKey('imageConfirmGenerate')));
     await tester.pump();
-    // Indeterminate progress indicators schedule endless frames.
-    // Wait for real asynchronous file IO outside FakeAsync before settling.
-    await tester.runAsync(() async {
-      final deadline = DateTime.now().add(const Duration(seconds: 10));
-      while (images.isBusy(2) && DateTime.now().isBefore(deadline)) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-    });
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     expect(image.calls,1);
     expect(find.byKey(const ValueKey('chatGeneratedImage')),findsOneWidget);
   });
