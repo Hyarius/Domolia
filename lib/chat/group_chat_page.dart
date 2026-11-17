@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/services.dart';
 
 import '../ai/ai_diagnostics.dart';
 import '../theme/domolia_theme.dart';
@@ -38,6 +39,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   int? _lastTimelineEventId;
+  int? _highlightedMessageId;
 
   @override
   void initState() {
@@ -265,7 +267,9 @@ class _GroupChatPageState extends State<GroupChatPage> {
   Future<void> _showMessageActions(ChatEntry entry) async {
     if (entry.inProgress || widget.controller.busy) return;
     final isPlayer = entry.speaker == ChatSpeaker.player;
-    await showModalBottomSheet<void>(
+    setState(() => _highlightedMessageId = entry.id);
+    try {
+      await showModalBottomSheet<void>(
       context: context,
       builder: (sheetContext) => SafeArea(
         child: Column(
@@ -296,6 +300,18 @@ class _GroupChatPageState extends State<GroupChatPage> {
                   widget.controller.removeSceneBefore(entry.id);
                 },
               ),
+            ListTile(
+              key: const ValueKey('chatActionCopy'),
+              leading: const Icon(Icons.copy_outlined),
+              title: const Text('Copier'),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                final text = isPlayer || entry.speaker == ChatSpeaker.narrator
+                    ? entry.text : _characterText(entry.text, entry.name);
+                await Clipboard.setData(ClipboardData(text: text));
+                _showExportMessage('Texte copié.');
+              },
+            ),
             if (isPlayer) ...[
               ListTile(
                 key: const ValueKey('chatActionEdit'),
@@ -316,6 +332,26 @@ class _GroupChatPageState extends State<GroupChatPage> {
                 },
               ),
             ] else ...[
+              ListTile(
+                key: const ValueKey('chatActionIllustrate'),
+                leading: const Icon(Icons.brush_outlined),
+                title: const Text('Illustrer'),
+                subtitle: const Text('Ajouter une intention d’image après ce passage'),
+                enabled: widget.controller.canIllustrateMessage(entry.id),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  try {
+                    final added =
+                        await widget.controller.illustrateMessage(entry.id);
+                    _showExportMessage(added
+                        ? 'Illustration proposée.'
+                        : 'Impossible d’illustrer ce passage.');
+                  } catch (_) {
+                    _showExportMessage(
+                        'Impossible d’enregistrer l’illustration.');
+                  }
+                },
+              ),
               ListTile(
                 key: const ValueKey('chatActionRegenerate'),
                 leading: const Icon(Icons.refresh_rounded),
@@ -349,7 +385,10 @@ class _GroupChatPageState extends State<GroupChatPage> {
           ],
         ),
       ),
-    );
+      );
+    } finally {
+      if (mounted) setState(() => _highlightedMessageId = null);
+    }
   }
 
 
@@ -388,6 +427,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
                           return _ChatBubble(
                             key: ValueKey('chat-entry-${bubble.id}'),
                             entry: bubble,
+                            highlighted: bubble.id == _highlightedMessageId,
                             onLongPress: bubble.inProgress
                                 ? null : () => _showMessageActions(bubble),
                           );
@@ -689,9 +729,13 @@ class _IllustrationPlaceholder extends StatelessWidget {
 }
 
 class _ChatBubble extends StatelessWidget {
-  const _ChatBubble({super.key, required this.entry, this.onLongPress});
+  const _ChatBubble({
+    super.key, required this.entry, this.onLongPress,
+    this.highlighted = false,
+  });
   final ChatEntry entry;
   final VoidCallback? onLongPress;
+  final bool highlighted;
 
   @override
   Widget build(BuildContext context) {
@@ -706,8 +750,15 @@ class _ChatBubble extends StatelessWidget {
       // Narration is prose without a participant label, avatar, or bubble.
       return GestureDetector(
         onLongPress: onLongPress,
-        child: Padding(
+        child: Container(
+          key: highlighted
+              ? ValueKey('chatHighlightedMessage-${entry.id}') : null,
           padding: const EdgeInsets.fromLTRB(8, 8, 8, 22),
+          decoration: highlighted ? BoxDecoration(
+            color: DomoliaColors.goldDark.withValues(alpha: 0.2),
+            border: Border.all(color: DomoliaColors.goldDark),
+            borderRadius: BorderRadius.circular(10),
+          ) : null,
           child: Text(entry.text,
             key: const ValueKey('chatNarrationText'),
             style: TextStyle(
@@ -764,13 +815,17 @@ class _ChatBubble extends StatelessWidget {
                   ),
                 ),
                 Container(
+                  key: highlighted
+                      ? ValueKey('chatHighlightedMessage-${entry.id}') : null,
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 14,
                     vertical: 12,
                   ),
                   decoration: BoxDecoration(
-                    color: isPlayer
+                    color: highlighted
+                        ? DomoliaColors.goldDark.withValues(alpha: 0.3)
+                        : isPlayer
                         ? const Color(0xFF624E20)
                         : entry.speaker == ChatSpeaker.narrator
                             ? DomoliaColors.surface
@@ -782,7 +837,9 @@ class _ChatBubble extends StatelessWidget {
                       topLeft: Radius.circular(4),
                     ),
                     border: Border.all(
-                      color: isPlayer
+                      color: highlighted
+                          ? DomoliaColors.goldLight
+                          : isPlayer
                           ? DomoliaColors.goldDark
                           : DomoliaColors.border,
                     ),

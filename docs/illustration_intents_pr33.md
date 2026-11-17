@@ -44,6 +44,15 @@ transforme pas une intention en fait ni en événement narratif supplémentaire.
 - `automatic` : **même comportement que Suggestions dans cette PR**.
   Aucun processus, coût, file d'attente ni bouton de génération simulé.
 
+Un appui long sur une bulle IA ouvre « Copier » et « Illustrer ».
+Le message est surligné pendant l'ouverture du menu. « Illustrer »
+insère un `ChatIllustrationIntent` immédiatement après la bulle, avec
+son texte (500 caractères max) comme description initiale. Cette intention
+est sauvegardée avec la timeline, sans appel IA, sans modifier le RAW
+original et sans doublons si une intention suit déjà directement le texte.
+La réplique d'ouverture sans tour joueur ne peut pas être illustrée par
+cette action car elle n'a pas de `playerEventId` d'origine.
+
 Un nouveau Livre choisit Suggestions ; les anciens JSON de Livre sans
 ce réglage sont importés en Disabled pour éviter un changement silencieux.
 Les Parties héritent du Livre ou définissent un override nullable.

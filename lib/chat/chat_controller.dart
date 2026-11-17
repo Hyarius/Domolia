@@ -139,6 +139,7 @@ class NarrativeChatController extends ChangeNotifier {
   bool _closed = false;
   bool _started = false;
   bool _committingSnapshot = false;
+  bool _manualIllustrationInFlight = false;
   int _nextId = 0;
   int? _lastPlayerIndex;
   int _generationToken = 0;
@@ -246,7 +247,7 @@ class NarrativeChatController extends ChangeNotifier {
 
   Future<void> send(String text) async {
     final action = text.trim();
-    if (_closed || busy || action.isEmpty) return;
+    if (_closed || busy || _manualIllustrationInFlight || action.isEmpty) return;
     if (pendingRaw != null) {
       error = 'Terminez ou régénérez la réponse en attente avant de continuer.';
       _notify();
@@ -268,7 +269,7 @@ class NarrativeChatController extends ChangeNotifier {
   }
 
   Future<void> retry() async {
-    if (_closed || busy || _lastPlayerIndex == null) return;
+    if (_closed || busy || _manualIllustrationInFlight || _lastPlayerIndex == null) return;
     if (pendingRaw != null) {
       await _generate(reuseRaw: true);
     } else {
@@ -277,7 +278,7 @@ class NarrativeChatController extends ChangeNotifier {
   }
 
   Future<void> regenerate() async {
-    if (_closed || busy || _lastPlayerIndex == null) return;
+    if (_closed || busy || _manualIllustrationInFlight || _lastPlayerIndex == null) return;
     _timeline.removeRange(_lastPlayerIndex! + 1, _timeline.length);
     _dropGenerationsFromPlayer(_playerEventId!);
     _timelineChanged();
@@ -293,7 +294,7 @@ class NarrativeChatController extends ChangeNotifier {
     final value = text.trim();
     // A pending RAW belongs to the exact player history that produced it.
     // Editing any previous action would silently attach stale prose to new input.
-    if (_closed || busy || pendingRaw != null ||
+    if (_closed || busy || _manualIllustrationInFlight || pendingRaw != null ||
         value.isEmpty || value.length > 4000) {
       return false;
     }
@@ -311,7 +312,7 @@ class NarrativeChatController extends ChangeNotifier {
   }
 
   Future<bool> resumeFromPlayerMessage(int id) async {
-    if (_closed || busy) return false;
+    if (_closed || busy || _manualIllustrationInFlight) return false;
     final index = _playerIndex(id);
     if (index < 0) return false;
     _timeline.removeRange(index + 1, _timeline.length);
@@ -340,8 +341,63 @@ class NarrativeChatController extends ChangeNotifier {
     return null;
   }
 
+  /// Insert a deliberate [IMAGE] directly after a committed AI message.
+  /// This is local-only: no provider call, RAW modification or token cost.
+  bool canIllustrateMessage(int messageId) {
+    if (_closed || busy || _manualIllustrationInFlight ||
+        pendingRaw != null || _timeline.length >= 50000) {
+      return false;
+    }
+    final index = _timeline.indexWhere(
+      (event) => event is ChatEntry && event.id == messageId &&
+          event.speaker != ChatSpeaker.player && !event.inProgress,
+    );
+    if (index < 0 || (_timeline[index] as ChatEntry).text.trim().isEmpty ||
+        playerIdForAiMessage(messageId) == null) {
+      return false;
+    }
+    // Prevent duplicate placeholders on a repeated long press.
+    return index + 1 >= _timeline.length ||
+        _timeline[index + 1] is! ChatIllustrationIntent;
+  }
+
+  /// The timeline and unchanged RAW are persisted atomically before the
+  /// proposal becomes visible. Rewinds remove it with its source turn.
+  Future<bool> illustrateMessage(int messageId) async {
+    if (!canIllustrateMessage(messageId)) return false;
+    final index = _timeline.indexWhere((event) => event.id == messageId);
+    final entry = _timeline[index] as ChatEntry;
+    final playerId = playerIdForAiMessage(messageId)!;
+    final source = entry.text.trim();
+    final description = source.length <= 500
+        ? source : source.substring(0, 500).trimRight();
+    final intent = ChatIllustrationIntent(
+      id: _nextId, playerEventId: playerId, description: description,
+    );
+    final updated = <ChatTimelineEvent>[
+      ..._timeline.take(index + 1),
+      intent,
+      ..._timeline.skip(index + 1),
+    ];
+    _manualIllustrationInFlight = true;
+    try {
+      await _save(updated, _generations);
+      if (_closed) return false;
+      _timeline.insert(index + 1, intent);
+      _nextId++;
+      if (_lastPlayerIndex != null && index < _lastPlayerIndex!) {
+        _lastPlayerIndex = _lastPlayerIndex! + 1;
+      }
+      _timelineChanged();
+      _notify();
+      return true;
+    } finally {
+      _manualIllustrationInFlight = false;
+    }
+  }
+
   bool canRegenerateFromAiMessage(int id) {
-    if (_closed || busy) return false;
+    if (_closed || busy || _manualIllustrationInFlight) return false;
     final index = _timeline.indexWhere(
       (e) => e is ChatEntry && e.id == id &&
           e.speaker != ChatSpeaker.player,
@@ -366,7 +422,7 @@ class NarrativeChatController extends ChangeNotifier {
   }
 
   bool startSceneAt(int messageId) {
-    if (_closed || busy) return false;
+    if (_closed || busy || _manualIllustrationInFlight) return false;
     final index = _timeline.indexWhere(
       (e) => e.id == messageId && e is ChatEntry,
     );
@@ -382,7 +438,7 @@ class NarrativeChatController extends ChangeNotifier {
   }
 
   bool removeSceneBefore(int messageId) {
-    if (_closed || busy) return false;
+    if (_closed || busy || _manualIllustrationInFlight) return false;
     final index = _timeline.indexWhere((e) => e.id == messageId);
     if (index <= 0 || _timeline[index - 1] is! ChatSceneChange) return false;
     _timeline.removeAt(index - 1);
