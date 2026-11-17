@@ -1,0 +1,57 @@
+{
+  "format": "domolia-ai-exchange-v1",
+  "recordedAtUtc": "2026-11-17T00:00:01.000Z",
+  "completedAtUtc": "2026-11-17T00:00:02.200Z",
+  "durationMs": 1200,
+  "provider": "OpenAI-compatible",
+  "stage": "narrator_structured",
+  "playerEventId": 1,
+  "credentialsRedacted": true,
+  "request": {
+    "method": "POST",
+    "url": "https://api.openuncensored.com/v1/chat/completions",
+    "headers": {
+      "Authorization": "Bearer [REDACTED]",
+      "Content-Type": "application/json",
+      "Accept": "text/event-stream"
+    },
+    "rawBody": "{\"model\":\"modele-exemple\",\"messages\":[{\"role\":\"system\",\"content\":\"Tu es le narrateur.\"},{\"role\":\"user\",\"content\":\"Je promets de revenir avant minuit.\"}],\"stream\":true}",
+    "body": {
+      "model": "modele-exemple",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Tu es le narrateur."
+        },
+        {
+          "role": "user",
+          "content": "Je promets de revenir avant minuit."
+        }
+      ],
+      "stream": true
+    }
+  },
+  "response": {
+    "statusCode": 200,
+    "rawBody": "data: {\"choices\":[{\"delta\":{\"content\":\"{\\\"type\\\":\\\"message\\\",\\\"speaker\\\":\\\"character\\\",\\\"name\\\":\\\"Tomas\\\",\\\"text\\\":\\\"Je vous attends.\\\"}\\n\"}}]}\n\ndata: [DONE]\n\n",
+    "capturedBytes": 159,
+    "totalBytesReceived": 159,
+    "truncated": false
+  },
+  "interpretation": {
+    "promptTokens": 120,
+    "completionTokens": 22,
+    "toolCalls": 0,
+    "cancelled": false,
+    "error": null,
+    "events": [
+      {
+        "id": 2,
+        "type": "message",
+        "speaker": "character",
+        "name": "Tomas",
+        "text": "Je vous attends."
+      }
+    ]
+  }
+}

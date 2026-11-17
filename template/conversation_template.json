@@ -1,0 +1,35 @@
+{
+  "format": "domolia-conversation-v1",
+  "exportedAtUtc": "2026-11-17T00:00:00.000Z",
+  "bookTitle": "Livre modèle - Le Port de Brume",
+  "sessionTitle": "Partie exemple",
+  "selection": {
+    "scope": "complete"
+  },
+  "totalEventsInConversation": 3,
+  "exportedEvents": 3,
+  "events": [
+    {
+      "id": 0,
+      "type": "message",
+      "speaker": "narrator",
+      "name": "Narrateur",
+      "text": "La pluie frappe les vitres."
+    },
+    {
+      "id": 1,
+      "type": "message",
+      "speaker": "player",
+      "name": "Vous",
+      "text": "Je promets de revenir avant minuit."
+    },
+    {
+      "id": 2,
+      "type": "message",
+      "speaker": "character",
+      "name": "Tomas",
+      "text": "Je vous attends.",
+      "status": "calme"
+    }
+  ]
+}

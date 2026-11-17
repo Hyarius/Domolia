@@ -1,0 +1,94 @@
+{
+  "format": "domolia-ai-pipeline-trace-v1",
+  "exportedAtUtc": "2026-11-17T00:01:00.000Z",
+  "bookTitle": "Livre modèle - Le Port de Brume",
+  "sessionTitle": "Partie exemple",
+  "diagnosticsRetentionNotice": "Seuls les échanges encore conservés localement sont disponibles; les RAW persistants sont exportés séparément.",
+  "privacyNotice": "Les clés sont masquées, mais les messages peuvent contenir des données privées.",
+  "capturedExchangeCount": 1,
+  "unreadableDiagnosticCount": 0,
+  "turns": [
+    {
+      "playerEventId": 1,
+      "playerMessage": "Je promets de revenir avant minuit.",
+      "raw": {
+        "text": "{\"type\":\"message\",\"speaker\":\"character\",\"name\":\"Tomas\",\"text\":\"Je vous attends.\"}\n",
+        "compactText": "Tomas : Je vous attends.",
+        "status": "jsonified",
+        "firstEventId": 2,
+        "lastEventId": 2
+      },
+      "phases": [
+        {
+          "format": "domolia-ai-exchange-v1",
+          "recordedAtUtc": "2026-11-17T00:00:01.000Z",
+          "completedAtUtc": "2026-11-17T00:00:02.200Z",
+          "durationMs": 1200,
+          "provider": "OpenAI-compatible",
+          "stage": "narrator_structured",
+          "playerEventId": 1,
+          "credentialsRedacted": true,
+          "request": {
+            "method": "POST",
+            "url": "https://api.openuncensored.com/v1/chat/completions",
+            "headers": {
+              "Authorization": "Bearer [REDACTED]",
+              "Content-Type": "application/json",
+              "Accept": "text/event-stream"
+            },
+            "rawBody": "{\"model\":\"modele-exemple\",\"messages\":[{\"role\":\"system\",\"content\":\"Tu es le narrateur.\"},{\"role\":\"user\",\"content\":\"Je promets de revenir avant minuit.\"}],\"stream\":true}",
+            "body": {
+              "model": "modele-exemple",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "Tu es le narrateur."
+                },
+                {
+                  "role": "user",
+                  "content": "Je promets de revenir avant minuit."
+                }
+              ],
+              "stream": true
+            }
+          },
+          "response": {
+            "statusCode": 200,
+            "rawBody": "data: {\"choices\":[{\"delta\":{\"content\":\"{\\\"type\\\":\\\"message\\\",\\\"speaker\\\":\\\"character\\\",\\\"name\\\":\\\"Tomas\\\",\\\"text\\\":\\\"Je vous attends.\\\"}\\n\"}}]}\n\ndata: [DONE]\n\n",
+            "capturedBytes": 159,
+            "totalBytesReceived": 159,
+            "truncated": false
+          },
+          "interpretation": {
+            "promptTokens": 120,
+            "completionTokens": 22,
+            "toolCalls": 0,
+            "cancelled": false,
+            "error": null,
+            "events": [
+              {
+                "id": 2,
+                "type": "message",
+                "speaker": "character",
+                "name": "Tomas",
+                "text": "Je vous attends."
+              }
+            ]
+          }
+        }
+      ],
+      "usage": {
+        "requests": 1,
+        "narratorRequests": 1,
+        "jsonifierRequests": 0,
+        "optimizerRequests": 0,
+        "promptTokensKnown": 120,
+        "completionTokensKnown": 22,
+        "totalTokensKnown": 142,
+        "requestsWithoutTokenUsage": 0,
+        "complete": true
+      }
+    }
+  ],
+  "unassignedExchanges": []
+}

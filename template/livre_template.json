@@ -1,0 +1,195 @@
+{
+  "format": "domolia.book",
+  "version": 2,
+  "id": "livre_template",
+  "title": "Livre modèle - Le Port de Brume",
+  "tags": [],
+  "cover": null,
+  "narrative": {
+    "style": "Narration immersive concise avec dialogues distincts, sans imposer de décisions au joueur.",
+    "detailLevel": 3,
+    "responseLength": 2,
+    "scenePacing": 2,
+    "styleKeywords": [
+      "Mystérieux",
+      "Dialogué"
+    ]
+  },
+  "openingMessages": [
+    "La pluie frappe les vitres de l'auberge du Phare. L'horloge est arrêtée à 21 h 17. Que faites-vous ?"
+  ],
+  "extensions": {},
+  "lore": {
+    "global": {
+      "universe": "Port de Brume",
+      "overview": "Une ville côtière. L'horloge du port est arrêtée.",
+      "genre": "Mystère",
+      "era": "Époque préindustrielle",
+      "initialContext": "Le joueur entre à l'auberge. Aucun objet ni promesse acquis.",
+      "history": "Le port possède des archives et une horloge ancienne.",
+      "rules": "Ne jamais jouer le personnage du joueur; distinguer rumeurs et faits.",
+      "conflicts": "Les habitants s'interrogent sur la panne.",
+      "directions": "Respecter les découvertes du joueur.",
+      "secrets": "Un mécanisme se trouve sous le quai; ne pas révéler sans le plan et la clé."
+    },
+    "characters": [
+      {
+        "id": "tomas",
+        "name": "Tomas",
+        "description": "Aubergiste prudent.",
+        "aliases": [
+          "le patron"
+        ],
+        "tags": [
+          "auberge"
+        ],
+        "secrets": "Le ticket bleu numéro 47 est dans un tiroir.",
+        "appearance": "Manteau gris.",
+        "personality": "Prudent.",
+        "background": "Vient du port.",
+        "role": "Aubergiste",
+        "motivations": "Protéger son auberge.",
+        "values": "Confiance.",
+        "relatedCharacterIds": [
+          "eline"
+        ],
+        "homePlaceId": "auberge"
+      },
+      {
+        "id": "eline",
+        "name": "Éline Varre",
+        "description": "Archiviste du port.",
+        "aliases": [
+          "l'archiviste"
+        ],
+        "tags": [
+          "archives"
+        ],
+        "secrets": "Sa montre porte CUIVRE-318.",
+        "appearance": "Veste noire.",
+        "personality": "Méthodique.",
+        "background": "Formée aux Archives.",
+        "role": "Archiviste",
+        "motivations": "Comprendre l'horloge.",
+        "values": "Vérification.",
+        "relatedCharacterIds": [
+          "tomas"
+        ],
+        "homePlaceId": "archives"
+      }
+    ],
+    "places": [
+      {
+        "id": "auberge",
+        "name": "Auberge du Phare",
+        "description": "Auberge face aux quais.",
+        "aliases": [],
+        "tags": [],
+        "secrets": "",
+        "type": "Intérieur",
+        "atmosphere": "Pluie sur les vitres.",
+        "history": "Vieux bâtiment.",
+        "features": "Une horloge arrêtée à 21 h 17.",
+        "characterIds": [
+          "tomas"
+        ],
+        "placeIds": [
+          "archives"
+        ]
+      },
+      {
+        "id": "archives",
+        "name": "Archives du Port",
+        "description": "Plans et registres.",
+        "aliases": [],
+        "tags": [],
+        "secrets": "",
+        "type": "Bâtiment",
+        "atmosphere": "Papier ancien.",
+        "history": "Fondées après une tempête.",
+        "features": "Tiroirs de plans.",
+        "characterIds": [
+          "eline"
+        ],
+        "placeIds": [
+          "auberge"
+        ]
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "enquete",
+        "name": "Horloge immobile",
+        "description": "Enquête à choix libres.",
+        "aliases": [],
+        "tags": [],
+        "secrets": "Ne pas révéler le mécanisme avant sa découverte.",
+        "summary": "Comprendre le mystère.",
+        "importance": "main",
+        "initialContext": "Au début, le joueur est à l'auberge.",
+        "objectives": "Questionner et rassembler des indices.",
+        "introduction": "La pendule indique 21 h 17.",
+        "characterIds": [
+          "tomas",
+          "eline"
+        ],
+        "placeIds": [
+          "auberge",
+          "archives"
+        ],
+        "eventIds": [
+          "aveu",
+          "entree"
+        ]
+      }
+    ],
+    "events": [
+      {
+        "id": "aveu",
+        "name": "Un témoignage",
+        "description": "Tomas donne un témoignage incertain.",
+        "aliases": [],
+        "tags": [],
+        "secrets": "",
+        "trigger": "optional",
+        "condition": "Le joueur interroge Tomas.",
+        "mandatory": false,
+        "timing": "À l'auberge.",
+        "consequences": "Une rumeur est rapportée, sans preuve.",
+        "priority": 2,
+        "characterIds": [
+          "tomas"
+        ],
+        "placeIds": [
+          "auberge"
+        ],
+        "scenarioIds": [
+          "enquete"
+        ]
+      },
+      {
+        "id": "entree",
+        "name": "Accès secret",
+        "description": "Découverte possible de la maintenance.",
+        "aliases": [],
+        "tags": [],
+        "secrets": "Accès sous le quai.",
+        "trigger": "conditional",
+        "condition": "Le joueur possède effectivement le plan ET la clé.",
+        "mandatory": false,
+        "timing": "Après acquisition des deux objets.",
+        "consequences": "L'accès devient découvrable sans imposer une action au joueur.",
+        "priority": 5,
+        "characterIds": [
+          "eline"
+        ],
+        "placeIds": [
+          "archives"
+        ],
+        "scenarioIds": [
+          "enquete"
+        ]
+      }
+    ]
+  }
+}

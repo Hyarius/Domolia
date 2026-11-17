@@ -1,0 +1,19 @@
+{
+  "operations": [
+    {
+      "action": "upsert",
+      "id": "commitment:joueur:retour",
+      "category": "commitment",
+      "entity": "joueur",
+      "label": "Promesse de retour",
+      "field": "engagement",
+      "text": "Le joueur a promis de revenir avant minuit.",
+      "kind": "state",
+      "certainty": "confirmed",
+      "visibility": "player",
+      "importance": 4,
+      "sourceSide": "player",
+      "quote": "Je promets de revenir avant minuit."
+    }
+  ]
+}

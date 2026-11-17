@@ -1,0 +1,4 @@
+{"type":"message","speaker":"narrator","name":"Narrateur","text":"La pluie frappe les vitres."}
+{"type":"message","speaker":"character","name":"Tomas","text":"Vous êtes de passage ?"}
+{"type":"scene_change"}
+{"type":"message","speaker":"narrator","name":"Narrateur","text":"Le quai se dessine dans la brume."}

@@ -1,0 +1,2 @@
+{"timestamp":"2026-11-17T00:00:00.000Z","level":"INFO","component":"chat","message":"Génération démarrée"}
+{"timestamp":"2026-11-17T00:00:02.200Z","level":"INFO","component":"chat","message":"Réponse validée","details":{"events":1}}
