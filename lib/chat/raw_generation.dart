@@ -1,3 +1,5 @@
+import 'chat_protocol.dart';
+
 /// An original literary reply. Its source is never reconstructed from UI bubbles.
 /// IDs refer to player messages, not to generated timeline event positions.
 class RawGeneration {
@@ -23,7 +25,7 @@ class RawGeneration {
   String get validatedNarrative => isStructured &&
           compactText != null && compactText!.trim().isNotEmpty
       ? compactText!
-      : rawText;
+      : stripIllustrationBlocks(rawText);
 
   RawGeneration structured(int first, int last, {String? compactText}) => RawGeneration(
     playerEventId: playerEventId,

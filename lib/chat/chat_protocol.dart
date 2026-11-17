@@ -1,5 +1,48 @@
 enum ChatSpeaker { player, narrator, character }
 
+/// Book-level default, optionally overridden by a Party.
+/// Automatic intentionally only proposes placeholders in PR33.
+enum IllustrationMode { disabled, suggestions, automatic }
+
+enum IllustrationIntentState { proposed, ignored, cancelled, queued }
+
+/// A proposal is not narrative evidence or a generated image. Its ID is the
+/// stable timeline event ID, and its origin is the player turn that produced it.
+class ChatIllustrationIntent extends ChatTimelineEvent {
+  const ChatIllustrationIntent({
+    required super.id,
+    required this.playerEventId,
+    required this.description,
+    this.state = IllustrationIntentState.proposed,
+  });
+
+  final int playerEventId;
+  final String description;
+  final IllustrationIntentState state;
+}
+
+/// Only validated narrative is reusable as context or evidence. The original
+/// RAW (including optional proposals) remains untouched in diagnostics.
+String stripIllustrationBlocks(String raw) {
+  final image = RegExp(r'^\[\s*IMAGE\s*\](?:\s|$)', caseSensitive: false);
+  final narrative = RegExp(
+    r'^\[\s*(?:NARRATION|NARRATEUR|PERSONNAGE|CHARACTER|SCENE|SCÈNE|SCENE_CHANGE|CHANGEMENT_DE_SCENE)(?:\s*[:\]])',
+    caseSensitive: false,
+  );
+  var inside = false;
+  final kept = <String>[];
+  for (final line in raw.split('\n')) {
+    final trimmed = line.trimLeft();
+    if (image.hasMatch(trimmed)) {
+      inside = true;
+      continue;
+    }
+    if (inside && narrative.hasMatch(trimmed)) inside = false;
+    if (!inside) kept.add(line);
+  }
+  return kept.join('\n').trim();
+}
+
 
 sealed class ChatTimelineEvent {
   const ChatTimelineEvent(this.id);
@@ -30,6 +73,11 @@ class ChatSceneChange extends ChatTimelineEvent {
 
 sealed class ChatOutputEvent {
   const ChatOutputEvent();
+}
+
+class ChatIllustrationOutput extends ChatOutputEvent {
+  const ChatIllustrationOutput(this.description);
+  final String description;
 }
 
 class ChatSceneChangeOutput extends ChatOutputEvent {

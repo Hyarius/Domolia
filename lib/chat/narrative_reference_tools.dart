@@ -327,7 +327,7 @@ class NarrativeReferenceTools {
         text: [
           player.text,
           if (original != null) original.compactText ?? '',
-          if (original != null) original.rawText,
+          if (original != null) stripIllustrationBlocks(original.rawText),
           ...lines,
         ].join('\n'),
       ));
@@ -405,15 +405,15 @@ class NarrativeReferenceTools {
             'player_event_id': t.player.id,
             'player_message': _short(t.player.text),
             if (t.raw != null) ...{
-              'raw_total_characters': t.raw!.rawText.length,
+              'raw_total_characters': stripIllustrationBlocks(t.raw!.rawText).length,
               'raw_offset': rawOffset,
-              'raw_original': t.raw!.rawText.substring(
-                rawOffset.clamp(0, t.raw!.rawText.length),
+              'raw_original': stripIllustrationBlocks(t.raw!.rawText).substring(
+                rawOffset.clamp(0, stripIllustrationBlocks(t.raw!.rawText).length),
                 (rawOffset + (count == 1 ? 4500 : 1250))
-                    .clamp(0, t.raw!.rawText.length),
+                    .clamp(0, stripIllustrationBlocks(t.raw!.rawText).length),
               ),
               'raw_truncated': rawOffset +
-                  (count == 1 ? 4500 : 1250) < t.raw!.rawText.length,
+                  (count == 1 ? 4500 : 1250) < stripIllustrationBlocks(t.raw!.rawText).length,
             },
             if (t.raw?.compactText != null)
               'compact': _short(t.raw!.compactText),

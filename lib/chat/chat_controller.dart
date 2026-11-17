@@ -57,6 +57,7 @@ class NarrativeChatController extends ChangeNotifier {
     this.onOptimizedLore,
     this.narrator = const Narrator(),
     this.structuredStreamingEnabled = false,
+    this.illustrationMode = IllustrationMode.disabled,
     this.narratorProvider,
     this.loreProvider,
     this.loreContextBudget = 8000,
@@ -87,6 +88,13 @@ class NarrativeChatController extends ChangeNotifier {
   final Narrator narrator;
   /// Enabled in production; legacy constructor callers retain old behavior.
   final bool structuredStreamingEnabled;
+  IllustrationMode illustrationMode;
+
+  /// Settings can change between turns, never during a streamed response.
+  void setIllustrationMode(IllustrationMode mode) {
+    if (busy) throw StateError('Une génération est en cours.');
+    illustrationMode = mode;
+  }
   final Narrator Function()? narratorProvider;
   final BookLore Function()? loreProvider;
   final int loreContextBudget;
@@ -458,7 +466,7 @@ class NarrativeChatController extends ChangeNotifier {
             history.add(AiMessage(
               role: 'assistant',
               content: active.compactText == null
-                  ? active.rawText
+                  ? active.validatedNarrative
                   : 'Résumé narratif factuel du tour :\n'
                     '${active.compactText}',
             ));
@@ -744,7 +752,7 @@ class NarrativeChatController extends ChangeNotifier {
     ];
     if (structuredOutput) {
       context[0] = AiToolMessage(role: 'system',
-          content: '${_structuredInstructions(context[0].content)}\n\n$theatricalNarratorProtocol');
+          content: '${_structuredInstructions(context[0].content)}\n\n$theatricalNarratorProtocol${illustrationMode == IllustrationMode.disabled ? '' : '\n' + theatricalIllustrationInstruction}');
     }
     context[0] = AiToolMessage(role: 'system',
         content: '${context.first.content}\n'
@@ -781,7 +789,7 @@ class NarrativeChatController extends ChangeNotifier {
               theatricalOutput: structuredOutput);
           if (structuredOutput) {
             fallback[0] = AiMessage(role: 'system',
-                content: '${_structuredInstructions(fallback.first.content)}\n\n$theatricalNarratorProtocol');
+                content: '${_structuredInstructions(fallback.first.content)}\n\n$theatricalNarratorProtocol${illustrationMode == IllustrationMode.disabled ? '' : '\n' + theatricalIllustrationInstruction}');
           }
           return _requestText(endpoint, fallback, token, maxTokens,
               onFragment: onFragment);
@@ -850,6 +858,13 @@ class NarrativeChatController extends ChangeNotifier {
         for (final event in events)
           if (event is ChatSceneChange)
             <String, dynamic>{'id': event.id, 'type': 'scene_change'}
+          else if (event is ChatIllustrationIntent)
+            <String, dynamic>{
+              'id': event.id, 'type': 'image_intent',
+              'player_event_id': event.playerEventId,
+              'description': event.description,
+              'state': event.state.name,
+            }
           else if (event is ChatEntry)
             <String, dynamic>{
               'id': event.id, 'type': 'message',
@@ -925,7 +940,8 @@ class NarrativeChatController extends ChangeNotifier {
     completionTokens = null;
     _draft.clear();
     _notify();
-    var decoder = TheatricalScriptDecoder();
+    var decoder = TheatricalScriptDecoder(
+        allowImages: illustrationMode != IllustrationMode.disabled);
     final accepted = <ChatOutputEvent>[];
     final raw = StringBuffer();
 
@@ -936,6 +952,10 @@ class NarrativeChatController extends ChangeNotifier {
       for (final event in accepted) {
         if (event is ChatSceneChangeOutput) {
           _draft.add(ChatSceneChange(id: id++));
+        } else if (event is ChatIllustrationOutput) {
+          _draft.add(ChatIllustrationIntent(
+              id: id++, playerEventId: playerId,
+              description: event.description));
         } else if (event is ChatLine) {
           _draft.add(ChatEntry(id: id++, speaker: event.speaker,
               name: event.name, text: event.text, status: event.status));
@@ -960,7 +980,8 @@ class NarrativeChatController extends ChangeNotifier {
       if (_closed || token != _generationToken) return;
       raw.clear();
       accepted.clear();
-      decoder = TheatricalScriptDecoder();
+      decoder = TheatricalScriptDecoder(
+          allowImages: illustrationMode != IllustrationMode.disabled);
       _draft.clear();
       _notify();
     }
@@ -988,7 +1009,7 @@ class NarrativeChatController extends ChangeNotifier {
       _check(token);
       final context = buildNarratorContext(theatricalOutput: true);
       context[0] = AiMessage(role: 'system',
-          content: '${_structuredInstructions(context.first.content)}\n\n$theatricalNarratorProtocol');
+          content: '${_structuredInstructions(context.first.content)}\n\n$theatricalNarratorProtocol${illustrationMode == IllustrationMode.disabled ? '' : '\n' + theatricalIllustrationInstruction}');
       final before = diagnostics?.last;
       Object? failure;
       try {
@@ -1018,6 +1039,10 @@ class NarrativeChatController extends ChangeNotifier {
               throw const FormatException('Séparateurs de scène consécutifs.');
             }
             prepared.add(ChatSceneChange(id: id++));
+          } else if (event is ChatIllustrationOutput) {
+            prepared.add(ChatIllustrationIntent(
+                id: id++, playerEventId: playerId,
+                description: event.description));
           } else if (event is ChatLine) {
             prepared.add(ChatEntry(id: id++, speaker: event.speaker,
                 name: event.name, text: event.text, status: event.status));

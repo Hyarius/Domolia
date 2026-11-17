@@ -15,3 +15,10 @@ Une porte claque.
 Pas de titre, préambule, explication ni [JOUEUR].
 Regroupe les phrases en quelques blocs cohérents et rends la main au joueur.
 ''';
+
+/// Added only for Suggestions/Automatic; absent in Disabled mode.
+const theatricalIllustrationInstruction =
+    'Illustrations facultatives : au plus un [IMAGE] suivi d’une brève '
+    'description visible pour un moment marquant, sans répéter une scène. '
+    'N’invente ni faits, secrets, possessions ni actions du joueur. '
+    'Sinon, aucun [IMAGE].';
