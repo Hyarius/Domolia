@@ -338,7 +338,7 @@ void main() {
     expect(opened!.title, 'Livre A');
   });
 
-  testWidgets('Four editable tabs and NSFW warning work on narrow Android',
+  testWidgets('Five editable tabs and NSFW warning work on narrow Android',
       (tester) async {
     tester.view.physicalSize = const Size(320, 780);
     tester.view.devicePixelRatio = 1;
@@ -371,9 +371,14 @@ void main() {
     await tester.tap(find.text('Système'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('bookOpenings')), findsOneWidget);
-    await tester.tap(find.text('Livre').last);
+    await tester.tap(find.byKey(const ValueKey('bookNav-0')));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const ValueKey('bookNsfw')));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('bookNsfw')), 180,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('bookTab-0')),
+        matching: find.byType(Scrollable)),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('bookNsfw')));
     await tester.pumpAndSettle();
