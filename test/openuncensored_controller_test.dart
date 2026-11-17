@@ -172,6 +172,55 @@ void main() {
         AiConnectionController.ouJsonifierProfileId);
   });
 
+  test('Restart does not replace a ChatGPT narrator with OpenUncensored', () async {
+    await controller.importKey(keyA);
+    expect(await ai.createProfile('ChatGPT normal'), true);
+    expect(await ai.setProviderKind(AiProviderKind.chatGpt), true);
+    final normalId = ai.selectedProfileId;
+    await routing.setProfile(AiNarrativeTask.narrator, normalId);
+    await routing.setProfile(AiNarrativeTask.jsonifier, normalId);
+    await routing.setProfile(AiNarrativeTask.memory, normalId);
+
+    controller.dispose();
+    attach();
+    await controller.initialize();
+
+    expect(ai.selectedProfileId, normalId);
+    expect(routing.profileFor(AiNarrativeTask.narrator), normalId);
+    expect(routing.profileFor(AiNarrativeTask.jsonifier), normalId);
+    expect(routing.profileFor(AiNarrativeTask.memory), normalId);
+    expect(controller.active!.secret, keyA);
+  });
+
+  test('Missing OU managed profile repaired without overriding routing', () async {
+    await controller.importKey(keyA);
+    expect(await ai.createProfile('ChatGPT normal'), true);
+    expect(await ai.setProviderKind(AiProviderKind.chatGpt), true);
+    final normalId = ai.selectedProfileId;
+    await routing.setProfile(AiNarrativeTask.narrator, normalId);
+    await routing.setProfile(AiNarrativeTask.jsonifier, normalId);
+    await routing.setProfile(AiNarrativeTask.memory, normalId);
+
+    profiles.state = AiProfilesState(
+      profiles: ai.profiles
+          .where((p) => p.id != AiConnectionController.ouNarratorProfileId)
+          .toList(),
+      selectedId: normalId,
+    );
+    controller.dispose();
+    ai.dispose();
+    ai = AiConnectionController(store: profiles, provider: NoopProvider());
+    attach();
+    await controller.initialize();
+
+    expect(ai.selectedProfileId, normalId);
+    expect(ai.profiles.any((p) =>
+        p.id == AiConnectionController.ouNarratorProfileId), true);
+    expect(routing.profileFor(AiNarrativeTask.narrator), normalId);
+    expect(routing.profileFor(AiNarrativeTask.jsonifier), normalId);
+    expect(routing.profileFor(AiNarrativeTask.memory), normalId);
+  });
+
   test('Managed narrator uses explicit catalogue tool capability', () async {
     await controller.importKey(keyA);
     AiProfile narrator() => ai.profiles.firstWhere(
