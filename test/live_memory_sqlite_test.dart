@@ -201,11 +201,11 @@ void main() {
     },
   );
 
-  test('structured NDJSON is memorized from readable narrative, not JSON',
+  test('theatrical script is memorized from validated text, not markup',
       () async {
-    const serialized = '{"type":"message","speaker":"narrator",'
-        '"name":"Narrateur","text":"Élise porte une bague en argent."}\n';
-    final source = raw(serialized);
+    const serialized = '[NARRATION]\nÉlise porte une bague en argent.\n';
+    final source = RawGeneration(playerEventId: 1, rawText: serialized)
+        .structured(2, 2, compactText: 'Élise porte une bague en argent.');
     await db.saveNarrativeSnapshot(session('a'), [source]);
     final fake = ScriptedMemoryAi([output('bague en argent')]);
     final memory = LiveMemoryCoordinator(
@@ -221,7 +221,7 @@ void main() {
     expect(fake.calls, 1);
     final prompt = fake.lastRequest!.last.content;
     expect(prompt, contains('Élise porte une bague en argent.'));
-    expect(prompt, isNot(contains('"speaker":"narrator"')));
+    expect(prompt, isNot(contains('[NARRATION]')));
     memory.dispose();
   });
 
