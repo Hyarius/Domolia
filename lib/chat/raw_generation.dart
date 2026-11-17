@@ -18,6 +18,13 @@ class RawGeneration {
 
   bool get isStructured => firstEventId != null && lastEventId != null;
 
+  /// Narrative content captured when the turn was validated. Never reparse
+  /// the model's original output: old persisted formats stay opaque.
+  String get validatedNarrative => isStructured &&
+          compactText != null && compactText!.trim().isNotEmpty
+      ? compactText!
+      : rawText;
+
   RawGeneration structured(int first, int last, {String? compactText}) => RawGeneration(
     playerEventId: playerEventId,
     rawText: rawText,

@@ -409,7 +409,8 @@ class _HomePageState extends State<HomePage> {
           // The usage ledger is separate from bounded, purgeable diagnostics.
           // A tool round is one billed LLM request, not another fee per tool.
           final usage = AiUsageRecord.fromExchange(session.id, exchange);
-          if (exchange.stage == 'jsonifier') {
+          if (exchange.stage == 'narrator_structured' ||
+              (exchange.stage?.startsWith('narrator_tool_round_') ?? false)) {
             final key = _credits.active;
             if (key != null) unawaited(_credits.refresh(key.id));
           }
@@ -463,6 +464,7 @@ class _HomePageState extends State<HomePage> {
           provider: _ai.provider,
           configuration: () => null,
           narrator: book.narrator,
+          structuredStreamingEnabled: true,
           loreProvider: () => _books.byId(book.id)?.lore ?? book.lore,
           diagnostics: _aiDiagnostics,
           memory: _liveMemory,
@@ -471,16 +473,6 @@ class _HomePageState extends State<HomePage> {
           resolveConnection: () async =>
               endpointForId(
                   await narratorProfileId(), AiNarrativeTask.narrator),
-          resolveFormatterConnection: () async {
-            final current = await _books.session(session.id);
-            final chosen = current?.formatterProfileId ??
-                _taskRouting.profileFor(AiNarrativeTask.jsonifier);
-            if (chosen == null || chosen == '#narrator') {
-              return endpointForId(
-                  await narratorProfileId(), AiNarrativeTask.jsonifier);
-            }
-            return endpointForId(chosen, AiNarrativeTask.jsonifier);
-          },
           resolveOptimizerConnection: () async {
             final current = await _books.session(session.id);
             final chosen = current?.optimizerProfileId ??

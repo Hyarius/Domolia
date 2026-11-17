@@ -57,6 +57,7 @@ class ScriptedMemoryAi implements AiChatProvider {
   ScriptedMemoryAi(this.responses);
   final List<String> responses;
   int calls = 0;
+  List<AiMessage>? lastRequest;
 
   @override
   Future<String> complete(
@@ -65,6 +66,7 @@ class ScriptedMemoryAi implements AiChatProvider {
     int maxTokens = 1024,
   }) async {
     calls++;
+    lastRequest = messages;
     return responses.removeAt(0);
   }
 
@@ -198,6 +200,30 @@ void main() {
       memory.dispose();
     },
   );
+
+  test('theatrical script is memorized from validated text, not markup',
+      () async {
+    const serialized = '[NARRATION]\nÉlise porte une bague en argent.\n';
+    final source = RawGeneration(playerEventId: 1, rawText: serialized)
+        .structured(2, 2, compactText: 'Élise porte une bague en argent.');
+    await db.saveNarrativeSnapshot(session('a'), [source]);
+    final fake = ScriptedMemoryAi([output('bague en argent')]);
+    final memory = LiveMemoryCoordinator(
+      sessionId: 'a', store: db, isEnabled: () async => true,
+      resolveConnection: () async => LiveMemoryAiEndpoint(
+        fake,
+        const AiConfiguration(baseUrl: 'https://example.com',
+          model: 'test-model', apiKey: 'test-key'),
+      ),
+    );
+    await memory.analyzePending();
+    expect(memory.facts.single.sourceQuote, 'bague en argent');
+    expect(fake.calls, 1);
+    final prompt = fake.lastRequest!.last.content;
+    expect(prompt, contains('Élise porte une bague en argent.'));
+    expect(prompt, isNot(contains('[NARRATION]')));
+    memory.dispose();
+  });
 
   test('invalid JSON leaves an unprocessed turn for retry', () async {
     await db.saveNarrativeSnapshot(session('a'), [raw()]);

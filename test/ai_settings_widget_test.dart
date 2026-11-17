@@ -278,20 +278,22 @@ void main() {
     await showPage(tester, size: const Size(430, 1100),
       taskRouting: routing);
 
-    final token = find.byKey(const ValueKey('aiTaskTokens-jsonifier-4096'));
+    expect(find.byKey(const ValueKey('aiTaskTokens-jsonifier-4096')),
+      findsNothing);
+    final token = find.byKey(const ValueKey('aiTaskTokens-narrator-8192'));
     await tester.scrollUntilVisible(token, 250,
       scrollable: find.byType(Scrollable).first);
     await tester.ensureVisible(token);
     await tester.pumpAndSettle();
     await tester.tap(token);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('8192 tokens').last);
+    await tester.tap(find.text('4096 tokens').last);
     await tester.pumpAndSettle();
-    expect(routing.generationFor(AiNarrativeTask.jsonifier).maxOutputTokens,
-      8192);
+    expect(routing.generationFor(AiNarrativeTask.narrator).maxOutputTokens,
+      4096);
 
     final reasoning = find.byKey(
-      const ValueKey('aiTaskReasoning-jsonifier-auto'));
+      const ValueKey('aiTaskReasoning-narrator-auto'));
     await tester.scrollUntilVisible(reasoning, 150,
       scrollable: find.byType(Scrollable).first);
     await tester.ensureVisible(reasoning);
@@ -300,14 +302,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('NONE').last);
     await tester.pumpAndSettle();
-    expect(routing.generationFor(AiNarrativeTask.jsonifier).reasoningEffort,
+    expect(routing.generationFor(AiNarrativeTask.narrator).reasoningEffort,
       'none');
     final reopened = AiTaskRouting();
     addTearDown(reopened.dispose);
     await reopened.initialize();
-    expect(reopened.generationFor(AiNarrativeTask.jsonifier).maxOutputTokens,
-      8192);
-    expect(reopened.generationFor(AiNarrativeTask.jsonifier).reasoningEffort,
+    expect(reopened.generationFor(AiNarrativeTask.narrator).maxOutputTokens,
+      4096);
+    expect(reopened.generationFor(AiNarrativeTask.narrator).reasoningEffort,
       'none');
     expect(tester.takeException(), isNull);
   });

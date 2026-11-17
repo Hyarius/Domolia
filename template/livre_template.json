@@ -1,0 +1,121 @@
+{
+  "format": "domolia.book",
+  "version": 2,
+  "id": "livre_template",
+  "title": "Livre de démonstration",
+  "tags": [],
+  "cover": null,
+  "narrative": {
+    "style": "Narration immersive, claire et réactive. Respecte les choix du joueur et distingue faits, rumeurs et secrets.",
+    "detailLevel": 3,
+    "responseLength": 2,
+    "scenePacing": 2,
+    "styleKeywords": [
+      "Mystérieux",
+      "Dialogué"
+    ]
+  },
+  "openingMessages": [
+    "La pluie frappe les vitres de l'auberge. Une horloge s'est arrêtée à 21 h 17. Le tenancier attend votre première question."
+  ],
+  "extensions": {},
+  "lore": {
+    "global": {
+      "universe": "Le Port des Brumes",
+      "overview": "Une petite cité portuaire dont l'ancienne horloge s'arrête chaque soir.",
+      "genre": "Mystère",
+      "era": "Époque industrielle fictive",
+      "initialContext": "Le joueur entre dans l'auberge. Il ne possède aucun objet de quête et n'a encore fait aucune promesse.",
+      "history": "L'horloge fut construite pour synchroniser les marées.",
+      "rules": "Ne pas imposer les actions du joueur. Les rumeurs ne deviennent pas des faits. Les secrets restent inconnus avant découverte.",
+      "conflicts": "Certains habitants pensent que l'horloge est maudite.",
+      "directions": "Permettre une enquête libre à travers les dialogues et les objets.",
+      "secrets": "La panne vient d'un mécanisme hydraulique caché. Ne pas révéler sans preuve."
+    },
+    "characters": [
+      {
+        "id": "tomas",
+        "name": "Tomas",
+        "description": "Tenancier de l'auberge, témoin des arrêts de l'horloge.",
+        "aliases": [],
+        "tags": [],
+        "secrets": "Il conserve un ticket bleu numéro 47, mais ne le remet que s'il accepte.",
+        "appearance": "Tablier sombre et mains tachées d'encre.",
+        "personality": "Prudent et chaleureux.",
+        "background": "Ancien horloger.",
+        "role": "Tenancier",
+        "motivations": "Comprendre la panne.",
+        "values": "La parole donnée.",
+        "relatedCharacterIds": [],
+        "homePlaceId": "auberge"
+      }
+    ],
+    "places": [
+      {
+        "id": "auberge",
+        "name": "L'Auberge du Cadran",
+        "description": "Point de départ de l'aventure.",
+        "aliases": [],
+        "tags": [],
+        "secrets": "Un compartiment est caché sous le comptoir.",
+        "type": "auberge",
+        "atmosphere": "Pluie, lampes à huile et odeur de café.",
+        "history": "Ancien relais de marins.",
+        "features": "Une horloge arrêtée à 21 h 17.",
+        "characterIds": [
+          "tomas"
+        ],
+        "placeIds": []
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "enquete",
+        "name": "L'horloge immobile",
+        "description": "Enquête sur les arrêts de l'horloge.",
+        "aliases": [],
+        "tags": [],
+        "secrets": "La cause est mécanique, pas surnaturelle.",
+        "summary": "Interroger Tomas, explorer le port et examiner les indices.",
+        "importance": "main",
+        "initialContext": "Le joueur arrive à l'auberge.",
+        "objectives": "Comprendre la panne sans forcer la progression.",
+        "introduction": "Une horloge immobile attire l'attention.",
+        "characterIds": [
+          "tomas"
+        ],
+        "placeIds": [
+          "auberge"
+        ],
+        "eventIds": [
+          "ticket"
+        ]
+      }
+    ],
+    "events": [
+      {
+        "id": "ticket",
+        "name": "Remise du ticket",
+        "description": "Tomas peut confier un ticket bleu numéro 47 au joueur.",
+        "aliases": [],
+        "tags": [],
+        "secrets": "Le ticket donne accès à une consigne.",
+        "trigger": "conditional",
+        "condition": "Le joueur demande le ticket et Tomas accepte explicitement.",
+        "mandatory": false,
+        "timing": "Pendant une conversation avec Tomas.",
+        "consequences": "Le joueur possède alors le ticket bleu numéro 47, uniquement si la remise a été narrée.",
+        "priority": 5,
+        "characterIds": [
+          "tomas"
+        ],
+        "placeIds": [
+          "auberge"
+        ],
+        "scenarioIds": [
+          "enquete"
+        ]
+      }
+    ]
+  }
+}
