@@ -22,5 +22,5 @@ Regroupe les phrases en quelques blocs cohérents et rends la main au joueur.
 const theatricalIllustrationInstruction =
     'Pour une arrivée, découverte ou scène visuelle marquante, propose '
     'au plus un [IMAGE] sur sa propre ligne, puis une description brève '
-    'et visible. Pas de répétition. N’invente ni fait, secret, possession '
+    'et visible. Pas de répétition. N’invente ni fait, secrets, possession '
     'ni action du joueur. Sinon, aucun [IMAGE].';
