@@ -36,16 +36,20 @@ class _Store implements AiProfileStore {
 }
 
 class _Text implements AiChatProvider {
+  Completer<String>? gate;
   @override
   Future<List<AiModel>> listModels(AiConfiguration configuration) async => [];
   @override
   Future<String> complete(AiConfiguration configuration, {
     required List<AiMessage> messages, int maxTokens = 300,
-  }) async => jsonEncode({
-    'shot':'medium','angle':'eye_level','focusIds':[],
-    'composition':'rule_of_thirds','lighting':'soft',
-    'palette':'muted','mood':'calm',
-  });
+  }) async {
+    if (gate != null) return gate!.future;
+    return jsonEncode({
+      'shot':'medium','angle':'eye_level','focusIds':[],
+      'composition':'rule_of_thirds','lighting':'soft',
+      'palette':'muted','mood':'calm',
+    });
+  }
 }
 
 class _Image implements ImageGenerationProvider {
@@ -234,5 +238,144 @@ void main() {
     image.gate!.complete(_result());
     await first;
     expect(controller.forIntent(2)?.state,IllustrationJobState.available);
+  });
+
+  testWidgets('Image error is visible even before an API job is persisted',
+      (tester) async {
+    tester.view.physicalSize=const Size(430,1100);
+    tester.view.devicePixelRatio=1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final ai=AiConnectionController(store:_Store(),provider:_Text());
+    addTearDown(ai.dispose);
+    await ai.initialize();
+    final prefs=ImagePreferences();
+    addTearDown(prefs.dispose);
+    await prefs.initialize();
+    final chat=NarrativeChatController(provider:_Text(),
+      configuration:()=>const AiConfiguration(
+        baseUrl:'https://api.openuncensored.com/v1',
+        model:'text',apiKey:'test'));
+    addTearDown(chat.dispose);
+    chat.restoreTimeline(const [
+      ChatEntry(id:1,speaker:ChatSpeaker.narrator,
+        name:'Narrateur',text:'Une scène au quai.'),
+      ChatIllustrationIntent(id:2,playerEventId:1,
+        description:'Le quai sous le brouillard.'),
+    ]);
+    final records=_ImageRecords()..timeline=()=>chat.timeline;
+    final provider=_Image();
+    final images=IllustrationController(
+      sessionId:'unconfigured',ai:ai,preferences:prefs,records:records,
+      timeline:()=>chat.timeline,lore:()=>const BookLore(),
+      memory:()=>const [],awaitNarrativeWrites:() async {},
+      files:_MemoryFiles(),providerFactory:(_)=>provider,
+    );
+    addTearDown(images.dispose);
+    await images.initialize();
+    var settingsOpened=false;
+    await tester.pumpWidget(MaterialApp(theme:DomoliaTheme.dark,
+      home:Scaffold(body:GroupChatPage(
+        controller:chat,onOpenSettings:(){},illustrations:images,
+        onOpenImageSettings:()=>settingsOpened=true,
+      ))));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(find.byKey(const ValueKey('imageGenerate')));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(find.byKey(const ValueKey('imageConfirmGenerate')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(provider.calls,0);
+    expect(find.byKey(const ValueKey('chatIllustrationErrorBanner')),
+      findsOneWidget);
+    expect(find.textContaining('Configurez un profil'),findsWidgets);
+    await tester.tap(find.byKey(
+      const ValueKey('chatIllustrationOpenSettings')));
+    expect(settingsOpened,isTrue);
+    await tester.tap(find.byKey(
+      const ValueKey('chatIllustrationDismissError')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('chatIllustrationErrorBanner')),
+      findsNothing);
+  });
+
+  testWidgets('Illustrator status follows actual director and image phases',
+      (tester) async {
+    tester.view.physicalSize=const Size(430,1100);
+    tester.view.devicePixelRatio=1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final text=_Text()..gate=Completer<String>();
+    final image=_Image()..gate=Completer<ImageGenerationResult>();
+    addTearDown(() {
+      if (!text.gate!.isCompleted) {
+        text.gate!.complete(jsonEncode({
+          'shot':'medium','angle':'eye_level','focusIds':[],
+          'composition':'rule_of_thirds','lighting':'soft',
+          'palette':'muted','mood':'calm',
+        }));
+      }
+      if (!image.gate!.isCompleted) image.gate!.complete(_result());
+    });
+    final ai=AiConnectionController(store:_Store(),provider:text);
+    addTearDown(ai.dispose);
+    await ai.initialize();
+    final prefs=ImagePreferences();
+    addTearDown(prefs.dispose);
+    await prefs.initialize();
+    await prefs.saveApplication(const ImageGenerationOptions(
+      profileId:'image',directorProfileId:'director',model:'test-image'));
+    final chat=NarrativeChatController(provider:_Text(),
+      configuration:()=>const AiConfiguration(
+        baseUrl:'https://api.openuncensored.com/v1',
+        model:'text',apiKey:'test'));
+    addTearDown(chat.dispose);
+    chat.restoreTimeline(const [
+      ChatEntry(id:1,speaker:ChatSpeaker.narrator,
+        name:'Narrateur',text:'Une scène au quai.'),
+      ChatIllustrationIntent(id:2,playerEventId:1,
+        description:'Le quai sous le brouillard.'),
+    ]);
+    final records=_ImageRecords()..timeline=()=>chat.timeline;
+    final images=IllustrationController(
+      sessionId:'phases',ai:ai,preferences:prefs,records:records,
+      timeline:()=>chat.timeline,lore:()=>const BookLore(),
+      memory:()=>const [],awaitNarrativeWrites:() async {},
+      files:_MemoryFiles(),providerFactory:(_)=>image,
+    );
+    addTearDown(images.dispose);
+    await images.initialize();
+    await tester.pumpWidget(MaterialApp(theme:DomoliaTheme.dark,
+      home:Scaffold(body:GroupChatPage(
+        controller:chat,onOpenSettings:(){},illustrations:images,
+      ))));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(find.byKey(const ValueKey('imageGenerate')));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(find.byKey(const ValueKey('imageConfirmGenerate')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.byKey(const ValueKey('chatIllustratorIndicator')),
+      findsOneWidget);
+    expect(find.text('Illustrateur prépare la mise en scène…'),
+      findsOneWidget);
+    expect(image.calls,0);
+    text.gate!.complete(jsonEncode({
+      'shot':'medium','angle':'eye_level','focusIds':[],
+      'composition':'rule_of_thirds','lighting':'soft',
+      'palette':'muted','mood':'calm',
+    }));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('Illustrateur dessine…'),findsOneWidget);
+    expect(image.calls,1);
+    image.gate!.complete(_result());
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.byKey(const ValueKey('chatIllustratorIndicator')),
+      findsNothing);
+    expect(find.byKey(const ValueKey('chatGeneratedImage')),findsOneWidget);
   });
 }
