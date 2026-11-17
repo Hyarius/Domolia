@@ -61,7 +61,8 @@ class NarrativeChatController extends ChangeNotifier {
     this.loreProvider,
     this.loreContextBudget = 8000,
     this.narratorRecentBudget = 16000,
-    this.hybridRecentBudget = 7000,
+    // Older verbatim turns stay available through the local history tools.
+    this.hybridRecentBudget = 5200,
     this.onTimelineChanged,
     this.memory,
     this.onPersistState,
@@ -498,7 +499,11 @@ class NarrativeChatController extends ChangeNotifier {
           '${_optimizedLore!}'
         : LoreContextBuilder(
             maxCharacters: loreContextBudget,
-          ).build(lore, selected.reversed.map((entry) => entry.content));
+          ).build(lore,
+              // Pick nearby canon using the current scene, rather than
+              // revisiting every place mentioned in the history window.
+              // Older entries remain available through search_lore.
+              selected.take(4).map((entry) => entry.content));
     final memories = memory?.context(
       selected.map((m) => m.content), budget: 3600) ?? '';
     return [
