@@ -463,19 +463,19 @@ class BookEditorPageState extends State<BookEditorPage> {
         onDestinationSelected: (tab) => setState(() => _tab = tab),
         destinations: const [
           NavigationDestination(
-            key: ValueKey('bookNav-$i'),
+            key: ValueKey('bookNav-0'),
             icon: Icon(Icons.menu_book_outlined), label: 'Livre'),
           NavigationDestination(
-            key: ValueKey('bookNav-$i'),
+            key: ValueKey('bookNav-1'),
             icon: Icon(Icons.auto_stories_outlined), label: 'Lore'),
           NavigationDestination(
-            key: ValueKey('bookNav-$i'),
+            key: ValueKey('bookNav-2'),
             icon: Icon(Icons.edit_note_rounded), label: 'Narrateur'),
           NavigationDestination(
-            key: ValueKey('bookNav-$i'),
+            key: ValueKey('bookNav-3'),
             icon: Icon(Icons.settings_outlined), label: 'Système'),
           NavigationDestination(
-            key: ValueKey('bookNav-$i'),
+            key: ValueKey('bookNav-4'),
             icon: Icon(Icons.palette_outlined), label: 'Images'),
         ],
       ),
