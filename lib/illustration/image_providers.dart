@@ -289,8 +289,9 @@ class OpenAiImageGenerationProvider extends _HttpImageProvider {
   static ImageModelCapability _capability(String id) => ImageModelCapability(
     id: id,
     sizes: const ['1024x1024', '1536x1024', '1024x1536'],
-    qualities: id == 'gpt-image-2' ? const ['low','medium','high']
-        : const ['low','medium','high','xhigh','max'],
+    qualities: id.startsWith('gpt-image-2.5-')
+        ? const ['low','medium','high','xhigh','max']
+        : const ['low','medium','high'],
     maximumImages: 4,
   );
 
@@ -340,7 +341,7 @@ class OpenUncensoredImageGenerationProvider extends _HttpImageProvider {
             id: entry['id'] as String,
             sizes: const [
               '1024x1024','1024x1536','1536x1024',
-              '1024x1792','1792x1024','512x512',
+              '1024x1792','1792x1024','512x512','auto',
             ],
             maximumImages: 4,
             // Cheapest-route prices are NOT spending caps.

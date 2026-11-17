@@ -42,6 +42,11 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
   Future<void> _showFullScreen(Uint8List bytes,
       StoredIllustration record) async {
     if (!mounted) return;
+    final extension = switch (record.mimeType) {
+      'image/jpeg' => 'jpg',
+      'image/webp' => 'webp',
+      _ => 'png',
+    };
     await showDialog<void>(
       context: context,
       builder: (context) => Dialog.fullscreen(
@@ -61,9 +66,9 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
                   try {
                     await FilePicker.platform.saveFile(
                       dialogTitle: 'Exporter cette illustration',
-                      fileName: 'domolia-illustration.png',
+                      fileName: 'domolia-illustration.$extension',
                       type: FileType.custom,
-                      allowedExtensions: ['png'],
+                      allowedExtensions: [extension],
                       bytes: bytes,
                     );
                   } catch (_) {

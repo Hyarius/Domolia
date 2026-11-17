@@ -147,6 +147,8 @@ class IllustrationController extends ChangeNotifier {
     StoredIllustration? current;
     final savedFiles = <String>[];
     var providerInvoked = false;
+    var directorInvoked = false;
+    var directorRecorded = false;
     final start = DateTime.now();
     try {
       await awaitNarrativeWrites();
@@ -196,10 +198,13 @@ class IllustrationController extends ChangeNotifier {
       _latest[intentId] = current;
       _notify();
 
+      directorInvoked = true;
       final direction = await const VisualDirector().direct(
         scene: scene, provider: directorConnection.provider,
         connection: directorConnection.configuration,
       );
+      await _directionUsage(start: start, failed: false);
+      directorRecorded = true;
       final prompt = validatedImagePrompt(scene, direction, style: options.style);
       current = current.copyWith(
           state: IllustrationJobState.generating, prompt: prompt);
@@ -240,6 +245,9 @@ class IllustrationController extends ChangeNotifier {
       if (providerId == 'openuncensored') onOpenUncensoredCharge?.call();
       await _usage(completed, failed: false, start: start);
     } catch (failure) {
+      if (directorInvoked && !directorRecorded) {
+        await _directionUsage(start: start, failed: true);
+      }
       final message = failure is ImageGenerationFailure
           ? failure.message : failure is FormatException
           ? 'Mise en scène invalide ou insuffisamment attestée.'
@@ -261,6 +269,23 @@ class IllustrationController extends ChangeNotifier {
     } finally {
       _inFlight.remove(intentId);
       _notify();
+    }
+  }
+
+  Future<void> _directionUsage({
+    required DateTime start, required bool failed,
+  }) async {
+    try {
+      await usage?.putUsage(AiUsageRecord(
+        id: 'direction-' + sessionId + '-' +
+            start.microsecondsSinceEpoch.toString(),
+        sessionId: sessionId, stage: 'image_direction',
+        createdAtUtc: start.toUtc(), failed: failed,
+        usageSource: 'unknown',
+        durationMs: DateTime.now().difference(start).inMilliseconds,
+      ));
+    } catch (_) {
+      // No retry: consumption records must never cause a new charged call.
     }
   }
 
