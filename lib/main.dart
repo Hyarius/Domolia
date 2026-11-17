@@ -474,13 +474,6 @@ class _HomePageState extends State<HomePage> {
           resolveConnection: () async =>
               endpointForId(
                   await narratorProfileId(), AiNarrativeTask.narrator),
-          resolveOptimizerConnection: () async {
-            final current = await _books.session(session.id);
-            final chosen = current?.optimizerProfileId ??
-                _taskRouting.profileFor(AiNarrativeTask.optimizer);
-            if (chosen == null || chosen == '#disabled') return null;
-            return endpointForId(chosen, AiNarrativeTask.optimizer);
-          },
           onOptimizedLore: (hash, compact) {
             final pending = writes.then((_) =>
                 _books.saveOptimizedLore(session.id, hash, compact));
