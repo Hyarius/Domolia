@@ -202,13 +202,17 @@ class IllustrationController extends ChangeNotifier {
       art.validate();
       final profiles = ai.profiles.where((e) => e.id == options.profileId);
       if (profiles.isEmpty || options.model.isEmpty) {
-        throw StateError('Configurez un profil et un modèle graphique.');
+        throw StateError(
+            'Génération d’image non configurée : choisissez un profil '
+            'graphique et un modèle dans les réglages IA.');
       }
       final profile = profiles.first;
       final providerId = _providerId(profile);
       final directorId = options.directorProfileId;
       if (directorId.isEmpty) {
-        throw StateError('Choisissez un profil IA pour la mise en scène.');
+        throw StateError(
+            'Génération d’image non configurée : choisissez un metteur '
+            'en scène IA dans les réglages graphiques.');
       }
       final directorConnection = await ai.connectionForProfile(directorId);
       final imageProvider = _provider(providerId);
