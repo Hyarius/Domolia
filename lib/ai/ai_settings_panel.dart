@@ -579,8 +579,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
         'L’optimiseur est désactivé tant qu’aucun profil ne lui est assigné.',
         style: TextStyle(color: DomoliaColors.muted)),
       const SizedBox(height: DomoliaSpacing.field),
-      for (final task in AiNarrativeTask.values
-          .where((task) => task != AiNarrativeTask.jsonifier)) ...[
+      for (final task in AiNarrativeTask.values) ...[
         Builder(builder: (context) {
           final chosen = routing.profileFor(task);
           final known = chosen != null &&
