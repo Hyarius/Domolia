@@ -508,9 +508,9 @@ class NarrativeChatController extends ChangeNotifier {
       AiMessage(role: 'system', content: [
         (narratorProvider?.call() ?? narrator).systemPrompt,
         if (loreContext.isNotEmpty)
-          'CONTEXTE INITIAL PRÉPARÉ LOCALEMENT (canon, non vécu)\\n$loreContext',
+          'CONTEXTE INITIAL PRÉPARÉ LOCALEMENT (canon, non vécu)\n$loreContext',
         if (nearbyLore.isNotEmpty)
-          'FICHES CANONIQUES PERTINENTES (non vécues)\\n$nearbyLore',
+          'FICHES CANONIQUES PERTINENTES (non vécues)\n$nearbyLore',
         if (memories.isNotEmpty)
           'LIVE MEMORY — faits rapportés de CETTE Partie uniquement. '
           'Chaque ligne indique la certitude et la visibilité. '
