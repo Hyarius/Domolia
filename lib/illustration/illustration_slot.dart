@@ -94,7 +94,10 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
                     '\nCoût connu : ' +
                     (record.costUsd == null ? 'inconnu'
                      : record.costUsd.toString() + ' USD') +
-                    '\n\n' + record.prompt)),
+                    '\nNegative prompt : ' +
+                    (record.negativePrompt.isEmpty
+                       ? '(aucun)' : record.negativePrompt) +
+                    '\n\nPrompt final :\n' + record.prompt)),
               ],
             ),
           ]),
