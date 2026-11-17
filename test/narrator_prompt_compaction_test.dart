@@ -96,6 +96,19 @@ void main() {
     expect(theatricalNarratorProtocol, contains('[JOUEUR]'));
   });
 
+  test('custom Book prompts cannot remove narrative invariants', () {
+    const custom = Narrator(
+      protocolPrompt: 'RÈGLES PERSONNALISÉES',
+      narrativePrompt: 'STYLE PERSONNALISÉ',
+    );
+    final prompt = custom.systemPrompt;
+    expect(prompt, startsWith('RÈGLES PERSONNALISÉES'));
+    expect(prompt, contains('Ne joue jamais à la place'));
+    expect(prompt, contains('Live Memory'));
+    expect(prompt, contains('promesse conditionnelle'));
+    expect(prompt, contains('secrets'));
+  });
+
   test('tuning remains configurable without repeating the player rules', () {
     const tuning = NarrativeTuning(
       responseLength: 1, scenePacing: 5,
