@@ -254,13 +254,13 @@ class ChatGptResponsesProvider
     }
     final request = http.Request('POST', _responses)
       ..followRedirects = false
-      ..headers['Authorization'] = 'Bearer ' + configuration.apiKey
+      ..headers['Authorization'] = 'Bearer ${configuration.apiKey}'
       ..headers['Content-Type'] = 'application/json'
       ..headers['Accept'] = 'text/event-stream'
       ..body = jsonEncode({
         'model': configuration.model,
         'input': input,
-        if (instructions != null) 'instructions': instructions,
+        'instructions': ?instructions,
         if (tools.isNotEmpty) 'tools': tools,
         'store': false,
         'stream': true,
@@ -309,7 +309,7 @@ class ChatGptResponsesProvider
             'Limite d’utilisation de l’abonnement atteinte.');
         default:
           throw AiProviderException(
-            'ChatGPT a répondu HTTP ' + response.statusCode.toString() + '.');
+            'ChatGPT a répondu HTTP ${response.statusCode}.');
       }
     }
     var completed = false;
