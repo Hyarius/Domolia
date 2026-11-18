@@ -135,7 +135,7 @@ abstract class _HttpImageProvider implements ImageGenerationProvider {
           'prompt_tokens': usage['prompt_tokens'],
           'completion_tokens': usage['completion_tokens'],
         },
-      if (safeCode != null) 'errorCode': safeCode,
+      'errorCode': ?safeCode,
     };
   }
 
@@ -374,12 +374,10 @@ abstract class _HttpImageProvider implements ImageGenerationProvider {
 class OpenAiImageGenerationProvider extends _HttpImageProvider {
   OpenAiImageGenerationProvider({
     http.Client? client,
-    AiExchangeRecorder? diagnostics,
-    void Function(AiExchange)? onExchangeCaptured,
-    int? playerEventId,
-  }) : super(client ?? http.Client(), Uri.parse('https://api.openai.com/v1/'),
-          diagnostics: diagnostics, onExchangeCaptured: onExchangeCaptured,
-          playerEventId: playerEventId);
+    super.diagnostics,
+    super.onExchangeCaptured,
+    super.playerEventId,
+  }) : super(client ?? http.Client(), Uri.parse('https://api.openai.com/v1/'));
   @override
   String get id => 'openai';
 
@@ -425,13 +423,11 @@ class OpenAiImageGenerationProvider extends _HttpImageProvider {
 class OpenUncensoredImageGenerationProvider extends _HttpImageProvider {
   OpenUncensoredImageGenerationProvider({
     http.Client? client,
-    AiExchangeRecorder? diagnostics,
-    void Function(AiExchange)? onExchangeCaptured,
-    int? playerEventId,
+    super.diagnostics,
+    super.onExchangeCaptured,
+    super.playerEventId,
   }) : super(client ?? http.Client(),
-          Uri.parse('https://api.openuncensored.com/v1/'),
-          diagnostics: diagnostics, onExchangeCaptured: onExchangeCaptured,
-          playerEventId: playerEventId);
+          Uri.parse('https://api.openuncensored.com/v1/'));
   @override
   String get id => 'openuncensored';
 
