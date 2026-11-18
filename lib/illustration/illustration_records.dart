@@ -8,7 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 /// Job metadata; pixel payloads must never be placed in conversation JSON.
 enum IllustrationJobState {
-  preparing, generating, available, failed, invalidated,
+  preparing, generating, available, failed, invalidated, ready, approved,
 }
 
 class StoredIllustration {
