@@ -306,6 +306,9 @@ void main() {
       (tester) async {
     await _showApp(tester, withSession: true);
     expect(find.byKey(const ValueKey('mainNavigation')), findsOneWidget);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('recentSession-journey')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('recentSession-journey')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('groupChatInput')), findsOneWidget);
@@ -322,6 +325,9 @@ void main() {
   testWidgets('Depuis une Partie, le raccourci ouvre le Lore du Livre',
       (tester) async {
     await _showApp(tester, withSession: true);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('recentSession-journey')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('recentSession-journey')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('groupChatInput')), findsOneWidget);
