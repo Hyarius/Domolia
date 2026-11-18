@@ -105,6 +105,23 @@ le dépôt existant ne fournit pas de plateforme Web prête à compiler.
     puis enregistrer/exporter. Un ancien Livre v1/v2 reçoit les
     réglages graphiques par défaut sans perdre ses données.
 
+### Réinitialisation des réglages (PR34)
+
+- **Paramètres de la Partie** : « Rétablir les réglages du Livre » demande
+  confirmation, retire les surcharges de profil IA, budgets, mémoire, mode
+  d’illustration, tool calling et connexion graphique. Le Livre reste la
+  référence prioritaire pour le narrateur, puis les valeurs de l’application
+  prennent le relais si aucune connexion n’est liée au Livre. La timeline,
+  Live Memory, les illustrations et les traces existantes restent inchangées.
+- **Éditeur du Livre > Système** : « Rétablir les réglages par défaut » demande
+  confirmation et rétablit le style narratif, le détail, le rythme, les
+  réglages artistiques et le mode d’illustration. Conserve la couverture, le
+  titre, le Lore, les premières scènes, les tags NSFW, les clés et les Parties.
+  Les champs affichés dans Narrateur/Images doivent refléter le nouvel état.
+- **Validation** : vérifier Annuler, réinitialisation répétée, retour
+  arrière puis réouverture du Livre/de la Partie, persistance SQLite des
+  diagnostics et images, et absence de requêtes IA payantes.
+
 ### Tests sans crédit réel
 
 Les simulations HTTP des tests Flutter retournent des octets de PNG
