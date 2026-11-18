@@ -87,7 +87,7 @@ void main() {
          prompt:'Un dossier scellé est posé au centre d’un bureau, '
              'dans une pièce faiblement éclairée, cadrage de face.',
        ));
-    expect(prompt,contains('Dossier posé'));
+    expect(prompt,contains('dossier scellé est posé'));
   });
 
   test('Only the authored prompt is transmitted, and cast IDs are checked',
@@ -236,7 +236,7 @@ void main() {
       }],
     }), scene);
     final prompt = validatedImagePrompt(scene, direction);
-    expect(prompt, contains('Cheveux bruns et aux yeux verts'));
+    expect(prompt, contains('cheveux bruns et aux yeux verts'));
     expect(prompt, isNot(contains('Apparence de')));
     expect(direction.appearances.single.identity,
         'Cheveux bruns et yeux verts');
