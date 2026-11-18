@@ -64,6 +64,35 @@ class _ToolNarrator implements AiChatProvider, AiToolCallingChatProvider {
   }
 }
 
+
+class _RetryOnceNarrator implements AiChatProvider, AiStreamingChatProvider {
+  int calls = 0;
+
+  @override
+  Future<List<AiModel>> listModels(AiConfiguration config) async => [];
+
+  @override
+  Future<String> complete(AiConfiguration config, {
+    required List<AiMessage> messages, int maxTokens = 1200,
+  }) => throw StateError('The narrator must stream');
+
+  @override
+  Stream<AiStreamChunk> streamChat(AiConfiguration config, {
+    required List<AiMessage> messages, int maxTokens = 1200,
+  }) {
+    calls++;
+    if (calls == 1) {
+      return Stream.error(const AiProviderException(
+        'Aucune réponse du fournisseur sous 25 s.',
+        kind: AiProviderErrorKind.timeout,
+      ));
+    }
+    return Stream.value(const AiStreamChunk(
+      text: '[NARRATION]\nLa porte s’ouvre.',
+    ));
+  }
+}
+
 Future<void> _tick() => Future<void>.delayed(const Duration(milliseconds: 20));
 
 void main() {
@@ -279,6 +308,32 @@ void main() {
     expect(toolChat.rawGenerations, hasLength(1));
     expect(toolChat.rawGenerations.single.rawText, contains('Bienvenue.'));
     expect(tool.calls, 2);
+  });
+
+
+  test('Structured retry preserves player message after provider timeout',
+      () async {
+    final fallback = _RetryOnceNarrator();
+    final local = NarrativeChatController(
+      provider: fallback, configuration: () => _config,
+      structuredStreamingEnabled: true,
+    );
+    addTearDown(local.dispose);
+    await local.send('Je regarde la porte.');
+    final player = local.messages.single;
+    expect(local.errorKind, AiProviderErrorKind.timeout);
+    expect(local.messages, hasLength(1));
+    expect(local.rawGenerations, isEmpty);
+
+    await local.retry();
+    expect(local.error, isNull);
+    expect(local.errorKind, isNull);
+    expect(local.messages, hasLength(2));
+    expect(local.messages.first.id, player.id);
+    expect(local.messages.first.text, 'Je regarde la porte.');
+    expect(local.messages.last.text, 'La porte s’ouvre.');
+    expect(local.rawGenerations, hasLength(1));
+    expect(fallback.calls, 2);
   });
 
   test('existing pending RAW is recovered locally, without JSONifier',
