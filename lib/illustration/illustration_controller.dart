@@ -103,6 +103,7 @@ class IllustrationController extends ChangeNotifier {
     }
   }
   bool isBusy(int id) => _inFlight.contains(id);
+  bool get hasInFlight => _inFlight.isNotEmpty;
 
   void _notify() {
     if (!_closed) notifyListeners();
