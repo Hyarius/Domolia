@@ -67,12 +67,9 @@ class _Text implements AiChatProvider {
   }) async {
     if (gate != null) return gate!.future;
     return jsonEncode({
-      'shot':'medium','angle':'eye_level','focusIds':[],
-      'composition':'rule_of_thirds','lighting':'soft',
-      'palette':'muted','mood':'calm',
-      'visualSubject':'Un personnage dans le décor',
-      'visualAction':'Le personnage observe les lieux',
-      'visualSetting':'Un intérieur calme',
+      'prompt':'Un personnage adulte se tient immobile au milieu d’une '
+          'pièce calme. Il regarde autour de lui, les bras le long du corps. '
+          'Plan moyen, angle à hauteur des yeux, lumière douce et diffuse.',
     });
   }
 }
@@ -106,13 +103,11 @@ class _VisualText extends _Text {
   }) async {
     calls++;
     return jsonEncode({
-      'shot':'medium', 'angle':'eye_level',
-      'focusIds':['party:boulangere'],
-      'composition':'centered', 'lighting':'soft',
-      'palette':'warm', 'mood':'calm',
-      'visualSubject':'La boulangère au comptoir',
-      'visualAction':'Elle ajuste son tablier',
-      'visualSetting':'Une boulangerie',
+      'prompt':'La boulangère, femme adulte aux cheveux bruns coupés '
+          'aux épaules et aux yeux verts, ajuste son tablier beige. '
+          'Elle se tient debout derrière le comptoir de sa boulangerie, '
+          'le buste légèrement incliné, les mains sur la taille du tablier. '
+          'Lumière chaude et douce, plan moyen de face.',
       'appearances':[{
         'id':'party:boulangere',
         'identity':'Cheveux bruns et yeux verts',
@@ -139,7 +134,9 @@ class _Image implements ImageGenerationProvider {
     calls++;
     lastRequest=request;
     expect(request.model,'test-image');
-    expect(request.prompt,contains('Sujet :'));
+    expect(request.prompt.length, greaterThan(50));
+    expect(request.prompt, isNot(contains('Sujet :')));
+    expect(request.prompt, isNot(contains('focusIds')));
     expect(request.prompt,isNot(contains('Texte établi :')));
     expect(request.prompt,isNot(contains('Mémoire confirmée :')));
     expect(request.prompt,isNot(contains('ACTION PRIORITAIRE')));
@@ -457,12 +454,9 @@ void main() {
     addTearDown(() {
       if (!text.gate!.isCompleted) {
         text.gate!.complete(jsonEncode({
-          'shot':'medium','angle':'eye_level','focusIds':[],
-          'composition':'rule_of_thirds','lighting':'soft',
-          'palette':'muted','mood':'calm',
-      'visualSubject':'Un personnage dans le décor',
-      'visualAction':'Le personnage observe les lieux',
-      'visualSetting':'Un intérieur calme',
+          'prompt':'Un personnage adulte se trouve dans une pièce calme, '
+              'debout au centre, regard vers la fenêtre. '
+              'Plan moyen, lumière naturelle et douce.',
         }));
       }
       if (!image.gate!.isCompleted) image.gate!.complete(_result());
@@ -508,12 +502,9 @@ void main() {
       findsOneWidget);
     expect(image.calls,0);
     text.gate!.complete(jsonEncode({
-      'shot':'medium','angle':'eye_level','focusIds':[],
-      'composition':'rule_of_thirds','lighting':'soft',
-      'palette':'muted','mood':'calm',
-      'visualSubject':'Un personnage dans le décor',
-      'visualAction':'Le personnage observe les lieux',
-      'visualSetting':'Un intérieur calme',
+      'prompt':'Un personnage adulte se trouve dans une pièce calme, '
+          'debout au centre, regard vers la fenêtre. '
+          'Plan moyen, lumière naturelle et douce.',
     }));
     await tester.pump(const Duration(milliseconds: 200));
     expect(find.byKey(const ValueKey('imageApprovePrompt')),findsOneWidget);
@@ -581,8 +572,7 @@ void main() {
     expect(text.calls, 1);
     expect(image.calls, 0);
 
-    await controller.editPrompt(3, '${draft!.prompt}\nPlan plus rapproché.');
-    expect(controller.forIntent(3)?.state, IllustrationJobState.ready);
+    // First approval confirms proposed appearance facts in Party memory.
     await controller.approvePrompt(3);
     expect(controller.forIntent(3)?.state, IllustrationJobState.approved);
     expect(visualFacts, hasLength(2));
@@ -590,6 +580,11 @@ void main() {
         .single.text, 'Cheveux bruns et yeux verts');
     expect(visualFacts.where((f) => f.field == 'visual_current')
         .single.text, 'Tablier beige');
+    await controller.editPrompt(3, '${draft!.prompt}\nPlan plus rapproché.');
+    expect(controller.forIntent(3)?.state, IllustrationJobState.ready);
+    expect(controller.forIntent(3)?.appearanceProposals, isEmpty);
+    await controller.approvePrompt(3);
+    expect(visualFacts, hasLength(2));
     expect(image.calls, 0);
 
     await controller.generate(3);
@@ -708,12 +703,9 @@ void main() {
         return http.Response(jsonEncode({'choices':[{'message':{
           'role':'assistant',
           'content':jsonEncode({
-            'shot':'medium','angle':'eye_level','focusIds':[],
-            'composition':'centered','lighting':'soft',
-            'palette':'warm','mood':'calm',
-            'visualSubject':'Une voisine dans le salon',
-            'visualAction':'Elle ferme la porte',
-            'visualSetting':'Un salon éclairé',
+            'prompt':'La voisine est debout dans un salon éclairé, '
+                'une main appuyée sur la poignée de la porte '
+                'qu’elle vient de fermer. Plan moyen de trois quarts.',
           }),
         }}]}), 200, headers: {
           'content-type': 'application/json; charset=utf-8',
@@ -756,7 +748,7 @@ void main() {
     expect(captured.single.completedAtUtc, isNotNull);
     expect(captured.single.toJson()['request']['body']['model'], 'text');
     expect(captured.single.toJson()['response']['rawBody'],
-      contains('visualSubject'));
+      contains('prompt'));
     expect(recorder.last, same(narratorExchange));
     expect(captured.single.exportJson(), isNot(contains('text-key')));
   });
