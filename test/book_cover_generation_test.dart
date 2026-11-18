@@ -75,7 +75,7 @@ void main() {
     expect(fake.catalogs, 1);
     expect(fake.request!.size, '1024x1536');
     expect(fake.request!.count, 1);
-    expect(fake.request!.quality, 'medium');
+    expect(fake.request!.quality, isNull); // OpenUncensored has no quality field.
     expect(fake.request!.prompt, contains('texte, bulles, filigranes'));
     expect(fake.request!.prompt, contains('gravure au fusain'));
     expect(fake.request!.prompt, isNot(contains('meurtrier')));
@@ -102,12 +102,12 @@ void main() {
     expect(fake.catalogs, 0);
   });
 
-  test('Incompatible Book quality fails before paid POST', () async {
+  test('Unknown spending cap blocks cover before paid POST', () async {
     final fake = _FakeCoverProvider();
     final generator = BookCoverGenerator(providerFactory: (_) => fake);
     await expectLater(generator.generate(
       book: book.copyWith(illustrationSettings:
-        book.illustrationSettings.copyWith(quality: 'xhigh')),
+        book.illustrationSettings.copyWith(maximumCostUsd: 0.01)),
       connection: const ImageGenerationOptions(
         profileId: 'image', model: 'visual-model'),
       profiles: [profile],
