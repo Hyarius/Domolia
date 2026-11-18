@@ -378,6 +378,18 @@ class _HomePageState extends State<HomePage> {
     }
     if (!await _canLeaveCurrentPage() || !mounted || _history.isEmpty) return;
     setState(() => _page = _history.removeLast());
+    if (_page == _Page.chat &&
+        _activeSessionId != null && _selectedBookId != null) {
+      // The Book may have been edited/reset without restarting this Party.
+      final current = await _books.session(_activeSessionId!);
+      if (mounted && _page == _Page.chat) {
+        _chat.setIllustrationMode(
+          current?.illustrationModeOverride ??
+              _books.byId(_selectedBookId!)?.illustrationMode ??
+              IllustrationMode.disabled,
+        );
+      }
+    }
     if (_page == _Page.home) unawaited(_refreshRecent());
   }
 
