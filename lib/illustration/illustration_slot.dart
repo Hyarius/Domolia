@@ -1,6 +1,8 @@
 // ignore_for_file: prefer_interpolation_to_compose_strings
 import 'dart:typed_data';
 
+import 'package:flutter/services.dart';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -138,6 +140,109 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
     );
   }
 
+  Future<bool> _approvePrompt() async {
+    try {
+      await widget.controller.approvePrompt(widget.intent.id);
+      return true;
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Validation impossible : $error')));
+      }
+      return false;
+    }
+  }
+
+  Future<void> _editPrompt(String initial) async {
+    final input = TextEditingController(text: initial);
+    try {
+      final edited = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Modifier la description visuelle'),
+          content: SizedBox(
+            width: 520,
+            child: TextField(
+              key: const ValueKey('imagePromptEditor'),
+              controller: input, maxLines: 12, maxLength: 6000,
+              decoration: const InputDecoration(
+                hintText: 'Décris le sujet, l’action, le décor et le cadrage.'),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Annuler')),
+            FilledButton(
+              key: const ValueKey('imageSavePrompt'),
+              onPressed: () => Navigator.pop(dialogContext, input.text),
+              child: const Text('Enregistrer')),
+          ],
+        ),
+      );
+      if (edited != null) {
+        await widget.controller.editPrompt(widget.intent.id, edited);
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Modification impossible : $error')));
+      }
+    } finally {
+      input.dispose();
+    }
+  }
+
+  void _showPromptActions(String prompt, IllustrationJobState? state) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheet) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            key: const ValueKey('imageActionGenerate'),
+            leading: const Icon(Icons.brush_outlined),
+            title: const Text('Générer cette image'),
+            onTap: () async {
+              Navigator.pop(sheet);
+              if (state == IllustrationJobState.ready &&
+                  !await _approvePrompt()) return;
+              widget.onGenerate();
+            },
+          ),
+          ListTile(
+            key: const ValueKey('imageActionRegeneratePrompt'),
+            leading: const Icon(Icons.refresh),
+            title: const Text('Régénérer le prompt'),
+            onTap: () {
+              Navigator.pop(sheet);
+              widget.controller.prepare(widget.intent.id, regenerate: true);
+            },
+          ),
+          ListTile(
+            key: const ValueKey('imageActionEditPrompt'),
+            leading: const Icon(Icons.edit_outlined),
+            title: const Text('Éditer le prompt'),
+            onTap: () {
+              Navigator.pop(sheet);
+              if (state == IllustrationJobState.ready ||
+                  state == IllustrationJobState.approved) {
+                _editPrompt(prompt);
+              }
+            },
+          ),
+          ListTile(
+            key: const ValueKey('imageActionCopyPrompt'),
+            leading: const Icon(Icons.copy),
+            title: const Text('Copier le prompt'),
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: prompt));
+              Navigator.pop(sheet);
+            },
+          ),
+        ]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     _refreshCache();
@@ -145,6 +250,10 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
     final working = widget.controller.isBusy(widget.intent.id);
     final available = record?.state == IllustrationJobState.available &&
         record!.fileNames.isNotEmpty;
+    final prepared = record?.state == IllustrationJobState.ready;
+    final approved = record?.state == IllustrationJobState.approved;
+    final prompt = record?.prompt.isNotEmpty == true
+        ? record!.prompt : widget.intent.description;
     return Container(
       key: ValueKey('imageSlot-' + widget.intent.id.toString()),
       width: double.infinity,
@@ -161,8 +270,38 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
             style: TextStyle(color: DomoliaColors.goldLight,
                 fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
-          Text(widget.intent.description,
-            style: const TextStyle(color: DomoliaColors.cream)),
+          GestureDetector(
+            key: const ValueKey('imagePromptText'),
+            onLongPress: working ? null :
+                () => _showPromptActions(prompt, record?.state),
+            child: Text(prompt,
+              style: const TextStyle(color: DomoliaColors.cream)),
+          ),
+          if (!working && (prepared || approved)) ...[
+            const SizedBox(height: 8),
+            Text(prepared ? 'Description à valider'
+                : 'Description validée',
+              style: const TextStyle(color: DomoliaColors.goldLight)),
+            Wrap(spacing: 6, children: [
+              TextButton.icon(
+                key: const ValueKey('imageEditPrompt'),
+                onPressed: () => _editPrompt(prompt),
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Éditer')),
+              TextButton.icon(
+                key: const ValueKey('imageRegeneratePrompt'),
+                onPressed: () => widget.controller.prepare(
+                    widget.intent.id, regenerate: true),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Refaire le prompt')),
+              if (prepared)
+                FilledButton.icon(
+                  key: const ValueKey('imageApprovePrompt'),
+                  onPressed: _approvePrompt,
+                  icon: const Icon(Icons.check),
+                  label: const Text('Valider la description')),
+            ]),
+          ],
           if (available) ...[
             const SizedBox(height: 10),
             for (final file in record.fileNames)
@@ -216,6 +355,9 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
                 ),
               ),
             ]),
+          ] else if (prepared) ...[
+            const SizedBox(height: 8),
+            const Text('Valide ou modifie le prompt avant la génération.'),
           ] else ...[
             if (record?.state == IllustrationJobState.failed) ...[
               const SizedBox(height: 8),
@@ -223,6 +365,13 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
                 style: const TextStyle(color: Colors.redAccent)),
             ],
             const SizedBox(height: 8),
+            if (record == null)
+              TextButton.icon(
+                key: const ValueKey('imagePreparePrompt'),
+                onPressed: working ? null :
+                    () => widget.controller.prepare(widget.intent.id),
+                icon: const Icon(Icons.auto_fix_high),
+                label: const Text('Préparer la description IA')),
             OutlinedButton.icon(
               key: const ValueKey('imageGenerate'),
               onPressed: working ? null : widget.onGenerate,
