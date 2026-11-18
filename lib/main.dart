@@ -882,13 +882,13 @@ class _HomePageState extends State<HomePage> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Réinitialiser Domolia ?'),
         content: const Text(
-          'Cette opération supprimera définitivement tous les Livres, '
-          'Parties, mémoires, illustrations, diagnostics, téléchargements '
-          'et réglages locaux.\n\n'
-          'Seules les clés API enregistrées et l’historique des clés '
-          'OpenUncensored seront conservés. Les fichiers déjà exportés '
-          'hors de Domolia ne seront pas modifiés.\n\n'
-          'Cette action est irréversible.',
+          'Les paramètres de Domolia (IA, narrateur, illustrations, '
+          'mises à jour et préférences par Partie) reviendront à leurs '
+          'valeurs par défaut. OpenUncensored sera sélectionné '
+          'automatiquement.\n\n'
+          'Vos Livres, Parties, mémoires, illustrations, diagnostics, '
+          'fichiers et toutes vos clés API enregistrées seront conservés. '
+          'Aucun crédit ne sera acheté ou consommé.',
         ),
         actions: [
           TextButton(
@@ -899,7 +899,7 @@ class _HomePageState extends State<HomePage> {
           FilledButton(
             key: const ValueKey('resetAppConfirm'),
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Effacer les données'),
+            child: const Text('Réinitialiser les réglages'),
           ),
         ],
       ),
@@ -910,25 +910,21 @@ class _HomePageState extends State<HomePage> {
       if (widget.onResetApp != null) {
         await widget.onResetApp!();
       } else {
-        final storage = _books.store;
-        final service = AppResetService(
-          closeDatabase: () async {
-            await _awaitSessionWrites?.call();
-            if (storage is SqliteBookStore) await storage.close();
-          },
-        );
-        await service.reset();
+        // Settings only: never close, erase or migrate the library database.
+        // The reset service preserves all books, sessions and API secrets.
+        await AppResetService().reset();
       }
       if (mounted && widget.onResetApp == null) {
-        // New widget tree recreates all providers, controllers and routing
-        // caches from pristine persisted state. No payable API call is made.
+        // Recreate settings controllers from defaults without changing
+        // the persisted books, sessions or illustration files.
         runApp(DomoliaApp(key: UniqueKey()));
       }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Réinitialisation incomplète. Les clés API sont '
-              'conservées ; relancez Domolia avant de réessayer.'),
+          content: Text('Réinitialisation des réglages incomplète. '
+              'Vos Livres, Parties et clés API sont conservés. '
+              'Relancez Domolia avant de réessayer.'),
         ));
       }
     } finally {
@@ -1013,7 +1009,7 @@ class _HomePageState extends State<HomePage> {
           leading: const Icon(Icons.restart_alt_rounded,
               color: Colors.redAccent),
           title: const Text('Réinitialiser l’application'),
-          subtitle: const Text('Tout effacer sauf les clés API'),
+          subtitle: const Text('Rétablir les réglages sans perdre vos Livres ni vos clés'),
           trailing: _resetting
               ? const SizedBox(width: 20, height: 20,
                   child: CircularProgressIndicator(strokeWidth: 2))
