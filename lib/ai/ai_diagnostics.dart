@@ -112,14 +112,16 @@ class AiExchange {
         'exchangeId': createdAtUtc.microsecondsSinceEpoch,
         'provider': provider,
         'stage': stage ?? 'unclassified',
-        if (playerEventId != null) 'playerEventId': playerEventId,
-        if (statusCode != null) 'statusCode': statusCode,
         'durationMs': completedAtUtc!.difference(createdAtUtc).inMilliseconds,
-        if (promptTokens != null) 'promptTokens': promptTokens,
-        if (completionTokens != null) 'completionTokens': completionTokens,
         'toolCalls': toolCalls,
         'cancelled': cancelled,
       };
+      if (playerEventId != null) details['playerEventId'] = playerEventId;
+      if (statusCode != null) details['statusCode'] = statusCode;
+      if (promptTokens != null) details['promptTokens'] = promptTokens;
+      if (completionTokens != null) {
+        details['completionTokens'] = completionTokens;
+      }
       if (error == null && !cancelled && (statusCode == null || statusCode! < 400)) {
         AppLogger.info('Appel IA terminé', component: 'ai.http',
             details: details);
