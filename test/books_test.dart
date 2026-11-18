@@ -1214,7 +1214,7 @@ void main() {
     addTearDown(ai.dispose);
     await tester.pumpWidget(MaterialApp(theme: DomoliaTheme.dark,
       home: BookEditorPage(book: custom, library: library, ai: ai,
-          initialTab: 3, onPlay: (_, __) async {}),
+          initialTab: 3, onPlay: (_, _) async {}),
     ));
     await tester.pumpAndSettle();
     final reset = find.byKey(const ValueKey('bookResetSettings'));
