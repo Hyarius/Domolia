@@ -903,6 +903,18 @@ void main() {
     expect(turn['phases'][0]['interpretation']['error'],
       'JSONification invalide');
     expect(exportedText!, isNot(contains('secret-token')));
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('conversationViewAiTrace')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('conversationViewAiTrace')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('conversationAiTraceList')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('conversationAiTrace-diag-1')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('conversationAiTraceBody-diag-1')),
+        findsOneWidget);
+    expect(loads, 2);
     expect(tester.takeException(), isNull);
   });
 
