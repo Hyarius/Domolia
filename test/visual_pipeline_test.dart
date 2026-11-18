@@ -350,6 +350,28 @@ void main() {
     expect(selected.evidence, isNot(contains('Local secret')));
   });
 
+  test('Latest motion survives truncation of a very long narrator turn', () {
+    const intent = ChatIllustrationIntent(
+      id: 9, playerEventId: 1,
+      description: 'Elle déplace une main sous son bras.');
+    final timeline = <ChatTimelineEvent>[
+      ChatEntry(id: 1, speaker: ChatSpeaker.narrator,
+        name: 'Narrateur',
+        text: 'Dans la salle au parquet. ' +
+            ('Des détails de décor et de dialogue. ' * 50) +
+            'Finalement la main gauche se glisse sous l’avant-bras droit.'),
+      intent,
+    ];
+    final selected = const VisualSceneSelector().select(
+      intent: intent, timeline: timeline, lore: const BookLore(),
+    );
+    expect(selected.chronology.single,
+        contains('Dans la salle au parquet'));
+    expect(selected.chronology.single,
+        contains('main gauche se glisse sous l’avant-bras droit'));
+    expect(selected.chronology.single.length, lessThan(650));
+  });
+
   test('Director uses the exact action, body geometry and must-show details',
       () async {
     final provider = _RecordingDirectorProvider();
