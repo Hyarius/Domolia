@@ -258,33 +258,21 @@ class VisualCharacterAppearance {
 
 class VisualDirection {
   const VisualDirection({
-    required this.shot, required this.angle, required this.focusIds,
-    required this.composition, required this.lighting,
-    required this.palette, required this.mood,
-    required this.visualSubject, required this.visualAction,
-    required this.visualSetting,
+    required this.prompt,
+    this.negativePrompt = '',
     this.appearances = const [],
-    this.bodyPose = '',
-    this.mustShow = const [],
   });
-  final String shot, angle, composition, lighting, palette, mood;
-  final List<String> focusIds;
-  final String visualSubject, visualAction, visualSetting;
-  /// Explicit limb/prop geometry when a physical action needs to be legible.
-  final String bodyPose;
-  final List<String> mustShow;
+
+  /// Written directly by the director for the image model, not assembled from
+  /// an intermediate shot checklist or the raw narrative transcript.
+  final String prompt, negativePrompt;
+
+  /// Optional visual proposals, explicitly approved before becoming Party
+  /// memory. These metadata never appear as technical fields in the prompt.
   final List<VisualCharacterAppearance> appearances;
 
-  static const shots = ['wide', 'medium', 'medium_full', 'full_body', 'closeup'];
-  static const angles = ['eye_level', 'high', 'low', 'over_shoulder',
-      'three_quarter', 'side'];
-  static const compositions = ['rule_of_thirds', 'centered', 'leading_lines'];
-  static const lightings = ['natural', 'soft', 'dramatic'];
-  static const palettes = ['warm', 'cool', 'neutral', 'muted'];
-  static const moods = ['calm', 'tense', 'mysterious', 'joyful', 'melancholic'];
-
   factory VisualDirection.parse(String raw, VisualScene scene) {
-    // A single Markdown JSON fence is accepted, but not additional prose.
+    // Tolerate one Markdown JSON fence, not arbitrary surrounding prose.
     var source = raw.trim();
     if (source.startsWith('```')) {
       final fenced = RegExp(
@@ -296,40 +284,34 @@ class VisualDirection {
       }
       source = fenced.group(1)!.trim();
     }
+
     Map<String, dynamic> data;
     try {
       data = jsonDecode(source) as Map<String, dynamic>;
     } catch (_) {
       throw const FormatException('Réponse de direction artistique non JSON.');
     }
-    if (data.keys.toSet().difference(const {
-      'shot','angle','focusIds','composition','lighting','palette','mood',
-      'illustratable','visualSubject','visualAction','visualSetting',
-      'appearances', 'bodyPose', 'mustShow',
-    }).isNotEmpty ||
-        // Ignore the old optional illustratable flag if a provider includes
-        // it. It is not a decision that the director can make.
-        (data.containsKey('illustratable') &&
-         data['illustratable'] is! bool) ||
-        !shots.contains(data['shot']) || !angles.contains(data['angle']) ||
-        !compositions.contains(data['composition']) ||
-        !lightings.contains(data['lighting']) ||
-        !palettes.contains(data['palette']) ||
-        !moods.contains(data['mood']) ||
-        data['focusIds'] is! List ||
-        (data['focusIds'] as List).length > 5 ||
-        (data['focusIds'] as List).any((e) => e is! String)) {
+    if (data.keys.toSet().difference(
+          const {'prompt', 'negativePrompt', 'appearances'},
+        ).isNotEmpty ||
+        data['prompt'] is! String ||
+        (data['negativePrompt'] != null &&
+            data['negativePrompt'] is! String)) {
       throw const FormatException('Structure de mise en scène invalide.');
     }
-    final allowed = {
-      ...scene.characters.map((c) => c.id),
-      ...scene.partyCharacters.keys,
-    };
-    final focused = (data['focusIds'] as List).cast<String>();
-    if (focused.toSet().length != focused.length ||
-        focused.any((id) => !allowed.contains(id))) {
-      throw const FormatException('Personnage inventé par le metteur en scène.');
+
+    final prompt = _validateVisualText(
+      data['prompt'] as String, scene, maxLength: 6000,
+    );
+    if (prompt.length < 30) {
+      throw const FormatException('Description visuelle trop courte.');
     }
+    final negative = data['negativePrompt'] as String? ?? '';
+    if (negative.length > 1500 ||
+        RegExp(r'[\r\n]').hasMatch(negative)) {
+      throw const FormatException('Exclusions visuelles invalides.');
+    }
+
     final rawAppearances = data['appearances'];
     if (rawAppearances != null &&
         (rawAppearances is! List || rawAppearances.length > 5)) {
@@ -342,54 +324,27 @@ class VisualDirection {
     if (appearances.map((a) => a.id).toSet().length != appearances.length) {
       throw const FormatException('Apparence visuelle dupliquée.');
     }
-    final pose = data['bodyPose'];
-    if (pose != null && pose is! String) {
-      throw const FormatException('Description de pose invalide.');
-    }
-    final bodyPose = pose == null || pose.trim().isEmpty
-        ? '' : _visualField(pose, scene);
-    final checkpoints = data['mustShow'];
-    if (checkpoints != null &&
-        (checkpoints is! List || checkpoints.length > 6 ||
-         checkpoints.any((e) => e is! String || e.trim().isEmpty ||
-             e.length > 180))) {
-      throw const FormatException('Points visuels obligatoires invalides.');
-    }
-    final mustShow = <String>[
-      for (final item in (checkpoints as List? ?? const []))
-        _visualField(item, scene),
-    ];
-    if (mustShow.toSet().length != mustShow.length) {
-      throw const FormatException('Points visuels dupliqués.');
-    }
     return VisualDirection(
-      shot: data['shot'] as String,
-      angle: data['angle'] as String,
-      focusIds: List.unmodifiable(focused),
-      composition: data['composition'] as String,
-      lighting: data['lighting'] as String,
-      palette: data['palette'] as String,
-      mood: data['mood'] as String,
-      visualSubject: _visualField(data['visualSubject'], scene),
-      visualAction: _visualField(data['visualAction'], scene),
-      visualSetting: _visualField(data['visualSetting'], scene),
+      prompt: prompt,
+      negativePrompt: negative.trim(),
       appearances: List.unmodifiable(appearances),
-      bodyPose: bodyPose,
-      mustShow: List.unmodifiable(mustShow),
     );
   }
 
-  /// Reject transcript formatting and verbatim dialogue rather than asking
-  /// the image backend to interpret it as context.
-  static String _visualField(Object? value, VisualScene scene) {
-    if (value is! String ||
-        value.trim().isEmpty || value.length > 400 ||
-        RegExp(r'[\r\n«»“”"]').hasMatch(value) ||
-        RegExp(r'(\[NARRATION\]|\[PERSONNAGE|\[IMAGE\]|texte établi\s*:|mémoire confirmée\s*:)',
-          caseSensitive: false).hasMatch(value)) {
+  static String _validateVisualText(String value, VisualScene scene,
+      {required int maxLength}) {
+    final text = value.trim();
+    if (text.isEmpty || text.length > maxLength ||
+        RegExp(
+          r'(\[NARRATION\]|\[PERSONNAGE|\[IMAGE\]|'
+          r'texte établi\s*:|mémoire confirmée\s*:)',
+          caseSensitive: false,
+        ).hasMatch(text) ||
+        RegExp(r'[«»“”]').hasMatch(text)) {
       throw const FormatException('Description visuelle invalide.');
     }
-    final normalized = value.trim().toLowerCase();
+    // A visual prompt must not reproduce character dialogue from the story.
+    final normalized = text.toLowerCase();
     for (final excerpt in scene.excerpts) {
       for (final quote in RegExp(r'«([^»]+)»|“([^”]+)”|"([^"]+)"')
           .allMatches(excerpt)) {
@@ -400,7 +355,14 @@ class VisualDirection {
         }
       }
     }
-    return value.trim();
+    return text;
+  }
+
+  static String _visualField(Object? value, VisualScene scene) {
+    if (value is! String || RegExp(r'[\r\n]').hasMatch(value)) {
+      throw const FormatException('Description d’apparence invalide.');
+    }
+    return _validateVisualText(value, scene, maxLength: 250);
   }
 }
 
@@ -410,34 +372,60 @@ class VisualDirector {
     required VisualScene scene,
     required AiChatProvider provider,
     required AiConfiguration connection,
+    String style = 'illustration cinématographique',
+    String negativePrompt = '',
   }) async {
-    final raw = await provider.complete(connection, maxTokens: 1000,
+    final raw = await provider.complete(connection, maxTokens: 1500,
       messages: [
         const AiMessage(role: 'system', content:
-          'Tu es le metteur en scène d’une seule image fixe. '
-          'Décris uniquement ce qui est visible : personnes et vêtements, '
-          'action exacte, pose et points de contact, objets, décor, '
-          'cadrage et éclairage. '
-          'L’instant à illustrer est prioritaire. Lore, mémoire et tours '
-          'précédents servent à la continuité, pas à cumuler les actions. '
-          'Ne recopie aucun dialogue, sentiment invisible ou événement futur. '
-          'N’invente ni personnage ni accessoire. '
-          'Réponds uniquement en JSON brut, sans balises Markdown, '
-          'avec shot (wide/medium/medium_full/full_body/closeup), '
-          'angle (eye_level/high/low/over_shoulder/three_quarter/side), '
-          'focusIds (liste), composition '
-          '(rule_of_thirds/centered/leading_lines), '
-          'lighting (natural/soft/dramatic), '
-          'palette (warm/cool/neutral/muted), '
-          'mood (calm/tense/mysterious/joyful/melancholic), '
-          'visualSubject, visualAction, visualSetting. '
-          'Optionnels : bodyPose (positions et contacts), '
-          'mustShow (détails indispensables), '
-          'appearances (liste de {id,identity,current}). '
-          'Une phrase courte, concrète et visuelle par champ. '
-          'focusIds et appearances : IDs autorisés uniquement.'),
+          'Tu es un metteur en scène et directeur artistique. '
+          'Écris TOI-MÊME le prompt final destiné à générer UNE image fixe. '
+          'Le champ prompt est une description visuelle fluide, autonome, '
+          'précise et riche, PAS un plan, une liste, un résumé du récit, '
+          'ni un assemblage de champs techniques. '
+          'Décris l’instant exact demandé, sans cumuler les actions passées '
+          'ou les événements futurs. '
+          'Pour chaque personne effectivement visible, détaille au maximum '
+          'ce que la caméra peut montrer : âge apparent (adulte si établi), '
+          'genre et silhouette, taille relative et carrure, teint, '
+          'traits du visage, couleur et forme des yeux visibles, '
+          'couleur, longueur, coupe, texture et état des cheveux, '
+          'vêtements et accessoires réellement présents (matières, couleurs, '
+          'ajustement), parties du corps visibles, expression du visage. '
+          'Décris précisément la pose et la géométrie : debout/assis/agenouillé, '
+          'orientation du buste et de la tête, direction du regard, '
+          'bras, mains, jambes, contacts, distance et emplacement relatif '
+          'des personnages, objets et surfaces. '
+          'Puis le lieu, les objets effectivement présents, arrière-plan, '
+          'perspective, angle et distance de caméra, plan, composition, '
+          'lumière, ombres, couleurs et style graphique. '
+          'Utilise toutes les précisions connues du Lore et de la mémoire '
+          'confirmée. Ne contredis jamais les faits établis. '
+          'Si une apparence nécessaire n’est pas définie, propose des '
+          'caractéristiques visuelles plausibles et cohérentes pour ce '
+          'personnage existant (par exemple âge apparent, cheveux, tenue), '
+          'sans les présenter comme des faits du récit : le joueur les '
+          'validera avant la génération. '
+          'N’invente ni nouveau personnage, ni action, ni objet narratif '
+          'absent de la scène. Ne décris que ce qui est visible, pas '
+          'les pensées, intentions ou dialogues. '
+          'Privilégie environ 120 à 250 mots visuels si la scène le permet ; '
+          'ne remplis pas artificiellement une scène simple. '
+          'Réponds UNIQUEMENT en JSON, sans Markdown ni commentaire, '
+          'avec "prompt" (texte détaillé) et "negativePrompt" '
+          '(exclusions, chaîne éventuellement vide). '
+          'Tu peux ajouter "appearances" : liste des propositions '
+          'visuelles par personnage avec id, identity (âge apparent, '
+          'physique, cheveux, yeux) et current (tenue, posture, '
+          'état visible). Utilise uniquement les IDs autorisés. '
+          'Ces propositions servent à la mémoire APRÈS approbation et '
+          'doivent être cohérentes avec le prompt.'),
         AiMessage(role: 'user',
-          content: scene.evidence + '\nIDs autorisés : ' +
+          content: scene.evidence +
+              '\nSTYLE VISUEL : ' + style +
+              (negativePrompt.trim().isEmpty ? '' :
+                  '\nEXCLUSIONS DU LIVRE : ' + negativePrompt) +
+              '\nIDs autorisés : ' +
               [...scene.characters.map((c) => c.id),
                 ...scene.partyCharacters.keys].join(', ')),
       ]);
@@ -445,76 +433,30 @@ class VisualDirector {
   }
 }
 
+/// Validate and preserve the director's authored text as-is. The only
+/// addition is the optional exclusion sentence when the backend has no
+/// separate negative-prompt parameter.
 String validatedImagePrompt(VisualScene scene, VisualDirection direction,
     {String style = 'illustration cinématographique',
      String negativePrompt = ''}) {
-   if (style.trim().isEmpty || style.length > 160 ||
+  if (style.trim().isEmpty || style.length > 160 ||
       negativePrompt.length > 1500) {
     throw const FormatException('Style invalide.');
   }
-  const shots = {
-    'wide': 'plan large',
-    'medium': 'plan moyen',
-    'medium_full': 'plan moyen en pied',
-    'full_body': 'personnage en pied',
-    'closeup': 'gros plan',
-  };
-  const angles = {
-    'eye_level': 'à hauteur des yeux',
-    'high': 'en plongée',
-    'low': 'en contre-plongée',
-    'over_shoulder': 'par-dessus l’épaule',
-    'three_quarter': 'de trois-quarts',
-    'side': 'de profil',
-  };
-  const compositions = {
-    'rule_of_thirds': 'règle des tiers',
-    'centered': 'composition centrée',
-    'leading_lines': 'lignes directrices',
-  };
-  const lights = {
-    'natural': 'naturelle',
-    'soft': 'douce',
-    'dramatic': 'dramatique',
-  };
-  const palettes = {
-    'warm': 'chaude',
-    'cool': 'froide',
-    'neutral': 'neutre',
-    'muted': 'atténuée',
-  };
-  const moods = {
-    'calm': 'calme',
-    'tense': 'tendue',
-    'mysterious': 'mystérieuse',
-    'joyful': 'joyeuse',
-    'melancholic': 'mélancolique',
-  };
-  // The image backend receives a self-contained visual description, not
-  // the director's intermediate field names or narrative context.
-  String visual(String value) => VisualDirection._visualField(value, scene);
-  final details = <String>[
-    visual(direction.visualSubject),
-    for (final appearance in direction.appearances)
-      '${scene.partyCharacters[appearance.id] ??
-          (scene.characters.where((c) => c.id == appearance.id)
-              .map((c) => c.name).toList().firstOrNull ?? appearance.id)} : '
-          '${visual(appearance.identity)}, ${visual(appearance.current)}',
-    visual(direction.visualAction),
-    if (direction.bodyPose.isNotEmpty) visual(direction.bodyPose),
-    for (final detail in direction.mustShow) visual(detail),
-    visual(direction.visualSetting),
-  ];
-  final camera = '${shots[direction.shot]}, ${angles[direction.angle]}, '
-      '${compositions[direction.composition]}';
-  final atmosphere = 'lumière ${lights[direction.lighting]}, '
-      'palette ${palettes[direction.palette]}, '
-      'ambiance ${moods[direction.mood]}';
+  final description = VisualDirection._validateVisualText(
+      direction.prompt, scene, maxLength: 6000);
+  if (description.length < 30) {
+    throw const FormatException('Description visuelle trop courte.');
+  }
+  final exclusions = [
+    direction.negativePrompt,
+    negativePrompt,
+  ].map((value) => value.trim()).where((value) => value.isNotEmpty).toList();
+  if (exclusions.join(', ').length > 1500) {
+    throw const FormatException('Exclusions visuelles trop longues.');
+  }
   return [
-    '${details.join('. ')}. '
-        '${camera[0].toUpperCase()}${camera.substring(1)}, ${atmosphere}. '
-        '${style.trim()}.',
-    if (negativePrompt.trim().isNotEmpty)
-      'À exclure : ${negativePrompt.trim()}.',
+    description,
+    if (exclusions.isNotEmpty) 'À exclure : ' + exclusions.join(', ') + '.',
   ].join('\n');
 }
