@@ -111,34 +111,9 @@ class AppResetService {
     ];
     var collision = 0;
     for (final profile in savedCustom) {
-      // Skip only credentials already retained by the vault or the default
-      // profile. Never silently drop a different key under a managed ID.
+      // Preserve every distinct key, even under an old managed profile ID.
       final alreadyRetained = (profile.apiKey == defaultOuKey &&
-          profile.baseUrl.replaceFirst(RegExp(r'/+
-    final restoredVault = OuVaultState(
-      keys: [
-        for (final key in oldVault.keys)
-          StoredOuKey(
-            id: key.id, secret: key.secret,
-            addedAt: key.addedAt, name: key.name,
-          ),
-      ],
-      activeKeyId: active?.id,
-    );
-
-    // Persist credentials *before* erasing other stores. Never deleteAll()
-    // in secure storage: a failed rewrite could permanently lose API keys.
-    await _vault.write(restoredVault);
-    await _profiles.write(AiProfilesState(
-      profiles: restoredProfiles, selectedId: 'default',
-    ));
-    await _clearOtherSecureEntries();
-    await _closeDatabase();
-    await _clearLocalData();
-    await _clearPreferences();
-  }
-}
-), '') ==
+          profile.baseUrl.replaceFirst(RegExp(r'/+$'), '') ==
               defaultAiBaseUrl) ||
           oldVault.keys.any((key) => key.secret == profile.apiKey);
       if (alreadyRetained) continue;
