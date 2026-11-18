@@ -295,7 +295,7 @@ class IllustrationController extends ChangeNotifier {
         sourceHash: scene.sourceHash, state: IllustrationJobState.ready,
         provider: 'director', model: options.directorProfileId,
         createdAtUtc: DateTime.now().toUtc(),
-        prompt: prompt,
+        prompt: prompt, visualStyle: art.style,
         negativePrompt: _combinedNegativePrompt(
             direction, art.negativePrompt),
         appearanceProposals: _appearanceProposals(direction),
@@ -513,7 +513,7 @@ class IllustrationController extends ChangeNotifier {
         sourceHash: scene.sourceHash, state: IllustrationJobState.preparing,
         provider: providerId, model: capability.id,
         createdAtUtc: DateTime.now().toUtc(),
-        prompt: preparedPrompt ?? '',
+        prompt: preparedPrompt ?? '', visualStyle: art.style,
         negativePrompt: preparedPrompt != null
             ? prepared!.negativePrompt : '',
         appearanceProposals: preparedPrompt != null
