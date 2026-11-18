@@ -287,8 +287,11 @@ class LiveMemoryCoordinator extends ChangeNotifier {
         throw const FormatException('Proposition visuelle invalide.');
       }
       final current = _facts.where((f) => f.id == proposal.id).toList();
+      // Once accepted, permanent physical traits never drift just because
+      // a later director proposes a different haircut or face.
       if (current.isNotEmpty &&
-          (current.first.manual || current.first.pinned)) continue;
+          (current.first.manual || current.first.pinned ||
+              proposal.field == 'visual_identity')) continue;
       await store.saveMemoryOverride(sessionId,
           LiveMemoryOverride(proposal.id, fact: proposal));
     }
