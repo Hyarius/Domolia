@@ -413,9 +413,10 @@ class _HomePageState extends State<HomePage> {
 
         Future<String> narratorProfileId() async {
           final current = await _books.session(session.id);
+          // Party override > Book binding > application default.
           final chosen = current?.aiProfileId ??
-              _taskRouting.profileFor(AiNarrativeTask.narrator) ??
-              await _books.profileFor(book.id);
+              await _books.profileFor(book.id) ??
+              _taskRouting.profileFor(AiNarrativeTask.narrator);
           if (chosen == null || chosen.isEmpty) {
             throw const AiProviderException(
               'Choisissez une configuration IA pour le narrateur.',
