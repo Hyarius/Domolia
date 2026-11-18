@@ -127,3 +127,38 @@ Le canal dev-latest concerne main, pas cette PR.
 flutter pub get, flutter analyze (aucun problème), flutter test,
 compilation Android, signature et release de préversion.
 La PR reste en brouillon et n'est pas fusionnée sans autorisation.
+
+## Réinitialisation locale — conservation des clés API
+
+Dans Paramètres > Application > **Réinitialiser l’application** :
+
+1. Ouvrir la confirmation, puis choisir Annuler : les données restent intactes.
+2. Créer un Livre, une Partie, de la Live Memory et une illustration locale.
+   Relancer la réinitialisation puis confirmer « Effacer les données ».
+3. Au redémarrage automatique, vérifier que les Livres, Parties, illustrations,
+   diagnostics, préférences et mises à jour téléchargées ont disparu.
+4. Dans Crédits IA, vérifier que toutes les clés OpenUncensored et leurs
+   identifiants persistent, que les modèles avancés et soldes mis en cache
+   ont été remis à zéro, et que la clé précédemment active est réutilisable.
+5. Vérifier les clés des autres profils API. La connexion ChatGPT OAuth n'est
+   **pas** conservée : seule une véritable clé API l'est.
+6. Lorsqu'un paiement OpenUncensored attend une confirmation, la remise à zéro
+   doit être refusée sans suppression ni perte du jeton de récupération.
+7. Provoquer un échec du stockage sécurisé et vérifier qu'aucune donnée locale
+   n'est supprimée. Les exports déjà enregistrés hors de Domolia ne sont
+   jamais effacés.
+
+## Réglages d’images automatiques
+
+Avec uniquement une clé OpenUncensored active, sans configurer séparément la
+génération graphique, le choix du profil et du metteur en scène doit être
+automatique. Le modèle graphique par défaut vient du catalogue retourné par
+OpenUncensored, avec préférence pour `z-image-turbo` lorsqu'il est disponible.
+Une sélection explicite conserve sa priorité ; un modèle explicitement
+sélectionné mais disparu est signalé sans requête facturable.
+
+Tester un Livre ancien ayant `quality: "high"` avec OpenUncensored : ce champ
+non pris en charge est omis des appels d'images, y compris pour la couverture.
+La génération manuelle nécessite toujours la confirmation de facturation.
+Tester également le refus du fournisseur, un modèle indisponible et un solde
+insuffisant sans retry automatique.
