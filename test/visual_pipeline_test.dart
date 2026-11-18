@@ -106,7 +106,9 @@ void main() {
     };
     final parsed=VisualDirection.parse(jsonEncode(direction()),selected);
     expect(parsed.appearances.single.id,'lea-monel');
-    expect(validatedImagePrompt(selected,parsed),parsed.prompt);
+    expect(validatedImagePrompt(selected,parsed),startsWith(parsed.prompt));
+    expect(validatedImagePrompt(selected,parsed),
+        contains('illustration cinématographique'));
     expect(parsed.prompt,isNot(contains('Personnage lea-monel')));
     expect(()=>VisualDirection.parse(jsonEncode(
        direction()..['appearances']=[{
