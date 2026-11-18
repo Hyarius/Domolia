@@ -207,7 +207,8 @@ class IllustrationController extends ChangeNotifier {
       final scene = const VisualSceneSelector().select(
           intent: intents.single, timeline: all,
           lore: lore(), memory: memory());
-      final options = await preferences.forSession(sessionId);
+      final options = (await preferences.forSession(sessionId))
+          .resolveProfiles(ai.profiles);
       if (options.directorProfileId.isEmpty) {
         throw StateError('Choisissez un metteur en scène IA dans les réglages.');
       }
@@ -357,12 +358,13 @@ class IllustrationController extends ChangeNotifier {
       }
       final preparedPrompt = prepared?.state == IllustrationJobState.approved
           ? prepared!.prompt : null;
-      final options = await preferences.forSession(sessionId);
+      final options = (await preferences.forSession(sessionId))
+          .resolveProfiles(ai.profiles);
       options.validate();
       final art = visualSettings?.call() ?? const BookIllustrationSettings();
       art.validate();
       final profiles = ai.profiles.where((e) => e.id == options.profileId);
-      if (profiles.isEmpty || options.model.isEmpty) {
+      if (profiles.isEmpty) {
         throw StateError(
             'Génération d’image non configurée : choisissez un profil '
             'graphique et un modèle dans les réglages IA.');
@@ -385,16 +387,13 @@ class IllustrationController extends ChangeNotifier {
             'Désactivez le plafond ou choisissez un modèle à prix garanti.');
       }
       final models = await imageProvider.listModels(profile.apiKey);
-      final matching = models.where((model) => model.id == options.model);
-      if (matching.isEmpty) {
-        throw const ImageGenerationFailure(ImageFailureKind.unsupported,
-            'Modèle graphique indisponible. Vérifiez les réglages IA.');
-      }
-      final capability = matching.first;
+      final capability = selectImageModel(models, options.model);
+      final effectiveQuality = providerId == 'openuncensored'
+          ? null : art.quality;
       if (!capability.sizes.contains(art.size) ||
           art.count > capability.maximumImages ||
-          (art.quality != null &&
-              !capability.qualities.contains(art.quality))) {
+          (effectiveQuality != null &&
+              !capability.qualities.contains(effectiveQuality))) {
         throw const ImageGenerationFailure(ImageFailureKind.unsupported,
             'Format, qualité ou quantité incompatible avec le modèle '
             'graphique. Modifiez les paramètres Images du Livre.');
@@ -405,7 +404,7 @@ class IllustrationController extends ChangeNotifier {
       current = StoredIllustration(
         requestId: unique, sessionId: sessionId, intentId: intentId,
         sourceHash: scene.sourceHash, state: IllustrationJobState.preparing,
-        provider: providerId, model: options.model,
+        provider: providerId, model: capability.id,
         createdAtUtc: DateTime.now().toUtc(),
         prompt: preparedPrompt ?? '',
       );
@@ -443,8 +442,8 @@ class IllustrationController extends ChangeNotifier {
       providerInvoked = true;
       final result = await imageProvider.generate(
         ImageGenerationRequest(
-          model: options.model, prompt: prompt, size: art.size,
-          quality: art.quality, count: art.count,
+          model: capability.id, prompt: prompt, size: art.size,
+          quality: effectiveQuality, count: art.count,
         ),
         apiKey: profile.apiKey,
       );
