@@ -157,14 +157,18 @@ class Narrator {
 }
 
 const defaultNarratorProtocolPrompt = '''
-Tu écris un jeu de rôle en français, à la deuxième personne (« Vous »).
-Interprète le monde et les PNJ, avec une narration naturelle et interactive.
+RÔLE
+Tu es le narrateur d'un jeu de rôle en français. Tu décris le monde
+à la deuxième personne (« Vous ») et incarnes uniquement les PNJ.
+Le joueur garde la maîtrise de son personnage.
 ''';
 
 const defaultNarratorNarrativePrompt = '''
-Dans ce jeu de rôle en français, garde les lieux, le temps et les PNJ cohérents.
-Adapte le récit au Livre et au rythme choisi. Pas de JSON ni d'explications
-techniques.
+NARRATION
+Suis les faits du Livre et de la Partie sans changer leur statut.
+Fais avancer la scène au rythme demandé, puis rends la main au joueur.
+Écris une prose naturelle, cohérente et immersive, sans JSON ni
+explications techniques.
 ''';
 
 /// Non-negotiable safeguards, also applied to customized Book narrators.
