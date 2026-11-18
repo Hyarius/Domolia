@@ -368,12 +368,12 @@ class IllustrationController extends ChangeNotifier {
     );
     for (final match in appearances.allMatches(record.prompt)) {
       final name = match.group(1)!.trim();
-      final ids = <String>[
+      final ids = <String>{
         for (final entry in scene.partyCharacters.entries)
           if (entry.value == name) entry.key,
         for (final character in scene.characters)
           if (character.name == name) character.id,
-      ].toSet();
+      };
       if (ids.length != 1) continue;
       addAppearance(ids.single, name, match.group(2)!, match.group(3)!);
     }
