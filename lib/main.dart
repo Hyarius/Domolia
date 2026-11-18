@@ -1009,7 +1009,7 @@ class _HomePageState extends State<HomePage> {
           key: const ValueKey('settingsFactoryReset'),
           leading: const Icon(Icons.restart_alt_rounded,
               color: Colors.redAccent),
-          title: const Text('Réinitialiser l’application'),
+          title: const Text('Réinitialiser les réglages'),
           subtitle: const Text('Rétablir les réglages sans perdre vos Livres ni vos clés'),
           trailing: _resetting
               ? const SizedBox(width: 20, height: 20,
