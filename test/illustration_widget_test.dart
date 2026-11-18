@@ -36,6 +36,23 @@ class _Store implements AiProfileStore {
   Future<void> write(AiProfilesState state) async {}
 }
 
+class _NoKeyStore implements AiProfileStore {
+  @override
+  Future<AiProfilesState?> read() async => const AiProfilesState(
+    profiles: [
+      AiProfile(id:'image', name:'Images OU',
+        baseUrl:'https://api.openuncensored.com/v1',
+        model:'text', apiKey:''),
+      AiProfile(id:'director', name:'Directeur photo',
+        baseUrl:'https://api.openuncensored.com/v1',
+        model:'text', apiKey:''),
+    ],
+    selectedId:'director',
+  );
+  @override
+  Future<void> write(AiProfilesState state) async {}
+}
+
 class _Text implements AiChatProvider {
   Completer<String>? gate;
   @override
@@ -301,7 +318,7 @@ void main() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
-    final ai=AiConnectionController(store:_Store(),provider:_Text());
+    final ai=AiConnectionController(store:_NoKeyStore(),provider:_Text());
     addTearDown(ai.dispose);
     await ai.initialize();
     final prefs=ImagePreferences();
