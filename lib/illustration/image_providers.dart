@@ -29,6 +29,28 @@ class ImageModelCapability {
   final double? estimatedUnitCostUsd;
 }
 
+/// Automatic default is selected from the live provider catalogue.
+ImageModelCapability selectImageModel(
+    List<ImageModelCapability> models, String requestedId) {
+  if (requestedId.isNotEmpty) {
+    for (final model in models) {
+      if (model.id == requestedId) return model;
+    }
+    throw const ImageGenerationFailure(ImageFailureKind.unsupported,
+        'Modèle graphique indisponible. Choisissez un autre modèle.');
+  }
+  for (final preferred in const [
+    'z-image-turbo', 'lustify-v8', 'qwen-image-3-uncensored',
+  ]) {
+    for (final model in models) {
+      if (model.id == preferred) return model;
+    }
+  }
+  if (models.isNotEmpty) return models.first;
+  throw const ImageGenerationFailure(ImageFailureKind.unavailable,
+      'Aucun modèle graphique disponible actuellement.');
+}
+
 class ImageGenerationRequest {
   const ImageGenerationRequest({
     required this.model,
