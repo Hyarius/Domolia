@@ -214,8 +214,15 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.byKey(const ValueKey('chatIllustrateLastScene')),
       findsOneWidget);
-    expect(find.byKey(const ValueKey('imageGenerate')),findsOneWidget);
+    expect(find.byKey(const ValueKey('imagePreparePrompt')),findsOneWidget);
     expect(image.calls,0);
+    await tester.tap(find.byKey(const ValueKey('imagePreparePrompt')));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byKey(const ValueKey('imageApprovePrompt')),findsOneWidget);
+    expect(image.calls,0);
+    await tester.tap(find.byKey(const ValueKey('imageApprovePrompt')));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byKey(const ValueKey('imageGenerate')),findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('imageGenerate')));
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.byKey(const ValueKey('imageConfirmGenerate')),
@@ -318,15 +325,13 @@ void main() {
         onOpenImageSettings:()=>settingsOpened=true,
       ))));
     await tester.pump(const Duration(milliseconds: 200));
-    await tester.tap(find.byKey(const ValueKey('imageGenerate')));
-    await tester.pump(const Duration(milliseconds: 200));
-    await tester.tap(find.byKey(const ValueKey('imageConfirmGenerate')));
+    await tester.tap(find.byKey(const ValueKey('imagePreparePrompt')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
     expect(provider.calls,0);
     expect(find.byKey(const ValueKey('chatIllustrationErrorBanner')),
       findsOneWidget);
-    expect(find.textContaining('Génération d’image non configurée'),findsWidgets);
+    expect(find.textContaining('Choisissez un metteur'),findsWidgets);
     await tester.tap(find.byKey(
       const ValueKey('chatIllustrationOpenSettings')));
     expect(settingsOpened,isTrue);
@@ -393,10 +398,7 @@ void main() {
         controller:chat,onOpenSettings:(){},illustrations:images,
       ))));
     await tester.pump(const Duration(milliseconds: 200));
-    await tester.tap(find.byKey(const ValueKey('imageGenerate')));
-    await tester.pump(const Duration(milliseconds: 200));
-    await tester.tap(find.byKey(const ValueKey('imageConfirmGenerate')));
-    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('imagePreparePrompt')));
     await tester.pump(const Duration(milliseconds: 200));
     expect(find.byKey(const ValueKey('chatIllustratorIndicator')),
       findsOneWidget);
@@ -411,6 +413,14 @@ void main() {
       'visualAction':'Le personnage observe les lieux',
       'visualSetting':'Un intérieur calme',
     }));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.byKey(const ValueKey('imageApprovePrompt')),findsOneWidget);
+    expect(image.calls,0);
+    await tester.tap(find.byKey(const ValueKey('imageApprovePrompt')));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(find.byKey(const ValueKey('imageGenerate')));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(find.byKey(const ValueKey('imageConfirmGenerate')));
     await tester.pump(const Duration(milliseconds: 200));
     expect(find.text('Illustrateur dessine…'),findsOneWidget);
     expect(image.calls,1);
