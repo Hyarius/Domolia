@@ -4,9 +4,10 @@ import 'dart:typed_data';
 
 import '../logging/app_logger.dart';
 
-/// A deliberately bounded, in-memory record of the actual outgoing HTTP
-/// JSON and the unparsed incoming HTTP response. Nothing is persisted until
-/// the user explicitly exports it. Never store Authorization credentials.
+/// A deliberately bounded record of the actual outgoing HTTP JSON and
+/// incoming HTTP response. The hosting Party may persist redacted exchanges
+/// locally according to its retention policy; app-level logs contain metadata
+/// only. Never store Authorization credentials.
 class AiExchangeRecorder {
   AiExchange? last;
 
