@@ -92,7 +92,7 @@ void main() {
         composition:'centered',lighting:'natural',palette:'muted',
         mood:'mysterious',visualSubject:'Bureau',visualAction:'Dossier posé',
         visualSetting:'Une pièce'));
-    expect(prompt,contains('Action : Dossier posé'));
+    expect(prompt,contains('Dossier posé'));
   });
 
   test('Director cannot add cast or arbitrary narrative fields', () {
@@ -148,6 +148,23 @@ void main() {
       selected), throwsFormatException);
   });
 
+  test('Director accepts a single Markdown JSON fence without prose', () {
+    final selected = const VisualSceneSelector().select(
+        intent: intent, timeline: scene(), lore: lore);
+    final raw = jsonEncode({
+      'shot': 'medium', 'angle': 'eye_level', 'focusIds': ['lea-monel'],
+      'composition': 'centered', 'lighting': 'soft',
+      'palette': 'warm', 'mood': 'calm',
+      'visualSubject': 'Léa', 'visualAction': 'Ferme le tiroir',
+      'visualSetting': 'Pièce éclairée',
+    });
+    expect(VisualDirection.parse('```json\\n$raw\\n```', selected).shot,
+        'medium');
+    expect(() => VisualDirection.parse(
+        'Préambule\\n```json\\n$raw\\n```', selected),
+        throwsFormatException);
+  });
+
   test('Book exclusions are added without treating scene dialogue as overlay', () {
     final selected=const VisualSceneSelector().select(
         intent:intent,timeline:scene(),lore:lore);
@@ -160,9 +177,9 @@ void main() {
     final prompt=validatedImagePrompt(selected,director,
       style:'gravure sombre',
       negativePrompt:'sous-titres, textes, filigranes');
-    expect(prompt,contains('Style : gravure sombre'));
+    expect(prompt,contains('gravure sombre'));
     expect(prompt,contains('À exclure : sous-titres'));
-    expect(prompt,contains('Action : Il ferme un tiroir'));
+    expect(prompt,contains('Il ferme un tiroir'));
     expect(prompt,isNot(contains('Texte établi')));
     expect(prompt,isNot(contains('Je regarde Léa Monel')));
     expect(prompt,isNot(contains('Soren referme lentement le tiroir derrière lui.')));
@@ -218,7 +235,7 @@ void main() {
     };
     final direction=VisualDirection.parse(jsonEncode(data),selected);
     expect(validatedImagePrompt(selected,direction),
-      contains('Action : Elle reste immobile'));
+      contains('Elle reste immobile'));
     expect(VisualDirection.parse(
       jsonEncode({...data,'illustratable':false}),selected).visualSubject,
       'La gardienne');
@@ -436,10 +453,10 @@ void main() {
     expect(direction.angle, 'three_quarter');
     expect(direction.mustShow, hasLength(2));
     final prompt = validatedImagePrompt(selected, direction);
-    expect(prompt, contains('Pose et contacts :'));
-    expect(prompt, contains('Détails visibles :'));
-    expect(prompt.indexOf('Action :'),
-        lessThan(prompt.indexOf('Décor :')));
+    expect(prompt, contains('Main droite au sol'));
+    expect(prompt, contains('Main gauche au tissu'));
+    expect(prompt.indexOf('Naëlle saisit un tissu'),
+        lessThan(prompt.indexOf('Parquet sombre de l’atelier')));
     expect(prompt, isNot(contains('ACTION PRIORITAIRE')));
     expect(prompt, isNot(contains('Personnage naelle')));
     expect(prompt.length, lessThan(800));
