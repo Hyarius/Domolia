@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:domolia/ai/ai_controller.dart';
 import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/books/book_lore.dart';
+import 'package:domolia/books/book_definition.dart';
 import 'package:domolia/chat/chat_controller.dart';
 import 'package:domolia/chat/chat_protocol.dart';
 import 'package:domolia/chat/group_chat_page.dart';
@@ -100,6 +101,7 @@ class _VisualText extends _Text {
 
 class _Image implements ImageGenerationProvider {
   int calls=0;
+  ImageGenerationRequest? lastRequest;
   Completer<ImageGenerationResult>? gate;
   @override
   String get id=>'openuncensored';
@@ -112,6 +114,7 @@ class _Image implements ImageGenerationProvider {
   Future<ImageGenerationResult> generate(ImageGenerationRequest request,
       {required String apiKey}) async {
     calls++;
+    lastRequest=request;
     expect(request.model,'test-image');
     expect(request.prompt,contains('Sujet visible :'));
     expect(request.prompt,isNot(contains('Texte établi :')));
@@ -269,6 +272,39 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('imagePromptExport')),findsOneWidget);
     expect(find.byTooltip('Exporter le prompt (JSON)'),findsOneWidget);
+  });
+
+  test('No image configuration required with an OpenUncensored API key',
+      () async {
+    final ai=AiConnectionController(store:_Store(),provider:_Text());
+    addTearDown(ai.dispose);
+    await ai.initialize();
+    final prefs=ImagePreferences();
+    addTearDown(prefs.dispose);
+    await prefs.initialize();
+    final events=<ChatTimelineEvent>[
+      const ChatEntry(id:1,speaker:ChatSpeaker.narrator,
+        name:'Narrateur',text:'La lumière entre dans la pièce.'),
+      const ChatIllustrationIntent(id:2,playerEventId:1,
+        description:'La lumière dessine un rayon sur le plancher.'),
+    ];
+    final records=_ImageRecords()..timeline=()=>events;
+    final provider=_Image();
+    final controller=IllustrationController(
+      sessionId:'automatic',ai:ai,preferences:prefs,
+      records:records,timeline:()=>events,
+      lore:()=>const BookLore(),memory:()=>const [],
+      visualSettings:()=>const BookIllustrationSettings(quality:'high'),
+      awaitNarrativeWrites:() async {},
+      files:_MemoryFiles(),providerFactory:(_)=>provider,
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    await controller.generate(2);
+    expect(provider.calls,1);
+    expect(provider.lastRequest!.quality,isNull);
+    expect(provider.lastRequest!.model,'test-image');
+    expect(controller.forIntent(2)?.state,IllustrationJobState.available);
   });
 
   test('Duplicate requests while provider is pending spend only once',
