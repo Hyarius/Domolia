@@ -722,6 +722,9 @@ void main() {
     final prefs = ImagePreferences();
     addTearDown(prefs.dispose);
     await prefs.initialize();
+    await prefs.saveApplication(const ImageGenerationOptions(
+      profileId:'image', directorProfileId:'director',
+    ));
     final events = <ChatTimelineEvent>[
       const ChatEntry(id:1, speaker:ChatSpeaker.player,
         name:'Vous', text:'Je regarde ma voisine.'),
@@ -768,6 +771,9 @@ void main() {
     final prefs = ImagePreferences();
     addTearDown(prefs.dispose);
     await prefs.initialize();
+    await prefs.saveApplication(const ImageGenerationOptions(
+      profileId:'image', directorProfileId:'director',
+    ));
     final events = <ChatTimelineEvent>[
       const ChatEntry(id:1,speaker:ChatSpeaker.player,
         name:'Vous',text:'Je regarde.'),
