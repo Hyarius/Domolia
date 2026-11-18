@@ -345,7 +345,12 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
             ),
           ),
         ),
-        const SizedBox(height: DomoliaSpacing.field),
+        ExpansionTile(
+          key: const ValueKey('aiCompatibilityAdvanced'),
+          title: const Text('Compatibilité et tests avancés'),
+          subtitle: const Text('À modifier seulement si un modèle en a besoin'),
+          childrenPadding: const EdgeInsets.symmetric(vertical: 8),
+          children: [
         DropdownButtonFormField<AiNsfwCompatibility>(
           key: const ValueKey('aiNsfwCapability'),
           initialValue: controller.selectedProfile.nsfwCompatibility,
@@ -403,6 +408,8 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
           icon: const Icon(Icons.fact_check_outlined),
           label: Text(_probingTools
               ? 'Vérification en cours…' : 'Tester le Tool Calling (payant)'),
+        ),
+          ],
         ),
         const SizedBox(height: DomoliaSpacing.compact),
         Wrap(
