@@ -1,0 +1,13 @@
+{
+  "format": "domolia-illustration-prompt-v1",
+  "createdAtUtc": "2026-01-01T00:00:00.000Z",
+  "requestId": "request-example",
+  "sessionId": "partie-exemple",
+  "intentId": 3,
+  "provider": "example",
+  "model": "example-image",
+  "costUsd": null,
+  "style": "aquarelle",
+  "negativePrompt": "texte, légendes, filigranes",
+  "prompt": "Une seule illustration de fiction, sans texte incrusté.\nStyle graphique : aquarelle.\nSujet visible : Un phare.\nAction visible : La lumière éclaire la mer.\nDécor visible : Côte rocheuse.\nEXCLUSIONS VISUELLES : texte, légendes, filigranes."
+}

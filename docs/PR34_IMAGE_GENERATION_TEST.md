@@ -6,8 +6,12 @@ Une intention [IMAGE] émise par le narrateur ou « Illustrer » après appui
 long suit exactement le même pipeline : sélection des événements historiques
 avant son identifiant, rapprochement du Lore et des faits confirmés de Live
 Memory, mise en scène IA sur une tâche textuelle indépendante, validation
-des identifiants de personnages et choix de caméra, puis composition d'un
-prompt graphique. Le générateur d'images est appelé **uniquement après
+des identifiants de personnages et choix de caméra, puis synthèse visuelle
+structurée (sujet, action et décor) et composition d'un prompt graphique.
+Les extraits du récit, dialogues et faits mémorisés restent dans le
+contexte du metteur en scène ; ils ne sont pas recopiés dans le prompt
+du fournisseur graphique. Le détail de l'image permet d'exporter le
+prompt historique et ses métadonnées en JSON, sans requête payante. Le générateur d'images est appelé **uniquement après
 confirmation explicite du joueur**.
 
 Le choix de la direction artistique est limité à des valeurs structurées ;

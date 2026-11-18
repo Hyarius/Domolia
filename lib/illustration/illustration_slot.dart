@@ -39,6 +39,26 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
       _imageCache.putIfAbsent(name,
           () => widget.controller.files.read(name));
 
+  Future<void> _exportPrompt(BuildContext context,
+      StoredIllustration record) async {
+    try {
+      final safeId = record.requestId.replaceAll(
+        RegExp(r'[^A-Za-z0-9_-]'), '_');
+      await FilePicker.platform.saveFile(
+        dialogTitle: 'Exporter le prompt de l’illustration',
+        fileName: 'domolia-prompt-$safeId.json',
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        bytes: record.exportPromptBytes(),
+      );
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Export du prompt impossible.')));
+      }
+    }
+  }
+
   Future<void> _showFullScreen(Uint8List bytes,
       StoredIllustration record) async {
     if (!mounted) return;
@@ -58,6 +78,12 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
                 onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.close)),
               const Spacer(),
+              IconButton(
+                key: const ValueKey('imagePromptExport'),
+                tooltip: 'Exporter le prompt (JSON)',
+                onPressed: () => _exportPrompt(context, record),
+                icon: const Icon(Icons.description_outlined),
+              ),
               IconButton(
                 key: const ValueKey('imageExport'),
                 tooltip: 'Exporter l’image',
@@ -88,8 +114,12 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
             ExpansionTile(
               title: const Text('Prompt et modèle'),
               children: [
-                Padding(padding: const EdgeInsets.all(12),
-                  child: SelectableText('Fournisseur : ' + record.provider +
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(context).height * 0.5),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(12),
+                    child: SelectableText('Fournisseur : ' + record.provider +
                     '\nModèle : ' + record.model +
                     '\nCoût connu : ' +
                     (record.costUsd == null ? 'inconnu'
@@ -97,7 +127,9 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
                     '\nNegative prompt : ' +
                     (record.negativePrompt.isEmpty
                        ? '(aucun)' : record.negativePrompt) +
-                    '\n\nPrompt final :\n' + record.prompt)),
+                    '\n\nPrompt final :\n' + record.prompt),
+                  ),
+                ),
               ],
             ),
           ]),

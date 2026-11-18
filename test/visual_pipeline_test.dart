@@ -55,7 +55,8 @@ void main() {
     expect(()=>validatedImagePrompt(selected,
        const VisualDirection(shot:'wide',angle:'eye_level',focusIds:[],
         composition:'centered',lighting:'natural',palette:'muted',
-        mood:'mysterious')),throwsFormatException);
+        mood:'mysterious',visualSubject:'Bureau',visualAction:'Dossier posé',
+        visualSetting:'Une pièce')),throwsFormatException);
   });
 
   test('Director cannot add cast or arbitrary narrative fields', () {
@@ -64,7 +65,10 @@ void main() {
     Map<String,dynamic> direction() => {
       'shot':'medium','angle':'eye_level','focusIds':['lea-monel'],
       'composition':'rule_of_thirds','lighting':'soft',
-      'palette':'warm','mood':'calm',
+      'palette':'warm','mood':'calm','illustratable':true,
+      'visualSubject':'Léa aux cheveux roux, vêtement vert',
+      'visualAction':'Soren ferme un tiroir',
+      'visualSetting':'Un meuble à tiroirs',
     };
     expect(VisualDirection.parse(jsonEncode(direction()),selected).focusIds,
         ['lea-monel']);
@@ -83,15 +87,47 @@ void main() {
     const director=VisualDirection(
       shot:'medium',angle:'eye_level',focusIds:[],
       composition:'centered',lighting:'soft',
-      palette:'muted',mood:'calm');
+      palette:'muted',mood:'calm',
+      visualSubject:'Soren',visualAction:'Il ferme un tiroir',
+      visualSetting:'Un meuble à tiroirs');
     final prompt=validatedImagePrompt(selected,director,
       style:'gravure sombre',
       negativePrompt:'sous-titres, textes, filigranes');
     expect(prompt,contains('Style graphique : gravure sombre'));
     expect(prompt,contains('EXCLUSIONS VISUELLES : sous-titres'));
-    expect(prompt,contains('ne doivent pas être recopiés'));
+    expect(prompt,contains('sans bulles'));
+    expect(prompt,contains('Action visible : Il ferme un tiroir'));
+    expect(prompt,isNot(contains('Texte établi')));
+    expect(prompt,isNot(contains('Je regarde Léa Monel')));
+    expect(prompt,isNot(contains('Soren referme lentement le tiroir derrière lui.')));
     expect(()=>validatedImagePrompt(selected,director,
       negativePrompt:'x' * 1501),throwsFormatException);
+  });
+
+  test('Quoted dialogue is not accepted or injected in image prompt', () {
+    final selected=const VisualSceneSelector().select(
+      intent:intent,timeline:[
+        const ChatEntry(id:2,speaker:ChatSpeaker.character,name:'Soren',
+          text:'« Le train est en retard depuis ce matin. »'),
+        intent,
+      ],lore:lore);
+    final data={
+      'illustratable':true,'shot':'medium','angle':'eye_level',
+      'focusIds':<String>[],'composition':'centered','lighting':'soft',
+      'palette':'muted','mood':'calm','visualSubject':'Soren',
+      'visualAction':'Ferme un tiroir','visualSetting':'Un meuble en bois',
+    };
+    final good=VisualDirection.parse(jsonEncode(data),selected);
+    final prompt=validatedImagePrompt(selected,good);
+    expect(prompt,isNot(contains('Le train est en retard')));
+    expect(prompt,isNot(contains('Mémoire confirmée')));
+    expect(()=>VisualDirection.parse(jsonEncode(
+      {...data,'visualAction':'Le train est en retard depuis ce matin.'}),
+      selected),throwsFormatException);
+    expect(()=>VisualDirection.parse(jsonEncode(
+      {'illustratable':false}),selected),throwsFormatException);
+    expect(()=>VisualDirection.parse(jsonEncode(
+      {...data,'visualSetting':'a' * 401}),selected),throwsFormatException);
   });
 
   test('Rewind removes source and changes hash of same ID', () {

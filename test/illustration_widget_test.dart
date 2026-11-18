@@ -47,7 +47,10 @@ class _Text implements AiChatProvider {
     return jsonEncode({
       'shot':'medium','angle':'eye_level','focusIds':[],
       'composition':'rule_of_thirds','lighting':'soft',
-      'palette':'muted','mood':'calm',
+      'palette':'muted','mood':'calm','illustratable':true,
+      'visualSubject':'Un personnage dans le décor',
+      'visualAction':'Le personnage observe les lieux',
+      'visualSetting':'Un intérieur calme',
     });
   }
 }
@@ -67,6 +70,9 @@ class _Image implements ImageGenerationProvider {
       {required String apiKey}) async {
     calls++;
     expect(request.model,'test-image');
+    expect(request.prompt,contains('Sujet visible :'));
+    expect(request.prompt,isNot(contains('Texte établi :')));
+    expect(request.prompt,isNot(contains('Mémoire confirmée :')));
     if (gate != null) return gate!.future;
     return _result();
   }
@@ -199,6 +205,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     expect(image.calls,1);
     expect(find.byKey(const ValueKey('chatGeneratedImage')),findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('chatGeneratedImage')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('imagePromptExport')),findsOneWidget);
+    expect(find.byTooltip('Exporter le prompt (JSON)'),findsOneWidget);
   });
 
   test('Duplicate requests while provider is pending spend only once',
@@ -316,7 +326,10 @@ void main() {
         text.gate!.complete(jsonEncode({
           'shot':'medium','angle':'eye_level','focusIds':[],
           'composition':'rule_of_thirds','lighting':'soft',
-          'palette':'muted','mood':'calm',
+          'palette':'muted','mood':'calm','illustratable':true,
+      'visualSubject':'Un personnage dans le décor',
+      'visualAction':'Le personnage observe les lieux',
+      'visualSetting':'Un intérieur calme',
         }));
       }
       if (!image.gate!.isCompleted) image.gate!.complete(_result());
@@ -367,7 +380,10 @@ void main() {
     text.gate!.complete(jsonEncode({
       'shot':'medium','angle':'eye_level','focusIds':[],
       'composition':'rule_of_thirds','lighting':'soft',
-      'palette':'muted','mood':'calm',
+      'palette':'muted','mood':'calm','illustratable':true,
+      'visualSubject':'Un personnage dans le décor',
+      'visualAction':'Le personnage observe les lieux',
+      'visualSetting':'Un intérieur calme',
     }));
     await tester.pump(const Duration(milliseconds: 200));
     expect(find.text('Illustrateur dessine…'),findsOneWidget);

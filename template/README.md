@@ -5,6 +5,7 @@ Ce dossier contient des **exemples conformes aux formats actuellement utilisés*
 | Fichier | Usage | Importable ? |
 | --- | --- | --- |
 | `livre_template.json` | Définition portable d'un Livre v3 avec Lore et configuration artistique (style, format, exclusions) | **Oui**, via Livres → Importer JSON |
+| `illustration_prompt_template.json` | Export du prompt graphique historique et de ses métadonnées | **Non** : export de diagnostic |
 | `conversation_template.json` | Exemple d'export de conversation | **Non** : format d'export, pas de fonction d'import |
 | `diagnostic_ia_template.json` | Exemple d'export de diagnostic IA | **Non** : format d'export, pas de fonction d'import |
 | `narrateur_theatral_template.txt` | Sortie courante du narrateur : didascalies et répliques balisées | **Non** : sortie textuelle du modèle |
