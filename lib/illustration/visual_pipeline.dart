@@ -98,8 +98,11 @@ class VisualSceneSelector {
       for (final m in memory)
         if (m.sourceTurnId <= intent.playerEventId &&
             m.certainty == 'confirmed' && m.visibility == 'player' &&
-            _mentioned(visible, [m.label]) && !_uncertain(m.text))
-          _short(m.text),
+            (_mentioned(visible, [m.label]) ||
+                (m.category == 'character' &&
+                    partyCharacters.containsKey(m.entityId))) &&
+            !_uncertain(m.text))
+          m.label + ' (' + m.field + ') : ' + _short(m.text),
     ];
     final stableEvidence = jsonEncode({
       'intent': [found.id, found.playerEventId, found.description],
