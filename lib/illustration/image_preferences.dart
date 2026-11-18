@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../ai/ai_provider.dart';
+
 /// API-only image configuration. Art direction and output format live in a
 /// portable BookDefinition instead of global or per-Party preferences.
 class ImageGenerationOptions {
@@ -20,6 +22,56 @@ class ImageGenerationOptions {
     directorProfileId: directorProfileId ?? this.directorProfileId,
     model: model ?? this.model,
   );
+
+  /// Empty fields mean automatic routing. Resolve only when making a
+  /// request; never overwrite explicit per-Party choices.
+  ImageGenerationOptions resolveProfiles(Iterable<AiProfile> profiles) {
+    final all = profiles.toList();
+    bool imageCapable(AiProfile profile) {
+      final uri = Uri.tryParse(profile.baseUrl);
+      return profile.kind == AiProviderKind.customAi &&
+          profile.apiKey.trim().isNotEmpty &&
+          uri?.scheme == 'https' &&
+          const {
+            'api.openuncensored.com', 'openuncensored.com',
+            'api.openai.com',
+          }.contains(uri?.host);
+    }
+    final ready = all.where(imageCapable).toList();
+    AiProfile? imageProfile;
+    for (final profile in ready) {
+      if (profile.id == profileId) imageProfile = profile;
+    }
+    if (imageProfile == null) {
+      const priorities = ['openuncensored-managed-narrator', 'default'];
+      for (final id in priorities) {
+        for (final profile in ready) {
+          if (profile.id == id &&
+              profile.baseUrl.contains('openuncensored.com')) {
+            imageProfile = profile;
+            break;
+          }
+        }
+        if (imageProfile != null) break;
+      }
+    }
+    imageProfile ??= ready.where((profile) =>
+      profile.baseUrl.contains('openuncensored.com')).firstOrNull ??
+        ready.firstOrNull;
+
+    var director = directorProfileId;
+    if (!all.any((profile) => profile.id == director)) {
+      final textProfile = all.where((profile) =>
+          profile.id == 'openuncensored-managed-narrator' &&
+          profile.apiKey.isNotEmpty).firstOrNull;
+      director = textProfile?.id ?? imageProfile?.id ?? '';
+    }
+    return ImageGenerationOptions(
+      profileId: imageProfile?.id ?? '',
+      directorProfileId: director,
+      model: model,
+    );
+  }
 
   Map<String, Object?> toJson() => {
     'profileId': profileId,
