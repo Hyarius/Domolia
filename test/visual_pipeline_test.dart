@@ -159,6 +159,50 @@ void main() {
       'La gardienne');
   });
 
+  test('New Party characters receive proposed appearances without Book Lore', () {
+    final timeline = <ChatTimelineEvent>[
+      const ChatEntry(id:1, speaker:ChatSpeaker.character,
+          name:'Boulangère', text:'Bonjour.'),
+      const ChatEntry(id:2, speaker:ChatSpeaker.narrator,
+          name:'Narrateur', text:'La boulangère ouvre son tablier.'),
+      const ChatIllustrationIntent(id:3, playerEventId:1,
+          description:'La boulangère près du comptoir.'),
+    ];
+    final scene = const VisualSceneSelector().select(
+      intent:timeline.last as ChatIllustrationIntent,
+      timeline:timeline, lore:const BookLore(),
+    );
+    expect(scene.partyCharacters['party:boulangere'], 'Boulangère');
+    final direction = VisualDirection.parse(jsonEncode({
+      'shot':'medium', 'angle':'eye_level',
+      'focusIds':['party:boulangere'],
+      'composition':'centered', 'lighting':'soft',
+      'palette':'warm', 'mood':'calm',
+      'visualSubject':'Une boulangère au comptoir',
+      'visualAction':'Elle ajuste son tablier',
+      'visualSetting':'Une boulangerie',
+      'appearances':[{
+        'id':'party:boulangere',
+        'identity':'Cheveux bruns et yeux verts',
+        'current':'Tablier beige et collier cyan',
+      }],
+    }), scene);
+    final prompt = validatedImagePrompt(scene, direction);
+    expect(prompt, contains('Personnage party:boulangere (Boulangère)'));
+    expect(prompt, contains('identité : Cheveux bruns et yeux verts'));
+    expect(prompt, contains('apparence actuelle : Tablier beige'));
+    expect(() => VisualDirection.parse(jsonEncode({
+      'shot':'medium', 'angle':'eye_level', 'focusIds':<String>[],
+      'composition':'centered', 'lighting':'soft', 'palette':'warm',
+      'mood':'calm', 'visualSubject':'Boulangère',
+      'visualAction':'Elle attend', 'visualSetting':'Boulangerie',
+      'appearances':[{
+        'id':'party:inconnue',
+        'identity':'Cheveux bruns', 'current':'Tablier blanc',
+      }],
+    }), scene), throwsFormatException);
+  });
+
   test('Rewind removes source and changes hash of same ID', () {
     final selected=const VisualSceneSelector().select(
         intent:intent,timeline:scene(),lore:lore);
