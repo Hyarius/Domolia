@@ -92,7 +92,7 @@ void main() {
         composition:'centered',lighting:'natural',palette:'muted',
         mood:'mysterious',visualSubject:'Bureau',visualAction:'Dossier posé',
         visualSetting:'Une pièce'));
-    expect(prompt,contains('Action visible : Dossier posé'));
+    expect(prompt,contains('Action : Dossier posé'));
   });
 
   test('Director cannot add cast or arbitrary narrative fields', () {
