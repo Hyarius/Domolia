@@ -182,6 +182,16 @@ void main() {
     expect(find.text('Optimiseur de Lore'), findsNothing);
     expect(find.text('Appliquer les modèles avancés'), findsNothing);
     expect(find.byKey(const ValueKey('ouTokens-narrator')), findsNothing);
+    final narrator = find.byKey(
+        const ValueKey('ouAdvanced-narrator-$defaultAiModel'));
+    await tester.ensureVisible(narrator);
+    await tester.pumpAndSettle();
+    await tester.tap(narrator);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('unverified-rp').last);
+    await tester.pumpAndSettle();
+    expect(credits.taskModels['narrator'], 'unverified-rp');
+    expect(probes, 0);
     expect(tester.takeException(), isNull);
   });
 

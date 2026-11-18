@@ -379,7 +379,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('settingsAiProviders')));
     await tester.pumpAndSettle();
     expect(find.byType(AiSettingsPanel), findsOneWidget);
-    expect(find.text('Fournisseur IA'), findsOneWidget);
+    expect(find.text('Profils IA'), findsOneWidget);
     await _systemBack(tester);
     expect(find.widgetWithText(ListTile, 'Crédits IA'), findsOneWidget);
 

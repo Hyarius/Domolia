@@ -383,6 +383,27 @@ void main() {
     expect(controller.taskModels['narrator'], defaultAiModel);
   });
 
+  test('Narrator selection preserves legacy settings and memory routing', () async {
+    await controller.importKey(keyA);
+    await controller.loadModels();
+    final legacy = Map.of(controller.taskModels);
+    await routing.setProfile(AiNarrativeTask.memory,
+        AiConnectionController.ouJsonifierProfileId);
+    await routing.setGeneration(AiNarrativeTask.narrator,
+        const AiTaskGenerationSettings(maxOutputTokens: 16384));
+    expect(await controller.setNarratorModel('cheap-json-model'), isTrue);
+    expect(controller.taskModels['narrator'], 'cheap-json-model');
+    expect(controller.taskModels['jsonifier'], legacy['jsonifier']);
+    expect(controller.taskModels['optimizer'], legacy['optimizer']);
+    expect(routing.profileFor(AiNarrativeTask.memory),
+        AiConnectionController.ouJsonifierProfileId);
+    expect(routing.generationFor(AiNarrativeTask.narrator).maxOutputTokens,
+        16384);
+    expect(await controller.setNarratorModel('unavailable-model'), isFalse);
+    expect(controller.taskModels['narrator'], 'cheap-json-model');
+    expect(probes, 0);
+  });
+
   test('Unknown narrator stays selectable with native tools disabled', () async {
     await controller.importKey(keyA);
     await controller.loadModels();

@@ -567,9 +567,12 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
       const SizedBox(height: DomoliaSpacing.compact),
       const Divider(),
       const SizedBox(height: DomoliaSpacing.compact),
-      const Text('Modèles et budgets par tâche', style: TextStyle(
-        color: DomoliaColors.goldLight, fontSize: 19,
-        fontWeight: FontWeight.w700)),
+      ExpansionTile(
+        key: const ValueKey('aiTaskSettings'),
+        tilePadding: EdgeInsets.zero,
+        title: const Text('Modèles et budgets par tâche'),
+        subtitle: const Text('Narrateur et mémoire automatique'),
+        children: [
       const SizedBox(height: 8),
       const Text('Choisissez parmi les profils déjà configurés. '
         'Ces paramètres s’appliquent par défaut à toutes les Parties ; '
@@ -681,7 +684,8 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
         }),
         const SizedBox(height: DomoliaSpacing.section),
       ],
-      const Divider(),
+        ],
+      ),
       const SizedBox(height: 14),
     ]);
   }

@@ -278,6 +278,13 @@ void main() {
     await showPage(tester, size: const Size(430, 1100),
       taskRouting: routing);
 
+    final taskSettings = find.byKey(const ValueKey('aiTaskSettings'));
+    await tester.scrollUntilVisible(taskSettings, 250,
+      scrollable: find.byType(Scrollable).first);
+    await tester.ensureVisible(taskSettings);
+    await tester.pumpAndSettle();
+    await tester.tap(taskSettings);
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('aiTaskTokens-jsonifier-4096')),
       findsNothing);
     expect(find.byKey(const ValueKey('aiTaskTokens-optimizer-4096')),

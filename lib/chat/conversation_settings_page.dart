@@ -667,7 +667,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                     const DropdownMenuItem(value: 'suggestions',
                         child: Text('Suggestions')),
                     const DropdownMenuItem(value: 'automatic',
-                        child: Text('Automatique (non disponible)')),
+                        child: Text('Automatique (préparation uniquement)')),
                   ],
                   onChanged: _saving || widget.chat.busy
                       ? null : _setIllustrationMode,
