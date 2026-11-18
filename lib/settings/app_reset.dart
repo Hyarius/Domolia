@@ -1,152 +1,127 @@
-import 'dart:io';
-
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sqflite/sqflite.dart';
 
 import '../ai/ai_provider.dart';
 import '../ai/ai_storage.dart';
 import '../ai/openuncensored_vault.dart';
-import '../logging/app_logger.dart';
 
-/// Factory reset of *local* Domolia data. API keys remain in encrypted storage.
-/// No purchase, text generation or image generation is performed by this service.
+/// Restores application preferences without deleting any user content.
+///
+/// Books, Parties, memory, illustrations, diagnostics, logs and downloads are
+/// deliberately untouched. API credentials remain in encrypted storage.
+/// This operation does not make billable calls or modify remote balances.
 class AppResetService {
   AppResetService({
     AiProfileStore? profiles,
     OuVaultStore? vault,
-    Future<void> Function()? closeDatabase,
-    Future<void> Function()? clearLocalData,
-    Future<void> Function()? clearPreferences,
-    Future<void> Function()? clearOtherSecureEntries,
+    Future<SharedPreferences> Function()? preferences,
   }) : _profiles = profiles ?? SecureAiProfileStore(),
        _vault = vault ?? SecureOuVaultStore(),
-       _closeDatabase = closeDatabase ?? (() async {}),
-       _clearLocalData = clearLocalData ?? _deleteLocalData,
-       _clearPreferences = clearPreferences ?? _deletePreferences,
-       _clearOtherSecureEntries =
-           clearOtherSecureEntries ?? _deleteOtherSecureEntries;
+       _preferences = preferences ?? SharedPreferences.getInstance;
 
   final AiProfileStore _profiles;
   final OuVaultStore _vault;
-  final Future<void> Function() _closeDatabase;
-  final Future<void> Function() _clearLocalData;
-  final Future<void> Function() _clearPreferences;
-  final Future<void> Function() _clearOtherSecureEntries;
+  final Future<SharedPreferences> Function() _preferences;
 
-  /// The only secure records retained are the sanitized API profile collection
-  /// and the OpenUncensored key history. All OAuth sessions are discarded.
-  static Future<void> _deleteOtherSecureEntries() async {
-    const keep = {
-      'domolia.ai.profiles.v2',
-      'domolia.openuncensored.vault.v1',
-    };
-    const storage = FlutterSecureStorage();
-    final entries = await storage.readAll();
-    for (final key in entries.keys) {
-      if (!keep.contains(key)) await storage.delete(key: key);
-    }
+  static const _preferenceKeys = <String>{
+    'domolia.narrator.settings.v1',
+    'domolia.image.settings.v1',
+    'aiTaskNarratorProfileId',
+    'aiTaskJsonifierProfileId',
+    'aiTaskOptimizerProfileId',
+    'aiTaskMemoryProfileId',
+    'aiDiagnosticsRetentionPerSession',
+    'automaticUpdates',
+    'updateChannel',
+    'aiTaskGeneration-narrator',
+    'aiTaskGeneration-jsonifier',
+    'aiTaskGeneration-optimizer',
+    'aiTaskGeneration-memory',
+  };
+
+  static bool _isAppSetting(String key) =>
+      _preferenceKeys.contains(key) ||
+      key.startsWith('domolia.image.party.');
+
+  static bool _isOpenUncensored(AiProfile profile) {
+    final uri = Uri.tryParse(profile.baseUrl);
+    return profile.kind == AiProviderKind.customAi &&
+        uri?.scheme == 'https' &&
+        const {'api.openuncensored.com', 'openuncensored.com'}
+            .contains(uri?.host);
   }
 
-  static Future<void> _deletePreferences() async {
-    if (!await (await SharedPreferences.getInstance()).clear()) {
-      throw StateError('Impossible d’effacer les préférences locales.');
-    }
-  }
-
-  static Future<void> _deleteLocalData() async {
-    // This directory contains SQLite (including WAL files), illustrations,
-    // logs and previously downloaded APK updates. Do not touch exported files
-    // outside Domolia's private directories.
-    await AppLogger.current.clear();
-    final support = await getApplicationSupportDirectory();
-    final database = path.join(support.path, 'domolia_books.sqlite');
-    await deleteDatabase(database);
-    for (final root in [
-      support,
-      await getTemporaryDirectory(),
-    ]) {
-      if (!await root.exists()) continue;
-      await for (final item in root.list(followLinks: false)) {
-        if (item is File) {
-          await item.delete();
-        } else if (item is Directory) {
-          await item.delete(recursive: true);
-        } else if (item is Link) {
-          await item.delete();
-        }
-      }
-    }
-  }
-
-  /// Preflight reads are completed before any deletion. A pending checkout
-  /// blocks reset: its one-time claim token must not be lost.
+  /// Read and validate everything before writing. Never wipe a secure store,
+  /// directory or database; preserving keys cannot depend on a later restore.
   Future<void> reset() async {
-    final oldVault = await _vault.read();
-    if (oldVault.pending != null) {
+    final previousVault = await _vault.read();
+    if (previousVault.pending != null) {
       throw StateError('Un paiement OpenUncensored est en attente. '
-          'Terminez sa vérification avant de réinitialiser.');
+          'Terminez sa vérification avant de réinitialiser les réglages.');
     }
-    final previous = await _profiles.read();
-    final savedCustom = (previous?.profiles ?? const <AiProfile>[])
-        .where((profile) => profile.kind == AiProviderKind.customAi &&
-            profile.apiKey.trim().isNotEmpty)
-        .toList();
+    final previousProfiles = await _profiles.read();
+    final prefs = await _preferences();
+    final keysToRemove = prefs.getKeys().where(_isAppSetting).toList();
 
-    final active = oldVault.find(oldVault.activeKeyId) ??
-        (oldVault.keys.isEmpty ? null : oldVault.keys.first);
-    final defaultOuKey = active?.secret ??
-        savedCustom.where((profile) =>
-          profile.baseUrl.replaceFirst(RegExp(r'/+$'), '') ==
-              defaultAiBaseUrl).map((profile) => profile.apiKey).firstOrNull ?? '';
+    final oldProfiles = previousProfiles?.profiles ?? const <AiProfile>[];
+    final active = previousVault.find(previousVault.activeKeyId) ??
+        previousVault.keys.firstOrNull;
+    final key = active?.secret ??
+        oldProfiles.where((p) => _isOpenUncensored(p) &&
+            p.apiKey.trim().isNotEmpty)
+            .map((p) => p.apiKey).firstOrNull ?? '';
 
-    final restoredProfiles = <AiProfile>[
-      AiProfile(
-        id: 'default', name: 'OpenUncensored',
-        baseUrl: defaultAiBaseUrl, model: defaultAiModel,
-        apiKey: defaultOuKey,
-      ),
-    ];
-    var collision = 0;
-    for (final profile in savedCustom) {
-      // Preserve every distinct key, even under an old managed profile ID.
-      final alreadyRetained = (profile.apiKey == defaultOuKey &&
-          profile.baseUrl.replaceFirst(RegExp(r'/+$'), '') ==
-              defaultAiBaseUrl) ||
-          oldVault.keys.any((key) => key.secret == profile.apiKey);
-      if (alreadyRetained) continue;
-      var id = profile.id;
-      while (restoredProfiles.any((saved) => saved.id == id)) {
-        id = 'retained-profile-${collision++}';
+    final retained = <AiProfile>[];
+    var index = 0;
+    for (final profile in oldProfiles) {
+      if (profile.id != 'default') {
+        retained.add(profile);
+        continue;
       }
-      restoredProfiles.add(AiProfile(
-        id: id, name: profile.name,
-        baseUrl: profile.baseUrl, model: profile.model,
-        apiKey: profile.apiKey,
+      // Replacing the default must not erase a different API credential.
+      if (profile.kind != AiProviderKind.customAi ||
+          profile.apiKey.trim().isEmpty ||
+          (_isOpenUncensored(profile) && profile.apiKey == key)) {
+        continue;
+      }
+      String newId;
+      do {
+        newId = 'retained-default-${index++}';
+      } while (oldProfiles.any((p) => p.id == newId) ||
+          retained.any((p) => p.id == newId));
+      retained.add(AiProfile(
+        id: newId, name: profile.name, baseUrl: profile.baseUrl,
+        model: profile.model, apiKey: profile.apiKey,
+        kind: profile.kind,
+        nsfwCompatibility: profile.nsfwCompatibility,
+        toolCallingCompatibility: profile.toolCallingCompatibility,
       ));
     }
-    final restoredVault = OuVaultState(
-      keys: [
-        for (final key in oldVault.keys)
-          StoredOuKey(
-            id: key.id, secret: key.secret,
-            addedAt: key.addedAt, name: key.name,
-          ),
+
+    final nextProfiles = AiProfilesState(
+      selectedId: 'default',
+      profiles: [
+        AiProfile(
+          id: 'default', name: 'OpenUncensored',
+          baseUrl: defaultAiBaseUrl, model: defaultAiModel,
+          apiKey: key,
+        ),
+        ...retained,
       ],
-      activeKeyId: active?.id,
     );
 
-    // Persist credentials *before* erasing other stores. Never deleteAll()
-    // in secure storage: a failed rewrite could permanently lose API keys.
-    await _vault.write(restoredVault);
-    await _profiles.write(AiProfilesState(
-      profiles: restoredProfiles, selectedId: 'default',
+    // The key history, balances, pending-payment metadata and active key
+    // are preserved. Only model presets and cached compatibility reset.
+    await _profiles.write(nextProfiles);
+    await _vault.write(previousVault.copyWith(
+      mode: 'balanced', models: const {}, toolChecks: const {},
     ));
-    await _clearOtherSecureEntries();
-    await _closeDatabase();
-    await _clearLocalData();
-    await _clearPreferences();
+
+    // Exact allowlist: never clear SharedPreferences wholesale. Future
+    // persistent user data must not become collateral damage.
+    for (final setting in keysToRemove) {
+      if (!await prefs.remove(setting)) {
+        throw StateError('Impossible de réinitialiser le réglage $setting.');
+      }
+    }
   }
 }
