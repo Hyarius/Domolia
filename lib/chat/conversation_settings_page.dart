@@ -25,7 +25,7 @@ class ConversationSettingsPage extends StatefulWidget {
     this.onExportBookJson, this.onLoadAiDiagnostics, this.onExportAiTrace,
     this.onPurgeAiDiagnostics, this.onLoadAiUsage,
     this.taskRouting, this.onOpenMemory, this.imagePreferences,
-    this.showBackButton = true,
+    this.onAwaitSessionWrites, this.showBackButton = true,
   });
   final BookLibraryController library;
   final AiConnectionController ai;
@@ -47,6 +47,7 @@ class ConversationSettingsPage extends StatefulWidget {
   final AiTaskRouting? taskRouting;
   final VoidCallback? onOpenMemory;
   final ImagePreferences? imagePreferences;
+  final Future<void> Function()? onAwaitSessionWrites;
   @override
   State<ConversationSettingsPage> createState() => _ConversationSettingsPageState();
 }
@@ -317,6 +318,8 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     ImageGenerationOptions? previousImageOverride;
     var imageOverrideRemoved = false;
     try {
+      // Drain queued RAW/timeline writes before updating the session row.
+      await widget.onAwaitSessionWrites?.call();
       final preferences = widget.imagePreferences;
       if (preferences != null) {
         previousImageOverride = await preferences.overrideFor(widget.sessionId);
