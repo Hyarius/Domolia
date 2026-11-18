@@ -38,6 +38,7 @@ class IllustrationController extends ChangeNotifier {
     this.usage,
     this.providerFactory,
     this.onOpenUncensoredCharge,
+    this.onAcceptVisualFacts,
   });
 
   final String sessionId;
@@ -53,6 +54,8 @@ class IllustrationController extends ChangeNotifier {
   final AiUsageStore? usage;
   final ImageProviderFactory? providerFactory;
   final VoidCallback? onOpenUncensoredCharge;
+  /// Persists only the appearances explicitly approved by the player.
+  final Future<void> Function(List<LiveMemoryFact>)? onAcceptVisualFacts;
 
   final Map<int, StoredIllustration> _latest = {};
   final Set<int> _inFlight = {};
@@ -171,6 +174,157 @@ class IllustrationController extends ChangeNotifier {
         'Utilisez un profil API OpenAI ou OpenUncensored.');
   }
 
+  /// Prepares a persistent image prompt without calling the image provider.
+  /// Newly narrated [IMAGE] intents can be prepared automatically.
+  Future<void> prepare(int intentId, {bool regenerate = false}) async {
+    if (_closed || !_inFlight.add(intentId)) return;
+    final previous = forIntent(intentId);
+    if (previous?.state == IllustrationJobState.available ||
+        (!regenerate && previous != null &&
+         (previous.state == IllustrationJobState.ready ||
+          previous.state == IllustrationJobState.approved))) {
+      _inFlight.remove(intentId);
+      return;
+    }
+    error = null;
+    errorIntentId = null;
+    _activities[intentId] = IllustrationActivity.preparing;
+    _notify();
+    final start = DateTime.now();
+    var directorInvoked = false;
+    var directorRecorded = false;
+    try {
+      await awaitNarrativeWrites();
+      final all = timeline();
+      final intents = all.whereType<ChatIllustrationIntent>()
+          .where((event) => event.id == intentId).toList();
+      if (intents.length != 1 ||
+          intents.single.state == IllustrationIntentState.cancelled ||
+          intents.single.state == IllustrationIntentState.ignored) {
+        throw StateError('Emplacement d’image introuvable.');
+      }
+      final scene = const VisualSceneSelector().select(
+          intent: intents.single, timeline: all,
+          lore: lore(), memory: memory());
+      final options = await preferences.forSession(sessionId);
+      if (options.directorProfileId.isEmpty) {
+        throw StateError('Choisissez un metteur en scène IA dans les réglages.');
+      }
+      final art = visualSettings?.call() ?? const BookIllustrationSettings();
+      final endpoint = await ai.connectionForProfile(options.directorProfileId);
+      _activities[intentId] = IllustrationActivity.directing;
+      _notify();
+      directorInvoked = true;
+      final direction = await const VisualDirector().direct(
+          scene: scene, provider: endpoint.provider,
+          connection: endpoint.configuration);
+      await _directionUsage(start: start, failed: false);
+      directorRecorded = true;
+      final prompt = validatedImagePrompt(scene, direction,
+          style: art.style, negativePrompt: art.negativePrompt);
+      final record = StoredIllustration(
+        requestId: 'draft-' +
+            DateTime.now().microsecondsSinceEpoch.toString() + '-' +
+            Random.secure().nextInt(0x7fffffff).toString(),
+        sessionId: sessionId, intentId: intentId,
+        sourceHash: scene.sourceHash, state: IllustrationJobState.ready,
+        provider: 'director', model: options.directorProfileId,
+        createdAtUtc: DateTime.now().toUtc(),
+        prompt: prompt, negativePrompt: art.negativePrompt,
+      );
+      if (!await records.saveIllustrationIfCurrent(record)) {
+        throw StateError('La scène a changé pendant la préparation.');
+      }
+      _latest[intentId] = record;
+      _notify();
+    } catch (failure) {
+      if (directorInvoked && !directorRecorded) {
+        await _directionUsage(start: start, failed: true);
+      }
+      error = failure is StateError ? failure.message
+          : failure is FormatException
+          ? 'Description du metteur en scène invalide.'
+          : 'Préparation du prompt impossible. Vérifiez le profil IA.';
+      errorIntentId = intentId;
+      _notify();
+    } finally {
+      _inFlight.remove(intentId);
+      _activities.remove(intentId);
+      _notify();
+    }
+  }
+
+  /// An edit invalidates earlier approval and never starts an image request.
+  Future<void> editPrompt(int intentId, String text) async {
+    final record = forIntent(intentId);
+    if (record == null ||
+        !{IllustrationJobState.ready, IllustrationJobState.approved}
+            .contains(record.state)) {
+      throw StateError('Aucune description modifiable pour cette scène.');
+    }
+    final value = text.trim();
+    if (value.length < 20 || value.length > 6000) {
+      throw const FormatException('Le prompt doit contenir de 20 à 6000 caractères.');
+    }
+    final edited = record.copyWith(
+        prompt: value, state: IllustrationJobState.ready);
+    if (!await records.saveIllustrationIfCurrent(edited)) {
+      throw StateError('La scène a été modifiée ou supprimée.');
+    }
+    _latest[intentId] = edited;
+    _notify();
+  }
+
+  /// Confirms the prompt and stores visual traits in Party Live Memory.
+  /// Existing manual corrections are preserved by the memory coordinator.
+  Future<void> approvePrompt(int intentId) async {
+    final record = forIntent(intentId);
+    if (record == null || record.state != IllustrationJobState.ready) {
+      throw StateError('Aucun prompt en attente de validation.');
+    }
+    final scene = const VisualSceneSelector().select(
+      intent: timeline().whereType<ChatIllustrationIntent>()
+          .singleWhere((event) => event.id == intentId),
+      timeline: timeline(), lore: lore(), memory: memory(),
+    );
+    final pattern = RegExp(
+      r'^Personnage ([^ ]+) \(([^)]+)\) — identité : (.+) ; apparence actuelle : (.+)\.$',
+      multiLine: true,
+    );
+    final proposals = <LiveMemoryFact>[];
+    final allowed = {
+      ...scene.partyCharacters.keys,
+      ...scene.characters.map((c) => c.id),
+    };
+    for (final match in pattern.allMatches(record.prompt)) {
+      final actorId = match.group(1)!;
+      final name = match.group(2)!;
+      if (!allowed.contains(actorId)) continue;
+      for (final (field, value, kind) in [
+        ('visual_identity', match.group(3)!, 'stable'),
+        ('visual_current', match.group(4)!, 'state'),
+      ]) {
+        if (value.trim().isEmpty || value.length > 800) continue;
+        proposals.add(LiveMemoryFact(
+          id: 'visual:' + actorId + ':' +
+              (field == 'visual_identity' ? 'identity' : 'current'),
+          category: 'character', entityId: actorId, label: name,
+          field: field, text: value.trim(), kind: kind,
+          certainty: 'confirmed', visibility: 'player', importance: 4,
+          sourceTurnId: scene.playerEventId, sourceSide: 'manual',
+          sourceQuote: 'Apparence validée dans un encart image',
+        ));
+      }
+    }
+    if (proposals.isNotEmpty) await onAcceptVisualFacts?.call(proposals);
+    final approved = record.copyWith(state: IllustrationJobState.approved);
+    if (!await records.saveIllustrationIfCurrent(approved)) {
+      throw StateError('La scène a été modifiée ou supprimée.');
+    }
+    _latest[intentId] = approved;
+    _notify();
+  }
+
   Future<void> generate(int intentId) async {
     if (_closed || !_inFlight.add(intentId)) return;
     error = null;
@@ -196,6 +350,12 @@ class IllustrationController extends ChangeNotifier {
         intent: intents.first, timeline: timeline(),
         lore: lore(), memory: memory(),
       );
+      final prepared = forIntent(intentId);
+      if (prepared?.state == IllustrationJobState.ready) {
+        throw StateError('Validez la description avant de générer l’image.');
+      }
+      final preparedPrompt = prepared?.state == IllustrationJobState.approved
+          ? prepared!.prompt : null;
       final options = await preferences.forSession(sessionId);
       options.validate();
       final art = visualSettings?.call() ?? const BookIllustrationSettings();
@@ -209,12 +369,13 @@ class IllustrationController extends ChangeNotifier {
       final profile = profiles.first;
       final providerId = _providerId(profile);
       final directorId = options.directorProfileId;
-      if (directorId.isEmpty) {
+      if (directorId.isEmpty && preparedPrompt == null) {
         throw StateError(
             'Génération d’image non configurée : choisissez un metteur '
             'en scène IA dans les réglages graphiques.');
       }
-      final directorConnection = await ai.connectionForProfile(directorId);
+      final directorConnection = preparedPrompt == null
+          ? await ai.connectionForProfile(directorId) : null;
       final imageProvider = _provider(providerId);
       // Price estimates are deliberately null until an actual, reliable
       // maximum cost is provided by the selected backend.
@@ -245,6 +406,7 @@ class IllustrationController extends ChangeNotifier {
         sourceHash: scene.sourceHash, state: IllustrationJobState.preparing,
         provider: providerId, model: options.model,
         createdAtUtc: DateTime.now().toUtc(),
+        prompt: preparedPrompt ?? '',
       );
       if (!await records.saveIllustrationIfCurrent(current)) {
         throw StateError('Cette scène a été modifiée ou supprimée.');
@@ -253,15 +415,20 @@ class IllustrationController extends ChangeNotifier {
       _activities[intentId] = IllustrationActivity.directing;
       _notify();
 
-      directorInvoked = true;
-      final direction = await const VisualDirector().direct(
-        scene: scene, provider: directorConnection.provider,
-        connection: directorConnection.configuration,
-      );
-      await _directionUsage(start: start, failed: false);
-      directorRecorded = true;
-      final prompt = validatedImagePrompt(scene, direction,
-          style: art.style, negativePrompt: art.negativePrompt);
+      late final String prompt;
+      if (preparedPrompt != null) {
+        prompt = preparedPrompt;
+      } else {
+        directorInvoked = true;
+        final direction = await const VisualDirector().direct(
+          scene: scene, provider: directorConnection!.provider,
+          connection: directorConnection.configuration,
+        );
+        await _directionUsage(start: start, failed: false);
+        directorRecorded = true;
+        prompt = validatedImagePrompt(scene, direction,
+            style: art.style, negativePrompt: art.negativePrompt);
+      }
       current = current.copyWith(
           state: IllustrationJobState.generating, prompt: prompt,
           negativePrompt: art.negativePrompt);
