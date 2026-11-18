@@ -150,6 +150,7 @@ class _HomePageState extends State<HomePage> {
   GlobalKey<BookEditorPageState> _bookEditorKey = GlobalKey<BookEditorPageState>();
   bool _leavingBook = false;
   bool _resetting = false;
+  int _settingsTabIndex = 0;
   late final UpdateController _updates;
   late final bool _ownsUpdates;
   final AiExchangeRecorder _aiDiagnostics = AiExchangeRecorder();
@@ -636,11 +637,6 @@ class _HomePageState extends State<HomePage> {
     unawaited(_navigateTo(_Page.ai));
   }
 
-  void _showPage(_Page page) {
-    Navigator.pop(context); // Dismiss the drawer route.
-    unawaited(_navigateTo(page));
-  }
-
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -684,16 +680,33 @@ class _HomePageState extends State<HomePage> {
               onPressed: _openConversationSettings,
               icon: const Icon(Icons.tune_rounded),
             ),
-          if (_history.isNotEmpty)
-            IconButton(
-              key: const ValueKey('appMenu'),
-              tooltip: 'Menu',
-              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-              icon: const Icon(Icons.menu),
-            ),
         ],
       ),
-      drawer: _buildDrawer(),
+      bottomNavigationBar: {_Page.home, _Page.books, _Page.settings}.contains(_page)
+          ? NavigationBar(
+              key: const ValueKey('mainNavigation'),
+              selectedIndex: _page == _Page.home ? 0 : _page == _Page.books ? 1 : 2,
+              onDestinationSelected: (index) {
+                if (index == 0) unawaited(_navigateTo(_Page.home));
+                if (index == 1) _openBooks();
+                if (index == 2) unawaited(_navigateTo(_Page.settings));
+              },
+              destinations: const [
+                NavigationDestination(
+                  key: ValueKey('navHome'),
+                  icon: Icon(Icons.home_outlined), label: 'Accueil',
+                ),
+                NavigationDestination(
+                  key: ValueKey('navBooks'),
+                  icon: Icon(Icons.library_books_outlined), label: 'Livres',
+                ),
+                NavigationDestination(
+                  key: ValueKey('navSettings'),
+                  icon: Icon(Icons.settings_outlined), label: 'Paramètres',
+                ),
+              ],
+            )
+          : null,
       body: Column(children: [
         if (_updates.phase == UpdatePhase.downloading)
           UpdateProgressStrip(controller: _updates),
@@ -809,92 +822,6 @@ class _HomePageState extends State<HomePage> {
     ));
   }
 
-  Widget _buildDrawer() {
-    return Drawer(
-      child: SafeArea(
-        child: ListView(
-          children: [
-            Container(
-              width: double.infinity,
-              color: DomoliaColors.background,
-              padding: const EdgeInsets.fromLTRB(20, 28, 16, 28),
-              child: Row(
-                children: [
-                  Image.asset(
-                    'assets/images/domolia_emblem.png',
-                    width: 68,
-                    height: 68,
-                    semanticLabel: 'Emblème Domolia',
-                  ),
-                  const SizedBox(width: 16),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'DOMOLIA',
-                          style: TextStyle(
-                            color: DomoliaColors.goldLight,
-                            fontSize: 22,
-                            letterSpacing: 2,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        SizedBox(height: 3),
-                        Text(
-                          'L’aventure vous appartient',
-                          style: TextStyle(color: DomoliaColors.muted),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            ListTile(
-              leading: const Icon(Icons.home_outlined),
-              title: const Text('Accueil'),
-              selected: _page == _Page.home,
-              selectedColor: DomoliaColors.goldLight,
-              selectedTileColor: DomoliaColors.raisedSurface,
-              onTap: () => _showPage(_Page.home),
-            ),
-            ListTile(
-              leading: const Icon(Icons.library_books_outlined),
-              title: const Text('Livres'),
-              selected: _page == _Page.books || _page == _Page.book ||
-                  _page == _Page.chat || _page == _Page.conversationSettings ||
-                  _page == _Page.memory,
-              selectedColor: DomoliaColors.goldLight,
-              selectedTileColor: DomoliaColors.raisedSurface,
-              onTap: () => _showPage(_Page.books),
-            ),
-            ListTile(
-              leading: const Icon(Icons.info_outline_rounded),
-              title: const Text('À propos'),
-              selected: _page == _Page.about,
-              selectedColor: DomoliaColors.goldLight,
-              selectedTileColor: DomoliaColors.raisedSurface,
-              onTap: () => _showPage(_Page.about),
-            ),
-            const Divider(indent: 16, endIndent: 16),
-            ListTile(
-              leading: const Icon(Icons.settings_outlined),
-              title: const Text('Paramètres'),
-              selected: _page == _Page.settings ||
-                  _page == _Page.updates || _page == _Page.ai ||
-                  _page == _Page.aiProviders || _page == _Page.diagnostics || _page == _Page.logs,
-              selectedColor: DomoliaColors.goldLight,
-              selectedTileColor: DomoliaColors.raisedSurface,
-              onTap: () => _showPage(_Page.settings),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _resetApp() async {
     if (_resetting) return;
     if (_chat.busy || _credits.busy ||
@@ -961,91 +888,127 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Widget _buildSettings() => SafeArea(
-    child: ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        const Text(
-          'Paramètres',
-          style: TextStyle(
-            color: DomoliaColors.goldLight,
-            fontSize: 25,
-            fontWeight: FontWeight.bold,
+  // Keep the three everyday settings domains separate. Diagnostic and
+  // destructive actions are intentionally absent from the default tab.
+  Widget _buildSettings() => DefaultTabController(
+    key: const ValueKey('settingsTabs'),
+    length: 3,
+    initialIndex: _settingsTabIndex,
+    child: SafeArea(
+      child: Column(children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Paramètres', style: TextStyle(
+              color: DomoliaColors.goldLight, fontSize: 25,
+              fontWeight: FontWeight.bold,
+            )),
           ),
         ),
-        const SizedBox(height: DomoliaSpacing.section),
-        const Text('Intelligence artificielle', style: TextStyle(
-          color: DomoliaColors.goldLight, fontSize: 18)),
-        const SizedBox(height: DomoliaSpacing.compact),
-        ListTile(
-          leading: const Icon(Icons.smart_toy_outlined, color: DomoliaColors.gold),
-          title: const Text('Crédits IA'),
-          subtitle: const Text('OpenUncensored : solde, clés et modèle narratif'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: _openAiSettings,
+        TabBar(
+          isScrollable: false,
+          onTap: (index) => _settingsTabIndex = index,
+          tabs: const [
+            Tab(key: ValueKey('settingsTabAi'), text: 'IA'),
+            Tab(key: ValueKey('settingsTabApp'), text: 'Application'),
+            Tab(key: ValueKey('settingsTabAdvanced'), text: 'Diagnostic'),
+          ],
         ),
-        const Divider(),
-        ListTile(
-          key: const ValueKey('settingsAiProviders'),
-          leading: const Icon(Icons.hub_outlined, color: DomoliaColors.gold),
-          title: const Text('Fournisseurs IA'),
-          subtitle: const Text('Connexions, narrateur, mémoire et budgets'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => unawaited(_navigateTo(_Page.aiProviders)),
-        ),
-        const Divider(),
-        ListTile(
-          key: const ValueKey('settingsImages'),
-          leading: const Icon(Icons.brush_outlined, color: DomoliaColors.gold),
-          title: const Text('Génération d’images'),
-          subtitle: const Text('Fournisseur, modèle et metteur en scène IA'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => _openImageSettings(),
-        ),
-        const Divider(),
-        const SizedBox(height: DomoliaSpacing.section),
-        const Text('Application', style: TextStyle(
-          color: DomoliaColors.goldLight, fontSize: 18)),
-        const SizedBox(height: DomoliaSpacing.compact),
-        ListTile(
-          leading: const Icon(Icons.system_update_alt_rounded, color: DomoliaColors.gold),
-          title: const Text('Mises à jour'),
-          subtitle: const Text('Version installée, canal et préversions'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => unawaited(_navigateTo(_Page.updates)),
-        ),
-        const Divider(),
-        ListTile(
-          leading: const Icon(Icons.bug_report_outlined,
-              color: DomoliaColors.gold),
-          title: const Text('Diagnostics IA'),
-          subtitle: const Text('Conservation locale des requêtes et réponses'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => unawaited(_navigateTo(_Page.diagnostics)),
-        ),
-        const Divider(),
-        ListTile(
-          key: const ValueKey('settingsLogs'),
-          leading: const Icon(Icons.article_outlined, color: DomoliaColors.gold),
-          title: const Text('Logs'),
-          subtitle: const Text('Consulter, copier, exporter et effacer le journal'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => unawaited(_navigateTo(_Page.logs)),
-        ),
-        const Divider(),
-        ListTile(
-          key: const ValueKey('settingsFactoryReset'),
-          leading: const Icon(Icons.restart_alt_rounded,
-              color: Colors.redAccent),
-          title: const Text('Réinitialiser les réglages'),
-          subtitle: const Text('Rétablir les réglages sans perdre vos Livres ni vos clés'),
-          trailing: _resetting
-              ? const SizedBox(width: 20, height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2))
-              : const Icon(Icons.chevron_right),
-          onTap: _resetting ? null : () => unawaited(_resetApp()),
-        ),
-      ],
+        Expanded(child: TabBarView(
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            ListView(padding: const EdgeInsets.all(20), children: [
+              const Text('Connexions et génération', style: TextStyle(
+                color: DomoliaColors.goldLight, fontSize: 18)),
+              const SizedBox(height: DomoliaSpacing.compact),
+              ListTile(
+                leading: const Icon(Icons.hub_outlined),
+                key: const ValueKey('settingsAiProviders'),
+                title: const Text('Profils IA'),
+                subtitle: const Text('Connexions et modèles utilisés par les tâches'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => unawaited(_navigateTo(_Page.aiProviders)),
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.brush_outlined),
+                key: const ValueKey('settingsImages'),
+                title: const Text('Génération d’images'),
+                subtitle: const Text('Modèle et préférences visuelles'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _openImageSettings(),
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.account_balance_wallet_outlined),
+                title: const Text('Crédits IA'),
+                subtitle: const Text('Solde et clés OpenUncensored'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _openAiSettings,
+              ),
+            ]),
+            ListView(padding: const EdgeInsets.all(20), children: [
+              const Text('Application', style: TextStyle(
+                color: DomoliaColors.goldLight, fontSize: 18)),
+              const SizedBox(height: DomoliaSpacing.compact),
+              ListTile(
+                leading: const Icon(Icons.system_update_alt_rounded),
+                title: const Text('Mises à jour'),
+                subtitle: const Text('Version et canal de distribution'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => unawaited(_navigateTo(_Page.updates)),
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.info_outline_rounded),
+                title: const Text('À propos'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => unawaited(_navigateTo(_Page.about)),
+              ),
+            ]),
+            ListView(padding: const EdgeInsets.all(20), children: [
+              const Text('Journal et maintenance', style: TextStyle(
+                color: DomoliaColors.goldLight, fontSize: 18)),
+              const Text(
+                'Ces outils sont destinés au dépannage ; ils ne sont pas '
+                'nécessaires pour jouer.',
+                style: TextStyle(color: DomoliaColors.muted),
+              ),
+              const SizedBox(height: DomoliaSpacing.compact),
+              ListTile(
+                leading: const Icon(Icons.article_outlined),
+                key: const ValueKey('settingsLogs'),
+                title: const Text('Journal de l’application'),
+                subtitle: const Text('Événements et appels IA, sans contenu privé'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => unawaited(_navigateTo(_Page.logs)),
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.bug_report_outlined),
+                title: const Text('Traces IA'),
+                subtitle: const Text('Conservation des requêtes par Partie'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => unawaited(_navigateTo(_Page.diagnostics)),
+              ),
+              const Divider(),
+              ListTile(
+                key: const ValueKey('settingsFactoryReset'),
+                leading: const Icon(Icons.restart_alt_rounded,
+                    color: Colors.redAccent),
+                title: const Text('Réinitialiser les réglages'),
+                subtitle: const Text('Sans supprimer les Livres ni les clés'),
+                trailing: _resetting
+                    ? const SizedBox(width: 20, height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.chevron_right),
+                onTap: _resetting ? null : () => unawaited(_resetApp()),
+              ),
+            ]),
+          ],
+        )),
+      ]),
     ),
   );
 
