@@ -199,7 +199,7 @@ void main() {
     for (final finish in ['content_filter', 'length']) {
       final body = 'data: ${jsonEncode({
         'choices': [{'finish_reason': finish, 'delta': {'content': ''}}],
-      })}\\n\\ndata: [DONE]\\n\\n';
+      })}\n\ndata: [DONE]\n\n';
       final provider = OpenAiCompatibleChatProvider(
         client: MockClient((_) async => http.Response(body, 200)),
       );
