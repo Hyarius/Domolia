@@ -497,6 +497,8 @@ class _HomePageState extends State<HomePage> {
           provider: _ai.provider,
           configuration: () => null,
           narrator: book.narrator,
+          // Book settings can change while this Party remains open.
+          narratorProvider: () => (_books.byId(book.id) ?? book).narrator,
           structuredStreamingEnabled: true,
           illustrationMode: session.illustrationModeOverride ??
               book.illustrationMode,
