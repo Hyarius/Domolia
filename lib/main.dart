@@ -884,10 +884,10 @@ class _HomePageState extends State<HomePage> {
         content: const Text(
           'Cette opération supprimera définitivement tous les Livres, '
           'Parties, mémoires, illustrations, diagnostics, téléchargements '
-          'et réglages locaux.\\n\\n'
+          'et réglages locaux.\n\n'
           'Seules les clés API enregistrées et l’historique des clés '
           'OpenUncensored seront conservés. Les fichiers déjà exportés '
-          'hors de Domolia ne seront pas modifiés.\\n\\n'
+          'hors de Domolia ne seront pas modifiés.\n\n'
           'Cette action est irréversible.',
         ),
         actions: [
