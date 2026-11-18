@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 class _RecordingDirectorProvider implements AiChatProvider {
   List<AiMessage> messages = const [];
+  String? response;
 
   @override
   Future<List<AiModel>> listModels(AiConfiguration config) async => const [];
@@ -19,6 +20,7 @@ class _RecordingDirectorProvider implements AiChatProvider {
     required List<AiMessage> messages, int maxTokens = 1200,
   }) async {
     this.messages = messages;
+    if (response != null) return response!;
     return jsonEncode({
       'prompt': 'Naëlle, jeune femme adulte aux cheveux noirs très longs, '
           'porte une jupe sombre et des collants noirs. Elle est accroupie '
@@ -416,8 +418,8 @@ void main() {
     expect(provider.messages, hasLength(2));
     expect(provider.messages.first.content,contains('âge apparent'));
     expect(provider.messages.first.content,contains('cheveux'));
-    expect(provider.messages.first.content,contains('géométrie'));
-    expect(provider.messages.first.content,contains('caméra'));
+    expect(provider.messages.first.content,contains('contacts physiques'));
+    expect(provider.messages.first.content,contains('cadrage'));
     expect(provider.messages.last.content,
       contains('INSTANT À ILLUSTRER (prioritaire)'));
     expect(provider.messages.last.content, contains('Tour : Narrateur'));
@@ -443,6 +445,94 @@ void main() {
         'current': 'Jupe sombre',
       }],
     }), selected), throwsFormatException);
+  });
+
+
+  test('Director favors a blank background for a manga character closeup',
+      () async {
+    final provider = _RecordingDirectorProvider()
+      ..response = jsonEncode({
+        'prompt':'Mila, femme adulte aux cheveux roux courts et '
+            'aux yeux verts, sourit avec malice et lève une main. '
+            'Gros plan à hauteur des yeux, fond blanc sans décor.',
+      });
+    const subject = ChatIllustrationIntent(
+      id: 2, playerEventId: 1,
+      description: 'Mila sourit et lève une main.',
+    );
+    final selected = const VisualSceneSelector().select(
+      intent: subject,
+      timeline: const [
+        ChatEntry(id: 1, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Mila sourit et lève une main.'),
+        subject,
+      ],
+      lore: const BookLore(characters: [
+        LoreCharacter(id: 'mila', name: 'Mila',
+            appearance: 'Femme adulte, cheveux roux courts, yeux verts'),
+      ]),
+    );
+    final result = await const VisualDirector().direct(
+      scene: selected, provider: provider,
+      style: 'manga noir et blanc',
+      connection: const AiConfiguration(
+          baseUrl: 'https://example.org/v1', model: 'fake', apiKey: 'fake'),
+    );
+    final instructions = provider.messages.first.content;
+    expect(instructions, contains('fond blanc'));
+    expect(instructions, contains('style manga'));
+    expect(instructions, contains('En style réaliste'));
+    expect(instructions, contains('ne remplis JAMAIS'));
+    expect(instructions, contains('caractéristiques physiques nécessaires'));
+    expect(provider.messages.last.content,
+        contains('Femme adulte, cheveux roux courts, yeux verts'));
+    expect(provider.messages.last.content, contains('manga noir et blanc'));
+    final prompt = validatedImagePrompt(selected, result,
+        style:'manga noir et blanc');
+    expect(prompt, contains('fond blanc sans décor'));
+    expect(prompt, isNot(contains('salon')));
+    expect(prompt, isNot(contains('parquet')));
+    expect(prompt, isNot(contains('fenêtre')));
+    expect(prompt, contains('manga noir et blanc'));
+  });
+
+  test('Director preserves only needed location anchors for a doorway',
+      () async {
+    final provider = _RecordingDirectorProvider()
+      ..response = jsonEncode({
+        'prompt': 'Une voisine adulte aux cheveux courts se tient '
+            'sur le palier intérieur, devant la porte ouverte '
+            'de l’appartement. Un encadrement simple la situe, '
+            'le reste de l’arrière-plan est blanc et neutre.',
+      });
+    const illustration = ChatIllustrationIntent(
+      id: 2, playerEventId: 1,
+      description: 'La voisine attend sur le palier devant la porte ouverte.',
+    );
+    final selected = const VisualSceneSelector().select(
+      intent: illustration,
+      timeline: const [
+        ChatEntry(id: 1, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur',
+          text: 'La voisine attend sur le palier devant la porte ouverte.'),
+        illustration,
+      ],
+      lore: const BookLore(),
+    );
+    final result = await const VisualDirector().direct(
+      scene: selected, provider: provider,
+      connection: const AiConfiguration(
+          baseUrl: 'https://example.org/v1', model: 'fake', apiKey: 'fake'),
+    );
+    final instructions = provider.messages.first.content;
+    expect(instructions, contains('une porte et son encadrement'));
+    expect(instructions,
+        contains('Un palier d’immeuble ne doit pas devenir un porche extérieur'));
+    final prompt = validatedImagePrompt(selected, result);
+    expect(prompt, contains('palier intérieur'));
+    expect(prompt, contains('encadrement simple'));
+    expect(prompt, isNot(contains('porche extérieur')));
+    expect(prompt, isNot(contains('carrelage')));
   });
 
   test('Rewind removes source and changes hash of same ID', () {
