@@ -379,7 +379,8 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
       request.body = jsonEncode(payload);
     }
 
-    final exchange = payload == null ? null : diagnostics?.begin(
+    final AiExchange? exchange = payload == null ? null :
+        (diagnostics ?? AiExchangeRecorder()).begin(
       provider: 'openai-compatible',
       method: request.method,
       url: request.url.toString(),
@@ -520,7 +521,7 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
         ],
       });
 
-    final exchange = diagnostics?.begin(
+    final AiExchange? exchange = (diagnostics ?? AiExchangeRecorder()).begin(
       provider: 'openai-compatible',
       method: request.method,
       url: request.url.toString(),
@@ -698,7 +699,7 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
         ],
         if (tools.isNotEmpty) 'tool_choice': 'auto',
       });
-    final exchange = diagnostics?.begin(
+    final AiExchange? exchange = (diagnostics ?? AiExchangeRecorder()).begin(
       provider: 'openai-compatible', method: request.method,
       url: request.url.toString(), requestBody: request.body,
       secret: configuration.apiKey.trim(),
