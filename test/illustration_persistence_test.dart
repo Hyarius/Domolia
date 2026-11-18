@@ -47,6 +47,13 @@ void main() {
       model: 'gpt-image-2', createdAtUtc: DateTime.utc(2026, 11, 17),
       prompt: 'Soren referme le tiroir.',
       negativePrompt: 'aucune bulle de texte',
+      appearanceProposals: const [
+        {
+          'id': 'party:soren',
+          'identity': 'Adulte aux cheveux bruns et courts',
+          'current': 'Chemise sombre, main sur la poignée du tiroir',
+        },
+      ],
       fileNames: const ['img-request-first-0.png'],
     );
     expect(await first.saveIllustrationIfCurrent(record), isTrue);
@@ -54,6 +61,12 @@ void main() {
       'aucune bulle de texte');
     expect((await first.listIllustrations('s')).single.fileNames,
       ['img-request-first-0.png']);
+    expect((await first.listIllustrations('s')).single.appearanceProposals,
+      [{
+        'id': 'party:soren',
+        'identity': 'Adulte aux cheveux bruns et courts',
+        'current': 'Chemise sombre, main sur la poignée du tiroir',
+      }]);
     await first.close();
     final second = SqliteBookStore(
       factory: databaseFactoryFfi, databasePath: file);
@@ -62,6 +75,8 @@ void main() {
       'gpt-image-2');
     expect((await second.listIllustrations('s')).single.negativePrompt,
       'aucune bulle de texte');
+    expect((await second.listIllustrations('s')).single.appearanceProposals.single['id'],
+      'party:soren');
     await second.updateSession(session.copyWith(
       timeline: timeline().take(2).toList()));
     expect(await second.listIllustrations('s'), isEmpty);
@@ -100,6 +115,50 @@ void main() {
     ]));
     expect(await db.listIllustrations('s'), isEmpty);
     expect(await db.saveIllustrationIfCurrent(record), isFalse);
+  });
+
+  test('Existing v14 illustration schema upgrades without losing prompts',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('domolia-img-v14-');
+    final file = '${dir.path}/books.sqlite';
+    addTearDown(() => dir.delete(recursive: true));
+    final old = await databaseFactoryFfi.openDatabase(file,
+      options: OpenDatabaseOptions(version: 14, onCreate: (db, _) async {
+        await db.execute(
+          'CREATE TABLE illustration_generations ('
+          'request_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, '
+          'intent_id INTEGER NOT NULL, source_hash TEXT NOT NULL, '
+          'state TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL, '
+          'created_at INTEGER NOT NULL, prompt TEXT NOT NULL, '
+          "negative_prompt TEXT NOT NULL DEFAULT '', "
+          'files_json TEXT NOT NULL, mime_type TEXT, error TEXT, '
+          'cost_usd REAL)',
+        );
+        await db.insert('illustration_generations', {
+          'request_id': 'legacy',
+          'session_id': 's',
+          'intent_id': 3,
+          'source_hash': 'hash',
+          'state': 'ready',
+          'provider': 'director',
+          'model': 'text',
+          'created_at': 1,
+          'prompt': 'Description historique',
+          'negative_prompt': 'texte',
+          'files_json': '[]',
+        });
+      }));
+    await old.close();
+
+    final upgraded = SqliteBookStore(
+      factory: databaseFactoryFfi, databasePath: file);
+    addTearDown(upgraded.close);
+    final db = await upgraded.database;
+    final columns = await db.rawQuery('PRAGMA table_info(illustration_generations)');
+    expect(columns.map((c) => c['name']), contains('appearance_proposals_json'));
+    final records = await upgraded.listIllustrations('s');
+    expect(records.single.prompt, 'Description historique');
+    expect(records.single.appearanceProposals, isEmpty);
   });
 
   test('Binary images survive restart and orphan pruning', () async {
