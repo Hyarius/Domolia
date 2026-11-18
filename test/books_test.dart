@@ -1056,9 +1056,9 @@ void main() {
       illustrationMode: IllustrationMode.automatic,
       narrativeStyle: 'Personnalisé dans le Livre',
     ));
-    const source = BookSession(
-      id: 'party-reset', bookId: 'book-reset', title: 'Partie préservée',
-      timeline: [
+    final source = BookSession(
+      id: 'party-reset', bookId: book.id, title: 'Partie préservée',
+      timeline: const [
         ChatEntry(id: 1, speaker: ChatSpeaker.player,
             name: 'Vous', text: 'Je reste dans la pièce.'),
       ],
