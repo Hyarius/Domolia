@@ -16,6 +16,8 @@ class VisualScene {
     required this.places, required this.memoryFacts,
     required this.restrictions,
     this.partyCharacters = const {},
+    this.chronology = const [],
+    this.worldContext = '',
   });
   final int intentId, playerEventId;
   final String sourceHash, description;
@@ -24,15 +26,28 @@ class VisualScene {
   final List<LorePlace> places;
   /// Characters discovered during a Party without a canonical Lore entry.
   final Map<String, String> partyCharacters;
+  /// Speaker-labelled, bounded recent turns ending immediately before the
+  /// selected [IMAGE] marker. Keep these separate from timeless Lore.
+  final List<String> chronology;
+  /// Public world basics only. Never include author secrets or future turns.
+  final String worldContext;
 
   String get evidence => [
-    'Intention : ' + description,
-    ...excerpts.map((e) => 'Scène : ' + e),
-    ...characters.map((e) => 'Personnage ' + e.id + ' (' + e.name + '): ' + e.appearance),
+    'INSTANT À ILLUSTRER (prioritaire) : ' + description,
+    'La pose et le mouvement doivent correspondre à cet instant exact.',
+    if (chronology.isNotEmpty)
+      'CONTINUITÉ AVANT CET INSTANT (chronologique, pas des actions à cumuler) :',
+    ...chronology.map((e) => 'Tour : ' + e),
+    if (chronology.isEmpty) ...excerpts.map((e) => 'Scène : ' + e),
+    if (worldContext.isNotEmpty) 'Univers (contexte, pas une action) : ' + worldContext,
+    ...characters.map((e) => 'Personnage canonique ' + e.id + ' (' + e.name +
+        ') — apparence : ' + e.appearance +
+        ' ; rôle : ' + e.role),
     ...partyCharacters.entries.map((e) => 'Personnage de Partie ' + e.key + ' (' + e.value + ')'),
-    ...places.map((e) => 'Lieu ' + e.id + ': ' + e.features),
-    ...memoryFacts.map((e) => 'Fait confirmé : ' + e),
-    ...restrictions.map((e) => 'Interdiction : ' + e),
+    ...places.map((e) => 'Lieu canonique ' + e.id + ' (' + e.name + ') : ' +
+        e.description + ' ; éléments : ' + e.features),
+    ...memoryFacts.map((e) => 'Mémoire visuelle confirmée : ' + e),
+    ...restrictions.map((e) => 'Élément non établi / incertain : ' + e),
   ].join('\n');
 }
 
@@ -55,10 +70,13 @@ class VisualSceneSelector {
     }
     final previous = timeline.take(position).toList();
     final boundary = previous.lastIndexWhere((e) => e is ChatSceneChange);
-    final messages = previous.skip(boundary + 1)
-        .whereType<ChatEntry>().toList()
-        .reversed.take(6).toList().reversed.toList();
+    final sceneMessages = previous.skip(boundary + 1)
+        .whereType<ChatEntry>().toList();
+    // Ten turns preserve a short physical action spanning several messages,
+    // while staying bounded for inexpensive director calls.
+    final messages = sceneMessages.reversed.take(10).toList().reversed.toList();
     final excerpts = <String>[];
+    final chronology = <String>[];
     final restrictions = <String>[];
     for (final message in messages) {
       final value = _short(message.text.trim());
@@ -67,6 +85,10 @@ class VisualSceneSelector {
         restrictions.add(value);
       } else {
         excerpts.add(value);
+        final speaker = message.speaker == ChatSpeaker.player
+            ? 'Joueur' : message.speaker == ChatSpeaker.narrator
+                ? 'Narrateur' : message.name;
+        chronology.add(speaker + ' : ' + value);
       }
     }
     // The [IMAGE] intent is a committed player-facing request. Keep it
@@ -74,12 +96,17 @@ class VisualSceneSelector {
     // Historical context may be qualified, but must never veto the slot.
     final description = found.description;
     final visible = [description, ...excerpts].join('\n');
+    // A named actor may have been introduced earlier in the same continuous
+    // scene, even if the final short instruction only uses a pronoun.
+    final sceneNames = sceneMessages.reversed.take(24)
+        .map((e) => e.text).join('\n');
+    final relevantText = visible + '\n' + sceneNames;
     final characters = <LoreCharacter>[
       for (final c in lore.characters)
-        if (_mentioned(visible, [c.name, ...c.aliases])) c,
-    ];
+        if (_mentioned(relevantText, [c.name, ...c.aliases])) c,
+    ].take(5).toList();
     final partyCharacters = <String, String>{};
-    final speakers = previous.skip(boundary + 1).whereType<ChatEntry>()
+    final speakers = sceneMessages
         .where((e) => e.speaker == ChatSpeaker.character)
         .toList().reversed;
     for (final entry in speakers) {
@@ -92,17 +119,28 @@ class VisualSceneSelector {
     }
     final places = <LorePlace>[
       for (final p in lore.places)
-        if (_mentioned(visible, [p.name, ...p.aliases])) p,
-    ];
+        if (_mentioned(relevantText, [p.name, ...p.aliases])) p,
+    ].take(4).toList();
+    final eligibleMemory = memory.where((m) =>
+        m.sourceTurnId <= intent.playerEventId &&
+        m.certainty == 'confirmed' && m.visibility == 'player' &&
+        !_uncertain(m.text) &&
+        (_mentioned(relevantText, [m.label]) ||
+         (m.category == 'character' &&
+             (partyCharacters.containsKey(m.entityId) ||
+              characters.any((c) => c.id == m.entityId))) ||
+         (m.category == 'place' &&
+             places.any((p) => p.id == m.entityId)))).toList()
+      ..sort((a, b) {
+        // Prefer recent clothing/pose/appearance, then other confirmed facts.
+        final aVisual = a.field.startsWith('visual_') ? 1 : 0;
+        final bVisual = b.field.startsWith('visual_') ? 1 : 0;
+        if (aVisual != bVisual) return bVisual.compareTo(aVisual);
+        return b.sourceTurnId.compareTo(a.sourceTurnId);
+      });
     final facts = <String>[
-      for (final m in memory)
-        if (m.sourceTurnId <= intent.playerEventId &&
-            m.certainty == 'confirmed' && m.visibility == 'player' &&
-            (_mentioned(visible, [m.label]) ||
-                (m.category == 'character' &&
-                    partyCharacters.containsKey(m.entityId))) &&
-            !_uncertain(m.text))
-          m.label + ' (' + m.field + ') : ' + _short(m.text),
+      for (final m in eligibleMemory.take(10))
+        m.label + ' (' + m.field + ') : ' + _short(m.text),
     ];
     final stableEvidence = jsonEncode({
       'intent': [found.id, found.playerEventId, found.description],
@@ -120,6 +158,11 @@ class VisualSceneSelector {
       memoryFacts: List.unmodifiable(facts),
       restrictions: List.unmodifiable(restrictions),
       partyCharacters: Map.unmodifiable(partyCharacters),
+      chronology: List.unmodifiable(chronology),
+      worldContext: [
+        lore.global.universe.trim(),
+        lore.global.era.trim(),
+      ].where((e) => e.isNotEmpty).join(' ; '),
     );
   }
 
