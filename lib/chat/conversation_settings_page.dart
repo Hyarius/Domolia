@@ -293,7 +293,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
         content: const Text(
           'Les surcharges de cette Partie (profils IA, mémoire, '
           'consultations, budgets et illustrations) seront retirées. '
-          'Les réglages du Livre ou de l’application seront utilisés.\\n\\n'
+          'Les réglages du Livre ou de l’application seront utilisés.\n\n'
           'Le récit, les souvenirs, les images et le Livre ne seront '
           'pas modifiés.'),
         actions: [
