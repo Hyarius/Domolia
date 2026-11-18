@@ -183,8 +183,12 @@ class AppLogger {
     for (final item in details.entries.take(12)) {
       final value = item.value;
       final key = _clean(item.key, limit: 48);
-      if (RegExp(r'authorization|token|secret|password|api.?key|credential|cookie|bearer',
-          caseSensitive: false).hasMatch(key)) {
+      final safeTokenMetric = const {
+        'promptTokens', 'completionTokens', 'cachedTokens', 'reasoningTokens',
+      }.contains(key) && value is num;
+      if (!safeTokenMetric &&
+          RegExp(r'authorization|token|secret|password|api.?key|credential|cookie|bearer',
+              caseSensitive: false).hasMatch(key)) {
         safeDetails[key] = '[REDACTED]';
         continue;
       }
