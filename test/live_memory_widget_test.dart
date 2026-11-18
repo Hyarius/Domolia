@@ -98,6 +98,11 @@ void main() {
     expect(find.text('Mémoire à jour'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('memoryCategory-character')));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('memoryCharacter-elise')),
+    );
+    await tester.tap(find.byKey(const ValueKey('memoryCharacter-elise')));
+    await tester.pumpAndSettle();
     expect(find.text('Bague en argent'), findsOneWidget);
     await tester.tap(
       find.byKey(const ValueKey('memoryFact-character:elise:ring')),
