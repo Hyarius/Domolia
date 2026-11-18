@@ -400,6 +400,7 @@ class _HomePageState extends State<HomePage> {
       await _ai.initialize();
       await _taskRouting.initialize();
       if (!mounted) return;
+      void Function(AiExchange)? captureIllustrationExchange;
       if (_ownsChat) {
         Future<NarrativeAiEndpoint> endpointForId(
             String id, AiNarrativeTask task) async {
@@ -486,7 +487,7 @@ class _HomePageState extends State<HomePage> {
           }
           persistExchange(exchange);
         }
-        void captureIllustrationExchange(AiExchange exchange) =>
+        captureIllustrationExchange = (exchange) =>
             persistExchange(exchange, recordUsage: false);
         _liveMemory = storage is LiveMemoryStore &&
                 storage is NarrativeSnapshotStore
