@@ -305,9 +305,11 @@ void main() {
   testWidgets('Accueil, Partie, paramètres, retour conversation',
       (tester) async {
     await _showApp(tester, withSession: true);
+    expect(find.byKey(const ValueKey('mainNavigation')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('recentSession-journey')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('groupChatInput')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mainNavigation')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('chatSettingsAppBar')));
     await tester.pumpAndSettle();
     expect(find.textContaining('Paramètres'), findsWidgets);
@@ -381,7 +383,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('settingsFactoryReset')),
       180,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: find.byType(Scrollable).last,
     );
     await tester.tap(find.byKey(const ValueKey('settingsFactoryReset')));
     await tester.pumpAndSettle();
