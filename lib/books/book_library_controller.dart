@@ -232,6 +232,29 @@ class BookLibraryController extends ChangeNotifier {
     _notify();
   }
 
+  /// Revert only Party-specific preferences to inherited Book/application
+  /// settings. Keep timeline, RAW, memory, Lore cache and images untouched.
+  /// One durable session update avoids a partially-reset combination of fields.
+  Future<void> resetSessionSettings(String id) async {
+    if (_deletedSessions.contains(id)) {
+      throw StateError('Partie supprimée.');
+    }
+    final current = await store.findSession(id);
+    if (current == null) throw StateError('Partie introuvable.');
+    final inherited = current.copyWith(
+      clearAiProfile: true,
+      clearFormatterProfile: true,
+      clearOptimizerProfile: true,
+      clearMemoryProfile: true,
+      memoryEnabled: true,
+      toolCallingEnabled: true,
+      clearIllustrationMode: true,
+      generationOverrides: const {},
+    );
+    await store.putSession(inherited);
+    _notify();
+  }
+
   Future<void> saveOptimizedLore(
       String id, String loreHash, String compactLore) async {
     if (_deletedSessions.contains(id)) {
