@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../ai/ai_controller.dart';
+import '../ai/ai_diagnostics.dart';
 import '../ai/ai_provider.dart';
 import '../ai/ai_usage.dart';
 import '../books/book_lore.dart';
@@ -36,6 +37,8 @@ class IllustrationController extends ChangeNotifier {
     required this.awaitNarrativeWrites,
     required this.files,
     this.usage,
+    this.diagnostics,
+    this.onExchangeCaptured,
     this.providerFactory,
     this.onOpenUncensoredCharge,
     this.onAcceptVisualFacts,
@@ -52,6 +55,10 @@ class IllustrationController extends ChangeNotifier {
   final Future<void> Function() awaitNarrativeWrites;
   final LocalIllustrationFiles files;
   final AiUsageStore? usage;
+  /// Scoped text diagnostics: image direction must not replace narrator traces.
+  final AiExchangeRecorder? diagnostics;
+  final void Function(AiExchange)? onExchangeCaptured;
+  final AiExchangeRecorder _imageHttpDiagnostics = AiExchangeRecorder();
   final ImageProviderFactory? providerFactory;
   final VoidCallback? onOpenUncensoredCharge;
   /// Persists only the appearances explicitly approved by the player.
@@ -151,10 +158,47 @@ class IllustrationController extends ChangeNotifier {
     return null;
   }
 
-  ImageGenerationProvider _provider(String id) =>
+  ImageGenerationProvider _provider(String id, int playerEventId) =>
       providerFactory?.call(id) ?? (id == 'openai'
-          ? OpenAiImageGenerationProvider()
-          : OpenUncensoredImageGenerationProvider());
+          ? OpenAiImageGenerationProvider(
+              diagnostics: _imageHttpDiagnostics,
+              onExchangeCaptured: onExchangeCaptured,
+              playerEventId: playerEventId,
+            )
+          : OpenUncensoredImageGenerationProvider(
+              diagnostics: _imageHttpDiagnostics,
+              onExchangeCaptured: onExchangeCaptured,
+              playerEventId: playerEventId,
+            ));
+
+  Future<VisualDirection> _directScene(
+      VisualScene scene, AiConnectionBinding endpoint) async {
+    final exchanges = <AiExchange>[];
+    Object? failure;
+    try {
+      final action = () => const VisualDirector().direct(
+        scene: scene, provider: endpoint.provider,
+        connection: endpoint.configuration,
+      );
+      if (diagnostics == null) return await action();
+      return await diagnostics!.captureDuring(action, exchanges.add);
+    } catch (error) {
+      failure = error;
+      rethrow;
+    } finally {
+      for (final exchange in exchanges) {
+        exchange
+          ..stage = 'image_direction'
+          ..playerEventId = scene.playerEventId;
+        exchange.complete(error: failure?.toString());
+        try {
+          onExchangeCaptured?.call(exchange);
+        } catch (_) {
+          // Diagnostics never block or repeat an AI request.
+        }
+      }
+    }
+  }
 
   String _providerId(AiProfile profile) {
     if (profile.kind != AiProviderKind.customAi ||
@@ -217,9 +261,7 @@ class IllustrationController extends ChangeNotifier {
       _activities[intentId] = IllustrationActivity.directing;
       _notify();
       directorInvoked = true;
-      final direction = await const VisualDirector().direct(
-          scene: scene, provider: endpoint.provider,
-          connection: endpoint.configuration);
+      final direction = await _directScene(scene, endpoint);
       await _directionUsage(start: start, failed: false);
       directorRecorded = true;
       final prompt = validatedImagePrompt(scene, direction,
@@ -383,7 +425,7 @@ class IllustrationController extends ChangeNotifier {
       }
       final directorConnection = preparedPrompt == null
           ? await ai.connectionForProfile(directorId) : null;
-      final imageProvider = _provider(providerId);
+      final imageProvider = _provider(providerId, scene.playerEventId);
       // Price estimates are deliberately null until an actual, reliable
       // maximum cost is provided by the selected backend.
       if (art.maximumCostUsd != null) {
@@ -424,10 +466,7 @@ class IllustrationController extends ChangeNotifier {
         prompt = preparedPrompt;
       } else {
         directorInvoked = true;
-        final direction = await const VisualDirector().direct(
-          scene: scene, provider: directorConnection!.provider,
-          connection: directorConnection.configuration,
-        );
+        final direction = await _directScene(scene, directorConnection!);
         await _directionUsage(start: start, failed: false);
         directorRecorded = true;
         prompt = validatedImagePrompt(scene, direction,
