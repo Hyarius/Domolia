@@ -201,6 +201,10 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
             title: const Text('Générer cette image'),
             onTap: () async {
               Navigator.pop(sheet);
+              if (state == null) {
+                await widget.controller.prepare(widget.intent.id);
+                return;
+              }
               if (state == IllustrationJobState.ready &&
                   !await _approvePrompt()) {
                 return;
@@ -212,6 +216,8 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
             key: const ValueKey('imageActionRegeneratePrompt'),
             leading: const Icon(Icons.refresh),
             title: const Text('Régénérer le prompt'),
+            enabled: state == IllustrationJobState.ready ||
+                state == IllustrationJobState.approved,
             onTap: () {
               Navigator.pop(sheet);
               widget.controller.prepare(widget.intent.id, regenerate: true);
@@ -221,12 +227,11 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
             key: const ValueKey('imageActionEditPrompt'),
             leading: const Icon(Icons.edit_outlined),
             title: const Text('Éditer le prompt'),
+            enabled: state == IllustrationJobState.ready ||
+                state == IllustrationJobState.approved,
             onTap: () {
               Navigator.pop(sheet);
-              if (state == IllustrationJobState.ready ||
-                  state == IllustrationJobState.approved) {
-                _editPrompt(prompt);
-              }
+              _editPrompt(prompt);
             },
           ),
           ListTile(
@@ -365,21 +370,24 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
                 style: const TextStyle(color: Colors.redAccent)),
             ],
             const SizedBox(height: 8),
-            if (record == null)
-              TextButton.icon(
+            if (approved || record?.state == IllustrationJobState.failed &&
+                    record!.prompt.isNotEmpty)
+              OutlinedButton.icon(
+                key: const ValueKey('imageGenerate'),
+                onPressed: working ? null : widget.onGenerate,
+                icon: const Icon(Icons.brush_outlined),
+                label: Text(approved
+                    ? 'Générer l’illustration'
+                    : 'Réessayer (nouvelle facturation possible)'),
+              )
+            else
+              OutlinedButton.icon(
                 key: const ValueKey('imagePreparePrompt'),
                 onPressed: working ? null :
                     () => widget.controller.prepare(widget.intent.id),
                 icon: const Icon(Icons.auto_fix_high),
-                label: const Text('Préparer la description IA')),
-            OutlinedButton.icon(
-              key: const ValueKey('imageGenerate'),
-              onPressed: working ? null : widget.onGenerate,
-              icon: const Icon(Icons.brush_outlined),
-              label: Text(record == null
-                  ? 'Générer l’illustration'
-                  : 'Réessayer (nouvelle facturation possible)'),
-            ),
+                label: const Text('Préparer la description IA'),
+              ),
           ],
         ],
       ),
