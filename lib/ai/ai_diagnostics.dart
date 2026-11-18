@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -6,6 +7,15 @@ import 'dart:typed_data';
 /// the user explicitly exports it. Never store Authorization credentials.
 class AiExchangeRecorder {
   AiExchange? last;
+
+  // Scope a specific HTTP request to its owner without stealing the
+  // narrator's shared "last" exchange during overlapping image work.
+  static final Object _captureZoneKey = Object();
+
+  Future<T> captureDuring<T>(
+    Future<T> Function() action,
+    void Function(AiExchange) onBegin,
+  ) => runZoned(action, zoneValues: {_captureZoneKey: onBegin});
 
   AiExchange begin({
     required String provider,
@@ -23,7 +33,12 @@ class AiExchangeRecorder {
       secret: secret,
       accept: accept,
     );
-    last = value;
+    final capture = Zone.current[_captureZoneKey];
+    if (capture is void Function(AiExchange)) {
+      capture(value);
+    } else {
+      last = value;
+    }
     return value;
   }
 }
@@ -86,6 +101,22 @@ class AiExchange {
     interpretedEvents = List.unmodifiable(events);
   }
 
+  /// Binary image responses must never be copied into diagnostics.
+  /// Record only safe response metadata and the real transfer size.
+  void addRedactedResponseSummary(Map<String, dynamic> summary,
+      {required int actualBytes}) {
+    if (totalResponseBytes != 0 || _response.length != 0) {
+      throw StateError('La réponse a déjà été enregistrée.');
+    }
+    final bytes = utf8.encode(jsonEncode(summary));
+    if (bytes.length > maxRawResponseBytes) {
+      throw ArgumentError('Résumé de réponse trop volumineux.');
+    }
+    _response.add(bytes);
+    totalResponseBytes = actualBytes;
+    truncated = actualBytes > bytes.length;
+  }
+
   void addRawResponse(List<int> bytes) {
     totalResponseBytes += bytes.length;
     final left = maxRawResponseBytes - _response.length;
@@ -128,7 +159,8 @@ class AiExchange {
         'Accept': accept,
       },
       'rawBody': _redact(requestBody),
-      'body': jsonDecode(_redact(requestBody)),
+      'body': requestBody.trim().isEmpty
+          ? null : jsonDecode(_redact(requestBody)),
     },
     'response': {
       'statusCode': statusCode,
