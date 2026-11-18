@@ -24,6 +24,8 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      - name: Show formatted memory page for diagnosis
+        run: dart format --output=show lib/memory/live_memory_page.dart
       - name: Check formatting of new memory files
         run: dart format --output=none --set-exit-if-changed lib/memory test/live_memory_test.dart test/live_memory_sqlite_test.dart test/live_memory_widget_test.dart
       - name: Memory unit tests
