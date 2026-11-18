@@ -78,8 +78,7 @@ class AppResetService {
         continue;
       }
       // Replacing the default must not erase a different API credential.
-      if (profile.kind != AiProviderKind.customAi ||
-          profile.apiKey.trim().isEmpty ||
+      if (profile.apiKey.trim().isEmpty ||
           (_isOpenUncensored(profile) && profile.apiKey == key)) {
         continue;
       }
