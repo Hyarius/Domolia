@@ -171,14 +171,30 @@ class _LiveMemoryPageState extends State<LiveMemoryPage> {
     if (yes == true) await _run(widget.memory.rebuild);
   }
 
+  String _factTitle(LiveMemoryFact fact) => switch (fact.field) {
+    'visual_identity' => 'Identité visuelle',
+    'visual_current' => 'Apparence actuelle',
+    _ => fact.label,
+  };
+
+  Widget _characterTile(List<LiveMemoryFact> facts, String entityId) {
+    final records = facts.where(
+      (fact) => fact.category == 'character' && fact.entityId == entityId,
+    ).toList();
+    return Card(
+      child: ExpansionTile(
+        key: ValueKey('memoryCharacter-$entityId'),
+        title: Text(records.first.label),
+        subtitle: const Text('Faits narratifs et apparence visuelle'),
+        children: [for (final fact in records) _factTile(fact)],
+      ),
+    );
+  }
+
   Widget _factTile(LiveMemoryFact fact) => Card(
     child: ExpansionTile(
       key: ValueKey('memoryFact-${fact.id}'),
-      title: Text(fact.field == 'visual_identity'
-          ? 'Identité visuelle'
-          : fact.field == 'visual_current'
-          ? 'Apparence actuelle'
-          : fact.label),
+      title: Text(_factTitle(fact)),
       subtitle: Text(fact.text, maxLines: 2, overflow: TextOverflow.ellipsis),
       leading: Icon(
         fact.pinned ? Icons.push_pin : Icons.bookmark_outline,
@@ -268,6 +284,10 @@ class _LiveMemoryPageState extends State<LiveMemoryPage> {
           .toLowerCase()
           .contains(needle);
     }).toList();
+    final characterIds = <String>{
+      for (final fact in facts)
+        if (fact.category == 'character') fact.entityId,
+    };
     return SafeArea(
       child: ListView(
         key: const ValueKey('liveMemoryPage'),
@@ -374,28 +394,11 @@ class _LiveMemoryPageState extends State<LiveMemoryPage> {
                 ),
                 children: [
                   if (category.key == 'character')
-                    for (final entity in facts
-                        .where((f) => f.category == 'character')
-                        .map((f) => f.entityId).toSet())
-                      Card(
-                        child: ExpansionTile(
-                          key: ValueKey('memoryCharacter-$entity'),
-                          title: Text(facts.firstWhere((f) =>
-                              f.category == 'character' &&
-                              f.entityId == entity).label),
-                          subtitle: const Text(
-                              'Faits narratifs et apparence visuelle'),
-                          children: [
-                            for (final fact in facts.where((f) =>
-                                f.category == 'character' &&
-                                f.entityId == entity))
-                              _factTile(fact),
-                          ],
-                        ),
-                      )
+                    for (final entityId in characterIds)
+                      _characterTile(facts, entityId)
                   else
                     for (final fact in facts.where(
-                      (f) => f.category == category.key,
+                      (fact) => fact.category == category.key,
                     ))
                       _factTile(fact),
                 ],
