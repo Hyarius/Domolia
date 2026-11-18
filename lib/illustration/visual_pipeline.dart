@@ -490,35 +490,31 @@ String validatedImagePrompt(VisualScene scene, VisualDirection direction,
     'joyful': 'joyeuse',
     'melancholic': 'mélancolique',
   };
-  return [
-    'Style : ' + style.trim() + '.',
-    'Sujet : ' + VisualDirection._visualField(
-        direction.visualSubject, scene) + '.',
+  // The image backend receives a self-contained visual description, not
+  // the director's intermediate field names or narrative context.
+  String visual(String value) => VisualDirection._visualField(value, scene);
+  final details = <String>[
+    visual(direction.visualSubject),
     for (final appearance in direction.appearances)
-      'Apparence de ' +
-          (scene.partyCharacters[appearance.id] ??
-              (scene.characters.where((c) => c.id == appearance.id)
-                  .map((c) => c.name).toList().firstOrNull ?? appearance.id)) +
-          ' : ' + VisualDirection._visualField(appearance.identity, scene) +
-          ' ; ' + VisualDirection._visualField(appearance.current, scene) + '.',
-    'Action : ' + VisualDirection._visualField(
-        direction.visualAction, scene) + '.',
-    if (direction.bodyPose.isNotEmpty)
-      'Pose et contacts : ' +
-          VisualDirection._visualField(direction.bodyPose, scene) + '.',
-    if (direction.mustShow.isNotEmpty)
-      'Détails visibles : ' + direction.mustShow
-          .map((detail) => VisualDirection._visualField(detail, scene))
-          .join(' ; ') + '.',
-    'Décor : ' + VisualDirection._visualField(
-        direction.visualSetting, scene) + '.',
-    'Cadrage : ' + shots[direction.shot]! + ', angle ' +
-        angles[direction.angle]! + ', ' +
-        compositions[direction.composition]! + '.',
-    'Atmosphère : lumière ' + lights[direction.lighting]! +
-        ', palette ' + palettes[direction.palette]! +
-        ', ambiance ' + moods[direction.mood]! + '.',
+      '${scene.partyCharacters[appearance.id] ??
+          (scene.characters.where((c) => c.id == appearance.id)
+              .map((c) => c.name).toList().firstOrNull ?? appearance.id)} : '
+          '${visual(appearance.identity)}, ${visual(appearance.current)}',
+    visual(direction.visualAction),
+    if (direction.bodyPose.isNotEmpty) visual(direction.bodyPose),
+    for (final detail in direction.mustShow) visual(detail),
+    visual(direction.visualSetting),
+  ];
+  final camera = '${shots[direction.shot]}, ${angles[direction.angle]}, '
+      '${compositions[direction.composition]}';
+  final atmosphere = 'lumière ${lights[direction.lighting]}, '
+      'palette ${palettes[direction.palette]}, '
+      'ambiance ${moods[direction.mood]}';
+  return [
+    '${details.join('. ')}. '
+        '${camera[0].toUpperCase()}${camera.substring(1)}, ${atmosphere}. '
+        '${style.trim()}.',
     if (negativePrompt.trim().isNotEmpty)
-      'À exclure : ' + negativePrompt.trim() + '.',
-  ].join('\n');
+      'À exclure : ${negativePrompt.trim()}.',
+  ].join('\\n');
 }
