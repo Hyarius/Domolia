@@ -96,7 +96,7 @@ void main() {
     await expectLater(generator.generate(
       book: book,
       connection: const ImageGenerationOptions(),
-      profiles: [profile],
+      profiles: const [],
     ), throwsA(isA<ImageGenerationFailure>()));
     expect(fake.generations, 0);
     expect(fake.catalogs, 0);
