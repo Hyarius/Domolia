@@ -15,6 +15,19 @@ final _png = Uint8List.fromList([
 ]);
 
 void main() {
+  test('Auto model prefers a documented OpenUncensored default', () {
+    const catalogue = [
+      ImageModelCapability(id:'other', sizes:['1024x1024']),
+      ImageModelCapability(id:'z-image-turbo', sizes:['1024x1024']),
+    ];
+    expect(selectImageModel(catalogue, '').id, 'z-image-turbo');
+    expect(selectImageModel(catalogue, 'other').id, 'other');
+    expect(() => selectImageModel(catalogue, 'no-such-model'),
+        throwsA(isA<ImageGenerationFailure>()));
+    expect(() => selectImageModel(const [], ''),
+        throwsA(isA<ImageGenerationFailure>()));
+  });
+
   test('OpenAI API key and GPT Image request are distinct from ChatGPT OAuth',
       () async {
     final provider = OpenAiImageGenerationProvider(client: MockClient(
