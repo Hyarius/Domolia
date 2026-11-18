@@ -159,17 +159,22 @@ void main() {
     routing.dispose();
   });
 
-  test('Empty first launch and import creates encrypted history and task profiles', () async {
+  test('First key import uses one shared profile, without creating task profiles', () async {
     await controller.initialize();
     expect(controller.active, null);
     expect(await controller.importKey(keyA), true);
     expect(controller.active!.secret, keyA);
     expect(controller.active!.lastBalance!.remainingUsd, 5);
-    expect(ai.selectedProfileId, AiConnectionController.ouNarratorProfileId);
-    expect(profiles.state!.profiles.where(
-      (item) => item.id.startsWith('openuncensored-managed-')), hasLength(3));
-    expect(routing.profileFor(AiNarrativeTask.jsonifier),
-        AiConnectionController.ouJsonifierProfileId);
+    expect(ai.selectedProfileId, 'default');
+    expect(ai.profiles, hasLength(1));
+    expect(ai.selectedProfile.name, 'OpenUncensored');
+    expect(ai.selectedProfile.apiKey, keyA);
+    expect(ai.profiles.where(
+      (item) => item.id.startsWith('openuncensored-managed-')), isEmpty);
+    expect(routing.profileFor(AiNarrativeTask.narrator), 'default');
+    // Other tasks inherit the narrator until separately configured.
+    expect(routing.profileFor(AiNarrativeTask.jsonifier), isNull);
+    expect(routing.profileFor(AiNarrativeTask.optimizer), isNull);
   });
 
   test('Restart does not replace a ChatGPT narrator with OpenUncensored', () async {
@@ -192,8 +197,10 @@ void main() {
     expect(controller.active!.secret, keyA);
   });
 
-  test('Missing OU managed profile repaired without overriding routing', () async {
+  test('Deleting shared profile prevents automatic recreation on restart',
+      () async {
     await controller.importKey(keyA);
+    expect(ai.profiles, hasLength(1));
     expect(await ai.createProfile('ChatGPT normal'), true);
     expect(await ai.setProviderKind(AiProviderKind.chatGpt), true);
     final normalId = ai.selectedProfileId;
@@ -201,30 +208,62 @@ void main() {
     await routing.setProfile(AiNarrativeTask.jsonifier, normalId);
     await routing.setProfile(AiNarrativeTask.memory, normalId);
 
-    profiles.state = AiProfilesState(
-      profiles: ai.profiles
-          .where((p) => p.id != AiConnectionController.ouNarratorProfileId)
-          .toList(),
-      selectedId: normalId,
-    );
+    expect(await ai.selectProfile('default'), true);
+    expect(await ai.deleteProfile(), true);
+    expect(ai.profiles, hasLength(1));
+
     controller.dispose();
     ai.dispose();
     ai = AiConnectionController(store: profiles, provider: NoopProvider());
     attach();
     await controller.initialize();
 
-    expect(ai.selectedProfileId, normalId);
-    expect(ai.profiles.any((p) =>
-        p.id == AiConnectionController.ouNarratorProfileId), true);
+    expect(controller.active!.secret, keyA);
+    expect(ai.profiles, hasLength(1));
+    expect(ai.profiles.single.id, normalId);
     expect(routing.profileFor(AiNarrativeTask.narrator), normalId);
     expect(routing.profileFor(AiNarrativeTask.jsonifier), normalId);
     expect(routing.profileFor(AiNarrativeTask.memory), normalId);
+
+    // A preset change is not permission to resurrect a deleted profile.
+    await controller.loadModels();
+    expect(await controller.setNarratorModel('cheap-json-model'), true);
+    expect(ai.profiles, hasLength(1));
+    expect(ai.profiles.single.id, normalId);
+    expect(controller.taskModels['narrator'], 'cheap-json-model');
+
+    // Only an explicit new activation can create a connection again.
+    expect(await controller.activate(ouKeyId(keyA)), true);
+    expect(ai.profiles, hasLength(2));
+    expect(ai.profiles.where(
+      (profile) => profile.id.startsWith('openuncensored-managed-')),
+      hasLength(1));
+    expect(routing.profileFor(AiNarrativeTask.narrator), normalId);
+  });
+
+  test('Renamed shared profile and manual task routing survive model changes',
+      () async {
+    await controller.importKey(keyA);
+    expect(await ai.renameProfile('Mon profil OU'), true);
+    await controller.loadModels();
+    expect(await controller.setNarratorModel('cheap-json-model'), true);
+    expect(ai.profiles, hasLength(1));
+    expect(ai.selectedProfile.name, 'Mon profil OU');
+    expect(ai.selectedProfile.model, 'cheap-json-model');
+
+    expect(await ai.createProfile('IA secondaire'), true);
+    final customId = ai.selectedProfileId;
+    await routing.setProfile(AiNarrativeTask.jsonifier, customId);
+    expect(await controller.setNarratorModel(defaultAiModel), true);
+    expect(ai.profiles, hasLength(2));
+    expect(ai.profiles.first.name, 'Mon profil OU');
+    expect(routing.profileFor(AiNarrativeTask.jsonifier), customId);
   });
 
   test('Managed narrator uses explicit catalogue tool capability', () async {
     await controller.importKey(keyA);
     AiProfile narrator() => ai.profiles.firstWhere(
-      (p) => p.id == AiConnectionController.ouNarratorProfileId);
+      (p) => p.id == 'default');
     expect(narrator().model, defaultAiModel);
     expect(narrator().toolCallingCompatibility,
         AiToolCallingCompatibility.supported);
@@ -387,16 +426,16 @@ void main() {
     await controller.importKey(keyA);
     await controller.loadModels();
     final legacy = Map.of(controller.taskModels);
-    await routing.setProfile(AiNarrativeTask.memory,
-        AiConnectionController.ouJsonifierProfileId);
+    await ai.createProfile('Mémoire personnalisée');
+    final memoryId = ai.selectedProfileId;
+    await routing.setProfile(AiNarrativeTask.memory, memoryId);
     await routing.setGeneration(AiNarrativeTask.narrator,
         const AiTaskGenerationSettings(maxOutputTokens: 16384));
     expect(await controller.setNarratorModel('cheap-json-model'), isTrue);
     expect(controller.taskModels['narrator'], 'cheap-json-model');
     expect(controller.taskModels['jsonifier'], legacy['jsonifier']);
     expect(controller.taskModels['optimizer'], legacy['optimizer']);
-    expect(routing.profileFor(AiNarrativeTask.memory),
-        AiConnectionController.ouJsonifierProfileId);
+    expect(routing.profileFor(AiNarrativeTask.memory), memoryId);
     expect(routing.generationFor(AiNarrativeTask.narrator).maxOutputTokens,
         16384);
     expect(await controller.setNarratorModel('unavailable-model'), isFalse);
@@ -414,7 +453,7 @@ void main() {
     }), true);
     expect(controller.toolSupportFor('cheap-json-model'), OuToolSupport.unknown);
     final narrator = ai.profiles.firstWhere(
-        (p) => p.id == AiConnectionController.ouNarratorProfileId);
+        (p) => p.id == 'default');
     expect(narrator.model, 'cheap-json-model');
     expect(narrator.toolCallingCompatibility,
         AiToolCallingCompatibility.unknown);
@@ -435,7 +474,7 @@ void main() {
     expect(controller.probeFor('cheap-json-model'),
         OuToolProbeOutcome.supported);
     expect(ai.profiles.firstWhere((p) =>
-        p.id == AiConnectionController.ouNarratorProfileId)
+        p.id == 'default')
         .toolCallingCompatibility, AiToolCallingCompatibility.supported);
     expect(probes, 1);
     final cached = await vault.read();
@@ -451,7 +490,7 @@ void main() {
     expect(controller.toolSupportFor('cheap-json-model'),
         OuToolSupport.unknown);
     expect(ai.profiles.firstWhere((p) =>
-        p.id == AiConnectionController.ouNarratorProfileId)
+        p.id == 'default')
         .toolCallingCompatibility, AiToolCallingCompatibility.unknown);
     await controller.activate(ouKeyId(keyA));
     expect(controller.probeFor('cheap-json-model'),
@@ -473,7 +512,7 @@ void main() {
     expect(controller.toolSupportFor('cheap-json-model'),
         OuToolSupport.unsupported);
     expect(ai.profiles.firstWhere((p) =>
-        p.id == AiConnectionController.ouNarratorProfileId)
+        p.id == 'default')
         .toolCallingCompatibility, AiToolCallingCompatibility.unsupported);
     probeMode = 'credits';
     expect(await controller.testToolCalling('cheap-json-model'), null);
