@@ -455,8 +455,13 @@ String validatedImagePrompt(VisualScene scene, VisualDirection direction,
   if (exclusions.join(', ').length > 1500) {
     throw const FormatException('Exclusions visuelles trop longues.');
   }
+  // The Book's requested visual style remains effective even if the
+  // director omits the exact expression in its natural-language prompt.
+  final visualStyle = style.trim();
+  final styled = description.toLowerCase().contains(visualStyle.toLowerCase())
+      ? description : description + ' ' + visualStyle + '.';
   return [
-    description,
+    styled,
     if (exclusions.isNotEmpty) 'À exclure : ' + exclusions.join(', ') + '.',
   ].join('\n');
 }
