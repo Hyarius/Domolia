@@ -385,16 +385,21 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
           Text(_toolStatus(selected),
             key: const ValueKey('ouToolStatus'),
             style: const TextStyle(color: DomoliaColors.muted)),
-          const SizedBox(height: DomoliaSpacing.compact),
-          OutlinedButton.icon(
-            key: const ValueKey('ouToolProbe'),
-            onPressed: !enabled || widget.sandbox != null
-                ? null : () => _probeNarrator(selected),
-            icon: const Icon(Icons.science_outlined),
-            label: const Text('Tester le Tool Calling'),
+          ExpansionTile(
+            key: const ValueKey('ouToolTestingAdvanced'),
+            title: const Text('Vérification avancée du modèle'),
+            children: [
+              OutlinedButton.icon(
+                key: const ValueKey('ouToolProbe'),
+                onPressed: !enabled || widget.sandbox != null
+                    ? null : () => _probeNarrator(selected),
+                icon: const Icon(Icons.science_outlined),
+                label: const Text('Tester le Tool Calling'),
+              ),
+              const Text('Test facultatif, potentiellement facturé.',
+                style: TextStyle(color: DomoliaColors.muted)),
+            ],
           ),
-          const Text('Test facultatif, potentiellement facturé.',
-            style: TextStyle(color: DomoliaColors.muted)),
         ],
       ],
       const SizedBox(height: DomoliaSpacing.field),
