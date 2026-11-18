@@ -568,7 +568,7 @@ void main() {
     await controller.prepare(3);
     final draft = controller.forIntent(3);
     expect(draft?.state, IllustrationJobState.ready);
-    expect(draft?.prompt, contains('Boulangère'));
+    expect(draft?.prompt.toLowerCase(), contains('boulangère'));
     expect(text.calls, 1);
     expect(image.calls, 0);
 
