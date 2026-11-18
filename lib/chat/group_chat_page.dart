@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -8,6 +9,7 @@ import '../ai/ai_diagnostics.dart';
 import '../theme/domolia_theme.dart';
 import '../illustration/illustration_controller.dart';
 import '../illustration/illustration_slot.dart';
+import '../illustration/illustration_records.dart';
 import 'chat_controller.dart';
 import 'chat_protocol.dart';
 
@@ -82,6 +84,13 @@ class _GroupChatPageState extends State<GroupChatPage> {
     final last = timeline.isEmpty ? null : timeline.last;
     if (last?.id == _lastTimelineEventId) return;
     _lastTimelineEventId = last?.id;
+
+    if (last is ChatIllustrationIntent && widget.illustrations != null) {
+      // Text-only direction pass. No image generation occurs here.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(widget.illustrations!.prepare(last.id));
+      });
+    }
 
     // Keep the freshly sent player message in view, but never jump to the
     // END of a newly committed AI answer. Long answers begin where reading
@@ -412,10 +421,15 @@ class _GroupChatPageState extends State<GroupChatPage> {
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: const Text('Générer cette illustration ?'),
-          content: const Text('La mise en scène IA et la génération '
-            'peuvent toutes deux être facturées. Coût : inconnu. '
-            'Une nouvelle génération est facturable, même en cas de refus '
-            'ou d’interruption. Aucun nouvel essai n’est automatique.'),
+          content: Text(
+            illustrations.forIntent(intentId)?.state ==
+                    IllustrationJobState.approved
+                ? 'La description est validée. Seule la génération '
+                    'd’image sera lancée ; elle peut être facturée. '
+                    'Coût inconnu. Aucun nouvel essai n’est automatique.'
+                : 'La préparation IA et la génération d’image peuvent '
+                    'être facturées. Coût inconnu. '
+                    'Aucun nouvel essai n’est automatique.'),
           actions: [
             if (widget.onOpenImageSettings != null)
               TextButton.icon(
@@ -453,7 +467,13 @@ class _GroupChatPageState extends State<GroupChatPage> {
     if (illustrations == null) return;
     final intent = illustrations.lastUnillustratedIntent;
     if (intent != null) {
-      await _generateImage(intent);
+      final state = illustrations.forIntent(intent)?.state;
+      if (state == IllustrationJobState.ready ||
+          state == IllustrationJobState.approved) {
+        _showExportMessage('Description disponible dans l’encart image.');
+      } else {
+        await illustrations.prepare(intent);
+      }
       return;
     }
     final messageId = illustrations.lastAiMessageWithoutIntent;
@@ -494,7 +514,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
       final inserted = await widget.controller.illustrateMessage(messageId);
       if (!inserted || !mounted) return;
       final nextIntent = illustrations.lastUnillustratedIntent;
-      if (nextIntent != null) await _generateImage(nextIntent);
+      if (nextIntent != null) await illustrations.prepare(nextIntent);
     } catch (_) {
       _showExportMessage('Impossible de créer l’intention d’image.');
     }
