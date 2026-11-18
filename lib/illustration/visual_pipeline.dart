@@ -42,6 +42,8 @@ class VisualScene {
     if (worldContext.isNotEmpty) 'Univers (contexte, pas une action) : ' + worldContext,
     ...characters.map((e) => 'Personnage canonique ' + e.id + ' (' + e.name +
         ') — apparence : ' + VisualSceneSelector._short(e.appearance) +
+        (e.description.trim().isEmpty ? '' :
+          ' ; description : ' + VisualSceneSelector._short(e.description)) +
         ' ; rôle : ' + e.role),
     ...partyCharacters.entries.map((e) => 'Personnage de Partie ' + e.key + ' (' + e.value + ')'),
     ...places.map((e) => 'Lieu canonique ' + e.id + ' (' + e.name + ') : ' +
