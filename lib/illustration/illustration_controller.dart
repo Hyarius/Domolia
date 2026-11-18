@@ -176,7 +176,7 @@ class IllustrationController extends ChangeNotifier {
     final exchanges = <AiExchange>[];
     Object? failure;
     try {
-      final action = () => const VisualDirector().direct(
+      Future<VisualDirection> action() => const VisualDirector().direct(
         scene: scene, provider: endpoint.provider,
         connection: endpoint.configuration,
       );
