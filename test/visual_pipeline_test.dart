@@ -20,22 +20,17 @@ class _RecordingDirectorProvider implements AiChatProvider {
   }) async {
     this.messages = messages;
     return jsonEncode({
-      'shot': 'medium_full',
-      'angle': 'three_quarter',
-      'focusIds': ['naelle'],
-      'composition': 'leading_lines',
-      'lighting': 'dramatic',
-      'palette': 'muted',
-      'mood': 'tense',
-      'visualSubject': 'Naëlle près du sol',
-      'visualAction': 'Naëlle saisit un tissu près de sa cuisse',
-      'visualSetting': 'Parquet sombre de l’atelier',
-      'bodyPose': 'Main droite au sol, genoux pliés, main gauche au tissu',
-      'mustShow': ['Main droite appuyée au sol', 'Main gauche au tissu'],
+      'prompt': 'Naëlle, jeune femme adulte aux cheveux noirs très longs, '
+          'porte une jupe sombre et des collants noirs. Elle est accroupie '
+          'sur le parquet sombre de l’atelier, genoux pliés, main droite '
+          'appuyée au sol, main gauche saisissant un tissu près de sa '
+          'cuisse. Le geste est net et les doigts touchent le tissu. '
+          'Vue de trois quarts, plan moyen en pied, lumière dramatique.',
+      'negativePrompt': 'texte, sous-titres',
       'appearances': [{
         'id': 'naelle',
-        'identity': 'Cheveux noirs longs',
-        'current': 'Jupe sombre et collants noirs',
+        'identity': 'Femme adulte, cheveux noirs très longs',
+        'current': 'Jupe sombre et collants noirs, accroupie',
       }],
     });
   }
@@ -88,55 +83,55 @@ void main() {
     expect(selected.restrictions,hasLength(3));
     expect(selected.excerpts,isEmpty);
     final prompt = validatedImagePrompt(selected,
-       const VisualDirection(shot:'wide',angle:'eye_level',focusIds:[],
-        composition:'centered',lighting:'natural',palette:'muted',
-        mood:'mysterious',visualSubject:'Bureau',visualAction:'Dossier posé',
-        visualSetting:'Une pièce'));
+       const VisualDirection(
+         prompt:'Un dossier scellé est posé au centre d’un bureau, '
+             'dans une pièce faiblement éclairée, cadrage de face.',
+       ));
     expect(prompt,contains('Dossier posé'));
   });
 
-  test('Director cannot add cast or arbitrary narrative fields', () {
+  test('Only the authored prompt is transmitted, and cast IDs are checked',
+      () {
     final selected=const VisualSceneSelector().select(
         intent:intent,timeline:scene(),lore:lore);
     Map<String,dynamic> direction() => {
-      'shot':'medium','angle':'eye_level','focusIds':['lea-monel'],
-      'composition':'rule_of_thirds','lighting':'soft',
-      'palette':'warm','mood':'calm',
-      'visualSubject':'Léa aux cheveux roux, vêtement vert',
-      'visualAction':'Soren ferme un tiroir',
-      'visualSetting':'Un meuble à tiroirs',
+      'prompt': 'Léa Monel, femme adulte aux cheveux roux, vêtue de vert, '
+          'se trouve près de Soren devant un meuble à tiroirs. '
+          'Vue à hauteur des yeux, lumière douce.',
+      'appearances': [{
+        'id':'lea-monel',
+        'identity':'Femme adulte aux cheveux roux',
+        'current':'Tenue verte et posture debout',
+      }],
     };
-    expect(VisualDirection.parse(jsonEncode(direction()),selected).focusIds,
-        ['lea-monel']);
+    final parsed=VisualDirection.parse(jsonEncode(direction()),selected);
+    expect(parsed.appearances.single.id,'lea-monel');
+    expect(validatedImagePrompt(selected,parsed),parsed.prompt);
+    expect(parsed.prompt,isNot(contains('Personnage lea-monel')));
     expect(()=>VisualDirection.parse(jsonEncode(
-       direction()..['focusIds']=['lea-monnel']),selected),throwsFormatException);
+       direction()..['appearances']=[{
+         'id':'party:inconnue',
+         'identity':'Cheveux roux','current':'Tenue verte',
+       }]),selected),throwsFormatException);
     expect(()=>VisualDirection.parse(jsonEncode(
        direction()..['unverifiedProp']='key'),selected),throwsFormatException);
-    expect(validatedImagePrompt(selected,
-       VisualDirection.parse(jsonEncode(direction()),selected)),
-       isNot(contains('Cheveux noirs')));
   });
-
 
   test('Director JSON fences are accepted without admitting extra text', () {
     final selected = const VisualSceneSelector().select(
       intent:intent, timeline:scene(), lore:lore,
     );
     final values = <String,dynamic>{
-      'shot':'medium_full', 'angle':'three_quarter',
-      'focusIds':['lea-monel'], 'composition':'leading_lines',
-      'lighting':'soft', 'palette':'warm', 'mood':'calm',
-      'visualSubject':'Léa devant le meuble',
-      'visualAction':'Elle touche le tiroir',
-      'visualSetting':'Un intérieur avec un meuble',
-      'bodyPose':'Sa main repose sur la poignée',
+      'prompt': 'Léa Monel se tient devant le meuble à tiroirs, '
+          'dans un intérieur éclairé. Sa main repose sur la poignée.',
+      'negativePrompt': 'texte, watermark',
     };
     final raw = jsonEncode(values);
     final fenced = '```json\n$raw\n```';
-    expect(VisualDirection.parse(raw, selected).shot, 'medium_full');
-    expect(VisualDirection.parse(fenced, selected).shot, 'medium_full');
+    expect(VisualDirection.parse(raw, selected).prompt, values['prompt']);
+    expect(VisualDirection.parse(fenced, selected).prompt, values['prompt']);
     expect(VisualDirection.parse(' ```JSON\r\n$raw\r\n``` ', selected)
-        .angle, 'three_quarter');
+        .negativePrompt, 'texte, watermark');
     expect(() => VisualDirection.parse(
       'Explication :\n$fenced', selected), throwsFormatException);
     expect(() => VisualDirection.parse(
@@ -148,38 +143,19 @@ void main() {
       selected), throwsFormatException);
   });
 
-  test('Director accepts a single Markdown JSON fence without prose', () {
-    final selected = const VisualSceneSelector().select(
-        intent: intent, timeline: scene(), lore: lore);
-    final raw = jsonEncode({
-      'shot': 'medium', 'angle': 'eye_level', 'focusIds': ['lea-monel'],
-      'composition': 'centered', 'lighting': 'soft',
-      'palette': 'warm', 'mood': 'calm',
-      'visualSubject': 'Léa', 'visualAction': 'Ferme le tiroir',
-      'visualSetting': 'Pièce éclairée',
-    });
-    expect(VisualDirection.parse('```json\\n$raw\\n```', selected).shot,
-        'medium');
-    expect(() => VisualDirection.parse(
-        'Préambule\\n```json\\n$raw\\n```', selected),
-        throwsFormatException);
-  });
-
   test('Book exclusions are added without treating scene dialogue as overlay', () {
     final selected=const VisualSceneSelector().select(
         intent:intent,timeline:scene(),lore:lore);
     const director=VisualDirection(
-      shot:'medium',angle:'eye_level',focusIds:[],
-      composition:'centered',lighting:'soft',
-      palette:'muted',mood:'calm',
-      visualSubject:'Soren',visualAction:'Il ferme un tiroir',
-      visualSetting:'Un meuble à tiroirs');
+      prompt:'Soren ferme un tiroir sur un meuble en bois. '
+          'Sa main serre la poignée, avec une lumière de gravure sombre.',
+      negativePrompt:'filigranes');
     final prompt=validatedImagePrompt(selected,director,
       style:'gravure sombre',
-      negativePrompt:'sous-titres, textes, filigranes');
+      negativePrompt:'sous-titres, textes');
+    expect(prompt,startsWith(director.prompt));
     expect(prompt,contains('gravure sombre'));
-    expect(prompt,contains('À exclure : sous-titres'));
-    expect(prompt,contains('Il ferme un tiroir'));
+    expect(prompt,contains('À exclure : filigranes, sous-titres, textes'));
     expect(prompt,isNot(contains('Texte établi')));
     expect(prompt,isNot(contains('Je regarde Léa Monel')));
     expect(prompt,isNot(contains('Soren referme lentement le tiroir derrière lui.')));
@@ -195,25 +171,22 @@ void main() {
         intent,
       ],lore:lore);
     final data={
-      'shot':'medium','angle':'eye_level',
-      'focusIds':<String>[],'composition':'centered','lighting':'soft',
-      'palette':'muted','mood':'calm','visualSubject':'Soren',
-      'visualAction':'Ferme un tiroir','visualSetting':'Un meuble en bois',
+      'prompt':'Soren, adulte portant une veste sombre, '
+          'ferme un tiroir sur un meuble en bois, vue de côté.',
     };
     final good=VisualDirection.parse(jsonEncode(data),selected);
     final prompt=validatedImagePrompt(selected,good);
     expect(prompt,isNot(contains('Le train est en retard')));
     expect(prompt,isNot(contains('Mémoire confirmée')));
     expect(()=>VisualDirection.parse(jsonEncode(
-      {...data,'visualAction':'Le train est en retard depuis ce matin.'}),
+      {...data,'prompt':'Soren parle : Le train est en retard '
+          'depuis ce matin. Le décor est un meuble.'}),
       selected),throwsFormatException);
-    // Backward-compatible: an old director response can include a veto
-    // flag, but it is ignored as long as the camera JSON is valid.
-    expect(VisualDirection.parse(jsonEncode(
-      {...data,'illustratable':false}),selected).visualAction,
-      'Ferme un tiroir');
     expect(()=>VisualDirection.parse(jsonEncode(
-      {...data,'visualSetting':'a' * 401}),selected),throwsFormatException);
+      {...data,'prompt':'[NARRATION] Soren ferme son tiroir.'}),
+      selected),throwsFormatException);
+    expect(()=>VisualDirection.parse(jsonEncode(
+      {...data,'prompt':'x' * 6001}),selected),throwsFormatException);
   });
 
   test('Every existing intent can be composed without director veto', () {
@@ -227,18 +200,13 @@ void main() {
         intent:events.last as ChatIllustrationIntent,
         timeline:events,lore:const BookLore());
     final data={
-      'shot':'wide','angle':'eye_level','focusIds':<String>[],
-      'composition':'centered','lighting':'natural','palette':'muted',
-      'mood':'mysterious','visualSubject':'La gardienne',
-      'visualAction':'Elle reste immobile',
-      'visualSetting':'Une porte',
+      'prompt':'La gardienne reste immobile à côté d’une porte ancienne, '
+          'dans un couloir sombre, avec une lumière venant de profil.',
     };
     final direction=VisualDirection.parse(jsonEncode(data),selected);
     expect(validatedImagePrompt(selected,direction),
-      contains('Elle reste immobile'));
-    expect(VisualDirection.parse(
-      jsonEncode({...data,'illustratable':false}),selected).visualSubject,
-      'La gardienne');
+      contains('La gardienne reste immobile'));
+    expect(direction.prompt, contains('porte ancienne'));
   });
 
   test('New Party characters receive proposed appearances without Book Lore', () {
@@ -256,13 +224,9 @@ void main() {
     );
     expect(scene.partyCharacters['party:boulangere'], 'Boulangère');
     final direction = VisualDirection.parse(jsonEncode({
-      'shot':'medium', 'angle':'eye_level',
-      'focusIds':['party:boulangere'],
-      'composition':'centered', 'lighting':'soft',
-      'palette':'warm', 'mood':'calm',
-      'visualSubject':'Une boulangère au comptoir',
-      'visualAction':'Elle ajuste son tablier',
-      'visualSetting':'Une boulangerie',
+      'prompt':'Une boulangère adulte aux cheveux bruns et aux yeux verts '
+          'ajuste son tablier beige et son collier cyan près du comptoir '
+          'd’une boulangerie. Ses mains tiennent le tissu, vue de face.',
       'appearances':[{
         'id':'party:boulangere',
         'identity':'Cheveux bruns et yeux verts',
@@ -270,14 +234,13 @@ void main() {
       }],
     }), scene);
     final prompt = validatedImagePrompt(scene, direction);
-    expect(prompt, contains('Apparence de Boulangère :'));
-    expect(prompt, contains('Cheveux bruns et yeux verts'));
-    expect(prompt, contains(' ; Tablier beige'));
+    expect(prompt, contains('Cheveux bruns et aux yeux verts'));
+    expect(prompt, isNot(contains('Apparence de')));
+    expect(direction.appearances.single.identity,
+        'Cheveux bruns et yeux verts');
     expect(() => VisualDirection.parse(jsonEncode({
-      'shot':'medium', 'angle':'eye_level', 'focusIds':<String>[],
-      'composition':'centered', 'lighting':'soft', 'palette':'warm',
-      'mood':'calm', 'visualSubject':'Boulangère',
-      'visualAction':'Elle attend', 'visualSetting':'Boulangerie',
+      'prompt':'Une boulangère adulte se tient derrière un comptoir '
+          'de cuisine et ajuste son tablier.',
       'appearances':[{
         'id':'party:inconnue',
         'identity':'Cheveux bruns', 'current':'Tablier blanc',
@@ -419,7 +382,7 @@ void main() {
     expect(selected.chronology.single.length, lessThan(650));
   });
 
-  test('Director uses the exact action, body geometry and must-show details',
+  test('Director writes a detailed visual prompt with scene continuity',
       () async {
     final provider = _RecordingDirectorProvider();
     const bookLore = BookLore(characters: [
@@ -442,34 +405,40 @@ void main() {
     );
     final direction = await const VisualDirector().direct(
       scene: selected, provider: provider,
+      style: 'aquarelle délicate', negativePrompt: 'texte incrusté',
       connection: const AiConfiguration(
         baseUrl: 'https://example.org/v1', model: 'fake', apiKey: 'fake'),
     );
     expect(provider.messages, hasLength(2));
+    expect(provider.messages.first.content,contains('âge apparent'));
+    expect(provider.messages.first.content,contains('cheveux'));
+    expect(provider.messages.first.content,contains('géométrie'));
+    expect(provider.messages.first.content,contains('caméra'));
     expect(provider.messages.last.content,
       contains('INSTANT À ILLUSTRER (prioritaire)'));
     expect(provider.messages.last.content, contains('Tour : Narrateur'));
-    expect(direction.shot, 'medium_full');
-    expect(direction.angle, 'three_quarter');
-    expect(direction.mustShow, hasLength(2));
+    expect(provider.messages.last.content, contains('aquarelle délicate'));
+    expect(provider.messages.last.content, contains('texte incrusté'));
+    expect(direction.appearances.single.id,'naelle');
     final prompt = validatedImagePrompt(selected, direction);
-    expect(prompt, contains('Main droite au sol'));
-    expect(prompt, contains('Main gauche au tissu'));
-    expect(prompt.indexOf('Naëlle saisit un tissu'),
-        lessThan(prompt.indexOf('Parquet sombre de l’atelier')));
+    expect(prompt, startsWith(direction.prompt));
+    expect(prompt, contains('Main droite'.toLowerCase().replaceFirst('m', 'm'))
+        .or(contains('main droite')));
+    expect(prompt, contains('main gauche'));
+    expect(prompt.indexOf('Naëlle saisit'), lessThan(
+        prompt.indexOf('parquet sombre de l’atelier'))); 
     expect(prompt, isNot(contains('ACTION PRIORITAIRE')));
     expect(prompt, isNot(contains('Personnage naelle')));
-    expect(prompt.length, lessThan(800));
     expect(prompt, isNot(contains('Je regarde Naëlle s’accroupir.')));
+    expect(prompt, contains('À exclure : texte, sous-titres'));
     expect(() => VisualDirection.parse(jsonEncode({
-      'shot': 'medium_full', 'angle': 'three_quarter',
-      'focusIds': ['naelle'],
-      'composition': 'centered', 'lighting': 'soft',
-      'palette': 'muted', 'mood': 'calm',
-      'visualSubject': 'Naëlle', 'visualAction': 'Elle saisit le tissu',
-      'visualSetting': 'Une pièce',
-      'bodyPose': 'Position stable',
-      'mustShow': ['x' * 181],
+      'prompt': 'Naëlle se tient sur le parquet sombre et '
+          'porte une jupe et des collants.',
+      'appearances': [{
+        'id': 'not-allowed',
+        'identity': 'Cheveux noirs',
+        'current': 'Jupe sombre',
+      }],
     }), selected), throwsFormatException);
   });
 
