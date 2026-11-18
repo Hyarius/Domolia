@@ -153,7 +153,7 @@ abstract class _HttpImageProvider implements ImageGenerationProvider {
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode(body);
     }
-    final AiExchange? exchange = (diagnostics ?? AiExchangeRecorder()).begin(
+    final exchange = (diagnostics ?? AiExchangeRecorder()).begin(
       provider: id,
       method: request.method,
       url: request.url.toString(),
@@ -161,11 +161,9 @@ abstract class _HttpImageProvider implements ImageGenerationProvider {
       secret: key.trim(),
       accept: 'application/json',
     );
-    if (exchange != null) {
-      exchange.stage = path == 'images/models'
-          ? 'image_catalog' : 'image_generation';
-      exchange.playerEventId = playerEventId;
-    }
+    exchange.stage = path == 'images/models'
+        ? 'image_catalog' : 'image_generation';
+    exchange.playerEventId = playerEventId;
 
     Object? failure;
     try {
@@ -173,7 +171,7 @@ abstract class _HttpImageProvider implements ImageGenerationProvider {
       try {
         response = await _client.send(request).timeout(
             const Duration(minutes: 5));
-        exchange?.statusCode = response.statusCode;
+        exchange.statusCode = response.statusCode;
       } on ImageGenerationFailure {
         rethrow;
       } catch (_) {
@@ -206,7 +204,7 @@ abstract class _HttpImageProvider implements ImageGenerationProvider {
       } catch (_) {
         // Do not export malformed or private upstream response data.
       }
-      exchange?.addRedactedResponseSummary(
+      exchange.addRedactedResponseSummary(
         _safeResponseMetadata(parsed, path, bytes.length),
         actualBytes: bytes.length,
       );
@@ -232,13 +230,11 @@ abstract class _HttpImageProvider implements ImageGenerationProvider {
       failure = error;
       rethrow;
     } finally {
-      if (exchange != null) {
-        exchange.complete(error: failure?.toString());
-        try {
-          onExchangeCaptured?.call(exchange);
-        } catch (_) {
-          // Diagnostic storage never changes a billed image outcome.
-        }
+      exchange.complete(error: failure?.toString());
+      try {
+        onExchangeCaptured?.call(exchange);
+      } catch (_) {
+        // Diagnostic storage never changes a billed image outcome.
       }
     }
   }
