@@ -109,17 +109,45 @@ class AppResetService {
         apiKey: defaultOuKey,
       ),
     ];
+    var collision = 0;
     for (final profile in savedCustom) {
-      // Managed profiles are rebuilt from the retained OpenUncensored vault.
-      if (profile.id == 'default' ||
-          profile.id.startsWith('openuncensored-managed-') ||
-          (profile.apiKey == defaultOuKey &&
-              profile.baseUrl.replaceFirst(RegExp(r'/+$'), '') ==
-                  defaultAiBaseUrl)) {
-        continue;
+      // Skip only credentials already retained by the vault or the default
+      // profile. Never silently drop a different key under a managed ID.
+      final alreadyRetained = (profile.apiKey == defaultOuKey &&
+          profile.baseUrl.replaceFirst(RegExp(r'/+
+    final restoredVault = OuVaultState(
+      keys: [
+        for (final key in oldVault.keys)
+          StoredOuKey(
+            id: key.id, secret: key.secret,
+            addedAt: key.addedAt, name: key.name,
+          ),
+      ],
+      activeKeyId: active?.id,
+    );
+
+    // Persist credentials *before* erasing other stores. Never deleteAll()
+    // in secure storage: a failed rewrite could permanently lose API keys.
+    await _vault.write(restoredVault);
+    await _profiles.write(AiProfilesState(
+      profiles: restoredProfiles, selectedId: 'default',
+    ));
+    await _clearOtherSecureEntries();
+    await _closeDatabase();
+    await _clearLocalData();
+    await _clearPreferences();
+  }
+}
+), '') ==
+              defaultAiBaseUrl) ||
+          oldVault.keys.any((key) => key.secret == profile.apiKey);
+      if (alreadyRetained) continue;
+      var id = profile.id;
+      while (restoredProfiles.any((saved) => saved.id == id)) {
+        id = 'retained-profile-${collision++}';
       }
       restoredProfiles.add(AiProfile(
-        id: profile.id, name: profile.name,
+        id: id, name: profile.name,
         baseUrl: profile.baseUrl, model: profile.model,
         apiKey: profile.apiKey,
       ));
