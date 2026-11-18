@@ -129,10 +129,9 @@ void main() {
     final prompt=validatedImagePrompt(selected,director,
       style:'gravure sombre',
       negativePrompt:'sous-titres, textes, filigranes');
-    expect(prompt,contains('Style graphique : gravure sombre'));
-    expect(prompt,contains('EXCLUSIONS VISUELLES : sous-titres'));
-    expect(prompt,contains('sans bulles'));
-    expect(prompt,contains('Action visible : Il ferme un tiroir'));
+    expect(prompt,contains('Style : gravure sombre'));
+    expect(prompt,contains('À exclure : sous-titres'));
+    expect(prompt,contains('Action : Il ferme un tiroir'));
     expect(prompt,isNot(contains('Texte établi')));
     expect(prompt,isNot(contains('Je regarde Léa Monel')));
     expect(prompt,isNot(contains('Soren referme lentement le tiroir derrière lui.')));
@@ -188,7 +187,7 @@ void main() {
     };
     final direction=VisualDirection.parse(jsonEncode(data),selected);
     expect(validatedImagePrompt(selected,direction),
-      contains('Action visible : Elle reste immobile'));
+      contains('Action : Elle reste immobile'));
     expect(VisualDirection.parse(
       jsonEncode({...data,'illustratable':false}),selected).visualSubject,
       'La gardienne');
@@ -223,9 +222,9 @@ void main() {
       }],
     }), scene);
     final prompt = validatedImagePrompt(scene, direction);
-    expect(prompt, contains('Personnage party:boulangere (Boulangère)'));
-    expect(prompt, contains('identité : Cheveux bruns et yeux verts'));
-    expect(prompt, contains('apparence actuelle : Tablier beige'));
+    expect(prompt, contains('Apparence de Boulangère :'));
+    expect(prompt, contains('Cheveux bruns et yeux verts'));
+    expect(prompt, contains(' ; Tablier beige'));
     expect(() => VisualDirection.parse(jsonEncode({
       'shot':'medium', 'angle':'eye_level', 'focusIds':<String>[],
       'composition':'centered', 'lighting':'soft', 'palette':'warm',
@@ -406,10 +405,13 @@ void main() {
     expect(direction.angle, 'three_quarter');
     expect(direction.mustShow, hasLength(2));
     final prompt = validatedImagePrompt(selected, direction);
-    expect(prompt, contains('POSITION DES CORPS ET CONTACTS'));
-    expect(prompt, contains('ÉLÉMENTS IMPÉRATIFS À MONTRER'));
-    expect(prompt.indexOf('ACTION PRIORITAIRE'),
-        lessThan(prompt.indexOf('Style graphique')));
+    expect(prompt, contains('Pose et contacts :'));
+    expect(prompt, contains('Détails visibles :'));
+    expect(prompt.indexOf('Action :'),
+        lessThan(prompt.indexOf('Décor :')));
+    expect(prompt, isNot(contains('ACTION PRIORITAIRE')));
+    expect(prompt, isNot(contains('Personnage naelle')));
+    expect(prompt.length, lessThan(800));
     expect(prompt, isNot(contains('Je regarde Naëlle s’accroupir.')));
     expect(() => VisualDirection.parse(jsonEncode({
       'shot': 'medium_full', 'angle': 'three_quarter',
