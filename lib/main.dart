@@ -446,22 +446,17 @@ class _HomePageState extends State<HomePage> {
         final AiUsageStore? usageStore =
             storage is AiUsageStore ? storage as AiUsageStore : null;
         final creditedNarratorExchanges = <int>{};
-        void captureExchange(AiExchange exchange) {
-          // The usage ledger is separate from bounded, purgeable diagnostics.
-          // A tool round is one billed LLM request, not another fee per tool.
-          final usage = AiUsageRecord.fromExchange(session.id, exchange);
-          // Freeze the payload synchronously: queued SQLite writes must not
-          // accidentally serialize a later mutation of the same HTTP record.
+        void persistExchange(AiExchange exchange, {bool recordUsage = true}) {
+          // Freeze the payload before it enters the async SQLite write queue.
+          // Image requests have a separate usage ledger and must not be
+          // double-counted as narration or as paid image operations.
           final diagnosticJson = exchange.exportJson();
-          if ((exchange.stage == 'narrator_structured' ||
-              (exchange.stage?.startsWith('narrator_tool_round_') ?? false)) &&
-              creditedNarratorExchanges.add(
-                  exchange.createdAtUtc.microsecondsSinceEpoch)) {
-            final key = _credits.active;
-            if (key != null) unawaited(_credits.refresh(key.id));
-          }
+          final usage = recordUsage
+              ? AiUsageRecord.fromExchange(session.id, exchange) : null;
           writes = writes.then((_) async {
-            if (usageStore != null) await usageStore.putUsage(usage);
+            if (usage != null && usageStore != null) {
+              await usageStore.putUsage(usage);
+            }
             final retention =
                 await const AiDiagnosticsRetentionPreferences().limit();
             if (retention == 0) return;
@@ -475,11 +470,24 @@ class _HomePageState extends State<HomePage> {
               retention,
             );
           }).catchError((Object failure, StackTrace stackTrace) {
-            AppLogger.error('Comptabilisation IA non enregistrée',
+            AppLogger.error('Diagnostic IA non enregistré',
                 component: 'diagnostics', error: failure,
                 stackTrace: stackTrace);
           });
         }
+        void captureExchange(AiExchange exchange) {
+          // A tool round is one billed LLM request, not one fee per tool.
+          if ((exchange.stage == 'narrator_structured' ||
+              (exchange.stage?.startsWith('narrator_tool_round_') ?? false)) &&
+              creditedNarratorExchanges.add(
+                  exchange.createdAtUtc.microsecondsSinceEpoch)) {
+            final key = _credits.active;
+            if (key != null) unawaited(_credits.refresh(key.id));
+          }
+          persistExchange(exchange);
+        }
+        void captureIllustrationExchange(AiExchange exchange) =>
+            persistExchange(exchange, recordUsage: false);
         _liveMemory = storage is LiveMemoryStore &&
                 storage is NarrativeSnapshotStore
             ? LiveMemoryCoordinator(
@@ -582,6 +590,8 @@ class _HomePageState extends State<HomePage> {
               ?? Future<void>.value(),
           files: LocalIllustrationFiles(),
           usage: store is AiUsageStore ? store as AiUsageStore : null,
+          diagnostics: _aiDiagnostics,
+          onExchangeCaptured: captureIllustrationExchange,
           onOpenUncensoredCharge: () {
             final active = _credits.active;
             if (active != null) unawaited(_credits.refresh(active.id));
