@@ -172,13 +172,16 @@ class IllustrationController extends ChangeNotifier {
             ));
 
   Future<VisualDirection> _directScene(
-      VisualScene scene, AiConnectionBinding endpoint) async {
+      VisualScene scene, AiConnectionBinding endpoint, {
+      required String style, required String negativePrompt,
+      }) async {
     final exchanges = <AiExchange>[];
     Object? failure;
     try {
       Future<VisualDirection> action() => const VisualDirector().direct(
         scene: scene, provider: endpoint.provider,
         connection: endpoint.configuration,
+        style: style, negativePrompt: negativePrompt,
       );
       if (diagnostics == null) return await action();
       return await diagnostics!.captureDuring(action, exchanges.add);
@@ -199,6 +202,23 @@ class IllustrationController extends ChangeNotifier {
       }
     }
   }
+
+  String _combinedNegativePrompt(
+      VisualDirection direction, String bookNegativePrompt) =>
+      [direction.negativePrompt, bookNegativePrompt]
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .join(', ');
+
+  List<Map<String, String>> _appearanceProposals(
+      VisualDirection direction) => [
+        for (final appearance in direction.appearances)
+          {
+            'id': appearance.id,
+            'identity': appearance.identity,
+            'current': appearance.current,
+          },
+      ];
 
   String _providerId(AiProfile profile) {
     if (profile.kind != AiProviderKind.customAi ||
@@ -261,7 +281,8 @@ class IllustrationController extends ChangeNotifier {
       _activities[intentId] = IllustrationActivity.directing;
       _notify();
       directorInvoked = true;
-      final direction = await _directScene(scene, endpoint);
+      final direction = await _directScene(scene, endpoint,
+          style: art.style, negativePrompt: art.negativePrompt);
       await _directionUsage(start: start, failed: false);
       directorRecorded = true;
       final prompt = validatedImagePrompt(scene, direction,
@@ -274,7 +295,10 @@ class IllustrationController extends ChangeNotifier {
         sourceHash: scene.sourceHash, state: IllustrationJobState.ready,
         provider: 'director', model: options.directorProfileId,
         createdAtUtc: DateTime.now().toUtc(),
-        prompt: prompt, negativePrompt: art.negativePrompt,
+        prompt: prompt,
+        negativePrompt: _combinedNegativePrompt(
+            direction, art.negativePrompt),
+        appearanceProposals: _appearanceProposals(direction),
       );
       if (!await records.saveIllustrationIfCurrent(record)) {
         throw StateError('La scène a changé pendant la préparation.');
@@ -315,7 +339,8 @@ class IllustrationController extends ChangeNotifier {
       throw const FormatException('Le prompt doit contenir de 20 à 6000 caractères.');
     }
     final edited = record.copyWith(
-        prompt: value, state: IllustrationJobState.ready);
+        prompt: value, state: IllustrationJobState.ready,
+        clearAppearanceProposals: true);
     if (!await records.saveIllustrationIfCurrent(edited)) {
       throw StateError('La scène a été modifiée ou supprimée.');
     }
@@ -358,6 +383,19 @@ class IllustrationController extends ChangeNotifier {
           sourceQuote: 'Apparence validée dans un encart image',
         ));
       }
+    }
+
+    // Only the player's approval makes the director's visual proposals
+    // canonical for this Party. Edits discard proposals rather than silently
+    // confirming stale identity or clothing details.
+    for (final appearance in record.appearanceProposals) {
+      final actorId = appearance['id'] ?? '';
+      final name = scene.partyCharacters[actorId] ??
+          scene.characters.where((c) => c.id == actorId)
+              .map((c) => c.name).firstOrNull;
+      if (name == null) continue;
+      addAppearance(actorId, name,
+          appearance['identity'] ?? '', appearance['current'] ?? '');
     }
 
     // Human-readable image prompts must not expose internal character IDs.
@@ -476,6 +514,10 @@ class IllustrationController extends ChangeNotifier {
         provider: providerId, model: capability.id,
         createdAtUtc: DateTime.now().toUtc(),
         prompt: preparedPrompt ?? '',
+        negativePrompt: preparedPrompt != null
+            ? prepared!.negativePrompt : '',
+        appearanceProposals: preparedPrompt != null
+            ? prepared!.appearanceProposals : const [],
       );
       if (!await records.saveIllustrationIfCurrent(current)) {
         throw StateError('Cette scène a été modifiée ou supprimée.');
@@ -485,11 +527,13 @@ class IllustrationController extends ChangeNotifier {
       _notify();
 
       late final String prompt;
+      VisualDirection? direction;
       if (preparedPrompt != null) {
         prompt = preparedPrompt;
       } else {
         directorInvoked = true;
-        final direction = await _directScene(scene, directorConnection!);
+        direction = await _directScene(scene, directorConnection!,
+            style: art.style, negativePrompt: art.negativePrompt);
         await _directionUsage(start: start, failed: false);
         directorRecorded = true;
         prompt = validatedImagePrompt(scene, direction,
@@ -497,7 +541,12 @@ class IllustrationController extends ChangeNotifier {
       }
       current = current.copyWith(
           state: IllustrationJobState.generating, prompt: prompt,
-          negativePrompt: art.negativePrompt);
+          negativePrompt: direction == null
+              ? prepared!.negativePrompt
+              : _combinedNegativePrompt(direction, art.negativePrompt),
+          appearanceProposals: direction == null
+              ? prepared!.appearanceProposals
+              : _appearanceProposals(direction));
       if (!await records.saveIllustrationIfCurrent(current)) {
         throw StateError('Scène invalidée avant la génération.');
       }
