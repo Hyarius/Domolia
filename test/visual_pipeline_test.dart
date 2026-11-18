@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:domolia/books/book_lore.dart';
 import 'package:domolia/chat/chat_protocol.dart';
 import 'package:domolia/illustration/visual_pipeline.dart';
+import 'package:domolia/memory/live_memory.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -201,6 +202,35 @@ void main() {
         'identity':'Cheveux bruns', 'current':'Tablier blanc',
       }],
     }), scene), throwsFormatException);
+  });
+
+  test('Confirmed visual details survive a pronoun-only subsequent scene', () {
+    final events = <ChatTimelineEvent>[
+      const ChatEntry(id:1, speaker:ChatSpeaker.character,
+          name:'Boulangère', text:'Bonjour.'),
+      const ChatEntry(id:2, speaker:ChatSpeaker.narrator,
+          name:'Narrateur', text:'Elle s’approche du comptoir.'),
+      const ChatIllustrationIntent(id:3, playerEventId:1,
+          description:'Elle ajuste sa tenue.'),
+    ];
+    final memory = <LiveMemoryFact>[
+      const LiveMemoryFact(
+        id:'visual:party:boulangere:identity',
+        category:'character', entityId:'party:boulangere',
+        label:'Boulangère', field:'visual_identity',
+        text:'Cheveux bruns et yeux verts',
+        kind:'stable', certainty:'confirmed', visibility:'player',
+        importance:4, sourceTurnId:1,
+        sourceSide:'manual', sourceQuote:'Apparence validée',
+      ),
+    ];
+    final selected = const VisualSceneSelector().select(
+      intent: events.last as ChatIllustrationIntent,
+      timeline:events, lore:const BookLore(), memory:memory,
+    );
+    expect(selected.memoryFacts.join(' '),
+        contains('Cheveux bruns et yeux verts'));
+    expect(selected.evidence, contains('Boulangère (visual_identity)'));
   });
 
   test('Rewind removes source and changes hash of same ID', () {

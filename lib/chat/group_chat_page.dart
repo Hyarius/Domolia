@@ -477,9 +477,10 @@ class _GroupChatPageState extends State<GroupChatPage> {
     final intent = illustrations.lastUnillustratedIntent;
     if (intent != null) {
       final state = illustrations.forIntent(intent)?.state;
-      if (state == IllustrationJobState.ready ||
-          state == IllustrationJobState.approved) {
-        _showExportMessage('Description disponible dans l’encart image.');
+      if (state == IllustrationJobState.approved) {
+        await _generateImage(intent);
+      } else if (state == IllustrationJobState.ready) {
+        _showExportMessage('Validez la description dans l’encart image.');
       } else {
         await illustrations.prepare(intent);
       }

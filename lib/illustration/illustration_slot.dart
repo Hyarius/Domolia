@@ -370,8 +370,9 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
                 style: const TextStyle(color: Colors.redAccent)),
             ],
             const SizedBox(height: 8),
-            if (approved || record?.state == IllustrationJobState.failed &&
-                    record!.prompt.isNotEmpty)
+            if (approved ||
+                (record?.state == IllustrationJobState.failed &&
+                    record?.prompt.isNotEmpty == true))
               OutlinedButton.icon(
                 key: const ValueKey('imageGenerate'),
                 onPressed: working ? null : widget.onGenerate,
