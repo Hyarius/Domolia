@@ -491,7 +491,7 @@ String validatedImagePrompt(VisualScene scene, VisualDirection direction,
         'l’action par une pose passive.',
     if (negativePrompt.trim().isNotEmpty)
       'EXCLUSIONS VISUELLES : ' + negativePrompt.trim() + '.',
-    'Image seule, sans texte incrusté, bulles, légendes, '
-        'filigrane ni interface.',
+    'Image seule, sans texte incrusté, sans bulles, sans légendes, '
+        'sans filigrane ni interface.',
   ].join('\n');
 }
