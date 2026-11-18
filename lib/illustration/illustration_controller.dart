@@ -335,22 +335,17 @@ class IllustrationController extends ChangeNotifier {
           .singleWhere((event) => event.id == intentId),
       timeline: timeline(), lore: lore(), memory: memory(),
     );
-    final pattern = RegExp(
-      r'^Personnage ([^ ]+) \(([^)]+)\) — identité : (.+) ; apparence actuelle : (.+)\.$',
-      multiLine: true,
-    );
     final proposals = <LiveMemoryFact>[];
     final allowed = {
       ...scene.partyCharacters.keys,
       ...scene.characters.map((c) => c.id),
     };
-    for (final match in pattern.allMatches(record.prompt)) {
-      final actorId = match.group(1)!;
-      final name = match.group(2)!;
-      if (!allowed.contains(actorId)) continue;
+    void addAppearance(String actorId, String name,
+        String identity, String current) {
+      if (!allowed.contains(actorId)) return;
       for (final (field, value, kind) in [
-        ('visual_identity', match.group(3)!, 'stable'),
-        ('visual_current', match.group(4)!, 'state'),
+        ('visual_identity', identity, 'stable'),
+        ('visual_current', current, 'state'),
       ]) {
         if (value.trim().isEmpty || value.length > 800) continue;
         proposals.add(LiveMemoryFact(
@@ -363,6 +358,34 @@ class IllustrationController extends ChangeNotifier {
           sourceQuote: 'Apparence validée dans un encart image',
         ));
       }
+    }
+
+    // Human-readable image prompts must not expose internal character IDs.
+    // Resolve names back to IDs only if the name identifies exactly one actor.
+    final appearances = RegExp(
+      r'^Apparence de ([^:\n]+) : (.+?) ; (.+?)\.$',
+      multiLine: true,
+    );
+    for (final match in appearances.allMatches(record.prompt)) {
+      final name = match.group(1)!.trim();
+      final ids = <String>[
+        for (final entry in scene.partyCharacters.entries)
+          if (entry.value == name) entry.key,
+        for (final character in scene.characters)
+          if (character.name == name) character.id,
+      ].toSet();
+      if (ids.length != 1) continue;
+      addAppearance(ids.single, name, match.group(2)!, match.group(3)!);
+    }
+
+    // Older already-prepared prompts remain approvable after an update.
+    final legacyAppearances = RegExp(
+      r'^Personnage ([^ ]+) \(([^)]+)\) — identité : (.+) ; apparence actuelle : (.+)\.$',
+      multiLine: true,
+    );
+    for (final match in legacyAppearances.allMatches(record.prompt)) {
+      addAppearance(match.group(1)!, match.group(2)!,
+          match.group(3)!, match.group(4)!);
     }
     if (proposals.isNotEmpty) await onAcceptVisualFacts?.call(proposals);
     final approved = record.copyWith(state: IllustrationJobState.approved);
