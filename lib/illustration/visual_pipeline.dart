@@ -403,12 +403,13 @@ de possessions ou de vêtements qui modifieraient la scène.
 
 CADRAGE ET DÉCOR
 Choisis un cadrage, un angle, une composition et une lumière au service
-du geste précis. Ne remplis JAMAIS un décor inconnu avec du mobilier,
+du geste précis. ne remplis JAMAIS un décor inconnu avec du mobilier,
 de l'architecture ou des accessoires inventés. Utilise un fond blanc,
 neutre ou épuré lorsqu'aucun lieu n'est décrit. En style manga ou BD,
 un fond blanc et quelques traits de mouvement conviennent.
 En style réaliste, un arrière-plan neutre ou flou est acceptable.
-Ne conserve du décor connu que les éléments nécessaires à l'action.
+Ne conserve du décor connu que les éléments nécessaires à l'action,
+par exemple une porte et son encadrement lorsqu'une personne franchit un seuil.
 Une scène située à l'intérieur ne devient pas une scène extérieure.
 
 SORTIE
