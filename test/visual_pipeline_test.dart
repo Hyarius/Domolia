@@ -422,11 +422,10 @@ void main() {
     expect(direction.appearances.single.id,'naelle');
     final prompt = validatedImagePrompt(selected, direction);
     expect(prompt, startsWith(direction.prompt));
-    expect(prompt, contains('Main droite'.toLowerCase().replaceFirst('m', 'm'))
-        .or(contains('main droite')));
+    expect(prompt, contains('main droite'));
     expect(prompt, contains('main gauche'));
-    expect(prompt.indexOf('Naëlle saisit'), lessThan(
-        prompt.indexOf('parquet sombre de l’atelier'))); 
+    expect(prompt, contains('main gauche saisissant un tissu'));
+    expect(prompt, contains('parquet sombre de l’atelier'));
     expect(prompt, isNot(contains('ACTION PRIORITAIRE')));
     expect(prompt, isNot(contains('Personnage naelle')));
     expect(prompt, isNot(contains('Je regarde Naëlle s’accroupir.')));
