@@ -193,7 +193,7 @@ class BookEditorPageState extends State<BookEditorPage> {
         content: const Text(
           'Le style et le rythme du narrateur, le niveau de détail, '
           'les préférences d’illustration et les options graphiques '
-          'reviendront à leurs valeurs par défaut.\\n\\n'
+          'reviendront à leurs valeurs par défaut.\n\n'
           'Le titre, la couverture, les premières scènes, le Lore, '
           'le mode NSFW, les connexions API et toutes les Parties '
           'existantes seront conservés.'),
