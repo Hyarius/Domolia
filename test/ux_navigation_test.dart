@@ -382,7 +382,7 @@ void main() {
     expect(find.text('Réinitialiser Domolia ?'), findsOneWidget);
     expect(find.textContaining('clés API enregistrées'), findsOneWidget);
     expect(find.textContaining('Vos Livres, Parties'), findsOneWidget);
-    expect(find.text('Réinitialiser les réglages'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Réinitialiser les réglages'), findsOneWidget);
     expect(count, 0);
     await tester.tap(find.byKey(const ValueKey('resetAppCancel')));
     await tester.pumpAndSettle();
