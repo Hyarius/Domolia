@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../ai/ai_diagnostics.dart';
+import '../ai/ai_provider.dart';
 import '../theme/domolia_theme.dart';
 import '../illustration/illustration_controller.dart';
 import '../illustration/illustration_slot.dart';
@@ -677,9 +678,22 @@ class _GroupChatPageState extends State<GroupChatPage> {
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text(
-                          chat.error!,
-                          style: const TextStyle(color: Color(0xFFFFE0E0)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              chat.errorKind?.label ?? 'Narration interrompue',
+                              key: const ValueKey('chatErrorCategory'),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFFFE0E0),
+                              ),
+                            ),
+                            Text(
+                              chat.error!,
+                              style: const TextStyle(color: Color(0xFFFFE0E0)),
+                            ),
+                          ],
                         ),
                       ),
                       if (!chat.busy)
