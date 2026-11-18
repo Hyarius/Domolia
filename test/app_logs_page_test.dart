@@ -53,6 +53,25 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Appels IA filter displays only AI exchanges', (tester) async {
+    final logger = AppLogger(storage: MemoryAppLogStorage());
+    logger.log(AppLogLevel.info, 'Démarrage', component: 'app');
+    logger.log(AppLogLevel.info, 'Appel IA lancé', component: 'ai.http',
+        details: {'stage': 'image_direction'});
+    await logger.flush();
+
+    await tester.pumpWidget(MaterialApp(
+      theme: DomoliaTheme.dark,
+      home: Scaffold(body: AppLogsPage(logger: logger)),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('logsAiOnly')));
+    await tester.pumpAndSettle();
+    expect(find.text('Démarrage'), findsNothing);
+    expect(find.text('Appel IA lancé'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Copy action copies an unmodified JSONL snapshot', (tester) async {
     final logger = AppLogger(storage: MemoryAppLogStorage());
     logger.log(AppLogLevel.error, 'Échec de lecture', component: 'cover');
