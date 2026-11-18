@@ -220,9 +220,15 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.byKey(const ValueKey('imageApprovePrompt')),findsOneWidget);
     expect(image.calls,0);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('imageApprovePrompt')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('imageApprovePrompt')));
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.byKey(const ValueKey('imageGenerate')),findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('imageGenerate')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('imageGenerate')));
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.byKey(const ValueKey('imageConfirmGenerate')),
@@ -231,6 +237,8 @@ void main() {
     await tester.tap(find.text('Annuler').last);
     await tester.pump(const Duration(milliseconds: 500));
     expect(image.calls,0);
+    await tester.ensureVisible(find.byKey(const ValueKey('imageGenerate')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('imageGenerate')));
     await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.byKey(const ValueKey('imageConfirmGenerate')));
@@ -238,6 +246,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     expect(image.calls,1);
     expect(find.byKey(const ValueKey('chatGeneratedImage')),findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('chatGeneratedImage')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('chatGeneratedImage')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('imagePromptExport')),findsOneWidget);
