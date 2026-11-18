@@ -275,6 +275,12 @@ class OuCreditsController extends ChangeNotifier {
     if (!applied) return false;
     final sharedId = ai.openUncensoredProfileIdFor(key.secret);
     if (!routeTasks || sharedId == null) return true;
+    // The economical preset disables the optional optimizer by default,
+    // without creating an optimizer profile or overriding a user selection.
+    if (snapshot.mode == OuQuality.economical.name &&
+        routing.profileFor(AiNarrativeTask.optimizer) == null) {
+      await routing.setProfile(AiNarrativeTask.optimizer, '#disabled');
+    }
     // Existing task selection takes precedence over the payment account's
     // suggested model. An unconfigured task may inherit the shared profile.
     for (final task in [
