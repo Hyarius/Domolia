@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
+import '../ai/ai_diagnostics.dart';
+
 /// Images are intentionally separate from text completions and ChatGPT OAuth.
 /// The caller supplies a personal API key from an existing encrypted profile.
 abstract interface class ImageGenerationProvider {
@@ -95,9 +97,47 @@ class ImageGenerationFailure implements Exception {
 }
 
 abstract class _HttpImageProvider implements ImageGenerationProvider {
-  _HttpImageProvider(this._client, this._origin);
+  _HttpImageProvider(this._client, this._origin, {
+    this.diagnostics, this.onExchangeCaptured, this.playerEventId,
+  });
   final http.Client _client;
   final Uri _origin;
+  final AiExchangeRecorder? diagnostics;
+  final void Function(AiExchange)? onExchangeCaptured;
+  final int? playerEventId;
+
+  /// Never persist response-embedded base64 images, temporary URLs or
+  /// upstream free-form error text. Keep only bounded metadata needed to
+  /// diagnose the exchange and its billing.
+  Map<String, dynamic> _safeResponseMetadata(
+      Map<String, dynamic>? data, String path, int bytes) {
+    final images = data?['data'];
+    final models = data?['models'] ?? images;
+    final ou = data?['ou'];
+    final usage = data?['usage'];
+    final error = data?['error'];
+    final code = error is Map ? error['code'] : null;
+    final safeCode = code is String &&
+            RegExp(r'^[a-zA-Z0-9_-]{1,80}$').hasMatch(code)
+        ? code : null;
+    return {
+      'imagePayloadRedacted': true,
+      'actualResponseBytes': bytes,
+      if (path == 'images/generations' && images is List)
+        'imageCount': images.length,
+      if (path == 'images/models' && models is List)
+        'modelCount': models.length,
+      if (ou is Map && ou['cost_usd'] is num)
+        'ou': {'cost_usd': ou['cost_usd']},
+      if (usage is Map && usage['prompt_tokens'] is int &&
+          usage['completion_tokens'] is int)
+        'usage': {
+          'prompt_tokens': usage['prompt_tokens'],
+          'completion_tokens': usage['completion_tokens'],
+        },
+      if (safeCode != null) 'errorCode': safeCode,
+    };
+  }
 
   Future<Map<String, dynamic>> _json(
     String method, String path, String key, [Map<String, dynamic>? body]
@@ -113,57 +153,94 @@ abstract class _HttpImageProvider implements ImageGenerationProvider {
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode(body);
     }
-    http.StreamedResponse response;
-    try {
-      response = await _client.send(request).timeout(
-          const Duration(minutes: 5));
-    } on ImageGenerationFailure {
-      rethrow;
-    } catch (_) {
-      throw const ImageGenerationFailure(
-          ImageFailureKind.timeout, 'Connexion interrompue ou délai dépassé.');
+    final exchange = diagnostics?.begin(
+      provider: id,
+      method: request.method,
+      url: request.url.toString(),
+      requestBody: request.body,
+      secret: key.trim(),
+      accept: 'application/json',
+    );
+    if (exchange != null) {
+      exchange.stage = path == 'images/models'
+          ? 'image_catalog' : 'image_generation';
+      exchange.playerEventId = playerEventId;
     }
-    // A large JSON response is expected for base64 images, but not unlimited.
-    const maxResponseBytes = 48 * 1024 * 1024;
-    final buffer = BytesBuilder(copy: false);
+
+    Object? failure;
     try {
-      await for (final chunk in response.stream.timeout(
-          const Duration(minutes: 5))) {
-        if (buffer.length + chunk.length > maxResponseBytes) {
-          throw const ImageGenerationFailure(
-              ImageFailureKind.tooLarge, 'Réponse image trop volumineuse.');
-        }
-        buffer.add(chunk);
+      http.StreamedResponse response;
+      try {
+        response = await _client.send(request).timeout(
+            const Duration(minutes: 5));
+        exchange?.statusCode = response.statusCode;
+      } on ImageGenerationFailure {
+        rethrow;
+      } catch (_) {
+        throw const ImageGenerationFailure(
+            ImageFailureKind.timeout, 'Connexion interrompue ou délai dépassé.');
       }
-    } on ImageGenerationFailure {
-      rethrow;
-    } catch (_) {
+      // A large JSON response is expected for base64 images, but not unlimited.
+      const maxResponseBytes = 48 * 1024 * 1024;
+      final buffer = BytesBuilder(copy: false);
+      try {
+        await for (final chunk in response.stream.timeout(
+            const Duration(minutes: 5))) {
+          if (buffer.length + chunk.length > maxResponseBytes) {
+            throw const ImageGenerationFailure(
+                ImageFailureKind.tooLarge, 'Réponse image trop volumineuse.');
+          }
+          buffer.add(chunk);
+        }
+      } on ImageGenerationFailure {
+        rethrow;
+      } catch (_) {
+        throw const ImageGenerationFailure(
+            ImageFailureKind.timeout, 'Téléchargement image interrompu.');
+      }
+      final bytes = buffer.takeBytes();
+      Map<String, dynamic>? parsed;
+      try {
+        final data = jsonDecode(utf8.decode(bytes));
+        if (data is Map<String, dynamic>) parsed = data;
+      } catch (_) {
+        // Do not export malformed or private upstream response data.
+      }
+      exchange?.addRedactedResponseSummary(
+        _safeResponseMetadata(parsed, path, bytes.length),
+        actualBytes: bytes.length,
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final code = response.statusCode;
+        final kind = switch (code) {
+          401 || 403 => ImageFailureKind.authentication,
+          402 => ImageFailureKind.credits,
+          400 || 422 || 451 => ImageFailureKind.refused,
+          _ => ImageFailureKind.unavailable,
+        };
+        throw ImageGenerationFailure(kind, switch (kind) {
+          ImageFailureKind.authentication => 'Clé API invalide ou non autorisée.',
+          ImageFailureKind.credits => 'Crédits insuffisants.',
+          ImageFailureKind.refused => 'Image refusée par le fournisseur.',
+          _ => 'Fournisseur d’images indisponible (HTTP $code).',
+        });
+      }
+      if (parsed != null) return parsed;
       throw const ImageGenerationFailure(
-          ImageFailureKind.timeout, 'Téléchargement image interrompu.');
+          ImageFailureKind.invalidResponse, 'Réponse du fournisseur invalide.');
+    } catch (error) {
+      failure = error;
+      rethrow;
+    } finally {
+      if (exchange != null) {
+        exchange.complete(error: failure?.toString());
+        try {
+          onExchangeCaptured?.call(exchange);
+        } catch (_) {
+          // Diagnostic storage never changes a billed image outcome.
+        }
+      }
     }
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final code = response.statusCode;
-      final kind = switch (code) {
-        401 || 403 => ImageFailureKind.authentication,
-        402 => ImageFailureKind.credits,
-        400 || 422 || 451 => ImageFailureKind.refused,
-        _ => ImageFailureKind.unavailable,
-      };
-      throw ImageGenerationFailure(kind, switch (kind) {
-        ImageFailureKind.authentication => 'Clé API invalide ou non autorisée.',
-        ImageFailureKind.credits => 'Crédits insuffisants.',
-        ImageFailureKind.refused => 'Image refusée par le fournisseur.',
-        _ => 'Fournisseur d’images indisponible (HTTP $code).',
-      });
-    }
-    try {
-      final data = jsonDecode(utf8.decode(buffer.takeBytes()));
-      if (data is Map<String, dynamic>) return data;
-    } catch (_) {
-      // Never include the raw response: it may contain secrets or images.
-    }
-    throw const ImageGenerationFailure(
-        ImageFailureKind.invalidResponse, 'Réponse du fournisseur invalide.');
   }
 
   Future<List<GeneratedImage>> _decodeImages(Map<String, dynamic> data) async {
@@ -295,8 +372,14 @@ abstract class _HttpImageProvider implements ImageGenerationProvider {
 }
 
 class OpenAiImageGenerationProvider extends _HttpImageProvider {
-  OpenAiImageGenerationProvider({http.Client? client})
-      : super(client ?? http.Client(), Uri.parse('https://api.openai.com/v1/'));
+  OpenAiImageGenerationProvider({
+    http.Client? client,
+    AiExchangeRecorder? diagnostics,
+    void Function(AiExchange)? onExchangeCaptured,
+    int? playerEventId,
+  }) : super(client ?? http.Client(), Uri.parse('https://api.openai.com/v1/'),
+          diagnostics: diagnostics, onExchangeCaptured: onExchangeCaptured,
+          playerEventId: playerEventId);
   @override
   String get id => 'openai';
 
@@ -340,9 +423,15 @@ class OpenAiImageGenerationProvider extends _HttpImageProvider {
 }
 
 class OpenUncensoredImageGenerationProvider extends _HttpImageProvider {
-  OpenUncensoredImageGenerationProvider({http.Client? client})
-      : super(client ?? http.Client(),
-          Uri.parse('https://api.openuncensored.com/v1/'));
+  OpenUncensoredImageGenerationProvider({
+    http.Client? client,
+    AiExchangeRecorder? diagnostics,
+    void Function(AiExchange)? onExchangeCaptured,
+    int? playerEventId,
+  }) : super(client ?? http.Client(),
+          Uri.parse('https://api.openuncensored.com/v1/'),
+          diagnostics: diagnostics, onExchangeCaptured: onExchangeCaptured,
+          playerEventId: playerEventId);
   @override
   String get id => 'openuncensored';
 
