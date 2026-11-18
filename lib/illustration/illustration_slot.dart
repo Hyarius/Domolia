@@ -1,6 +1,4 @@
 // ignore_for_file: prefer_interpolation_to_compose_strings
-import 'dart:typed_data';
-
 import 'package:flutter/services.dart';
 
 import 'package:file_picker/file_picker.dart';
@@ -204,7 +202,9 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
             onTap: () async {
               Navigator.pop(sheet);
               if (state == IllustrationJobState.ready &&
-                  !await _approvePrompt()) return;
+                  !await _approvePrompt()) {
+                return;
+              }
               widget.onGenerate();
             },
           ),
