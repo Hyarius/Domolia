@@ -132,6 +132,7 @@ class NarrativeChatController extends ChangeNotifier {
   ChatEntry? get preview => _draft.whereType<ChatEntry>().where((e) => e.inProgress).firstOrNull;
   bool busy = false;
   String? error;
+  AiProviderErrorKind? errorKind;
   int? promptTokens;
   int? completionTokens;
   String? modelUsed;
@@ -249,11 +250,13 @@ class NarrativeChatController extends ChangeNotifier {
     final action = text.trim();
     if (_closed || busy || _manualIllustrationInFlight || action.isEmpty) return;
     if (pendingRaw != null) {
+      errorKind = null;
       error = 'Terminez ou régénérez la réponse en attente avant de continuer.';
       _notify();
       return;
     }
     if (action.length > 4000) {
+      errorKind = null;
       error = 'Le message est trop long (maximum 4 000 caractères).';
       _notify();
       return;
@@ -1008,6 +1011,7 @@ class NarrativeChatController extends ChangeNotifier {
     final token = ++_generationToken;
     final playerId = _playerEventId!;
     error = null;
+    errorKind = null;
     busy = true;
     promptTokens = null;
     completionTokens = null;
@@ -1157,6 +1161,7 @@ class NarrativeChatController extends ChangeNotifier {
       // A cancelled or invalid draft never becomes durable.
     } on AiProviderException catch (failure) {
       error = failure.userMessage;
+      errorKind = failure.kind;
     } on FormatException catch (failure) {
       error = failure.message;
     } catch (failure, stack) {
@@ -1180,6 +1185,7 @@ class NarrativeChatController extends ChangeNotifier {
     final token = ++_generationToken;
     busy = true;
     error = null;
+    errorKind = null;
     _notify();
     try {
       await _save(_timeline, _generations);
@@ -1235,6 +1241,7 @@ class NarrativeChatController extends ChangeNotifier {
     if (_closed || busy || _lastPlayerIndex == null) return;
     final token = ++_generationToken;
     error = null;
+    errorKind = null;
     busy = true;
     promptTokens = null;
     completionTokens = null;
@@ -1385,6 +1392,7 @@ class NarrativeChatController extends ChangeNotifier {
       // A late response is never committed to this or a different session.
     } on AiProviderException catch (failure) {
       error = failure.userMessage;
+      errorKind = failure.kind;
     } on FormatException catch (failure) {
       error = failure.message;
     } catch (failure, stack) {
@@ -1408,6 +1416,7 @@ class NarrativeChatController extends ChangeNotifier {
     ++_generationToken;
     AppLogger.info('Génération interrompue', component: 'chat');
     error = 'Génération interrompue.';
+    errorKind = null;
     busy = false;
     unawaited(_subscription?.cancel() ?? Future<void>.value());
     unawaited(_toolSubscription?.cancel() ?? Future<void>.value());
