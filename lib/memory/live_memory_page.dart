@@ -174,7 +174,11 @@ class _LiveMemoryPageState extends State<LiveMemoryPage> {
   Widget _factTile(LiveMemoryFact fact) => Card(
     child: ExpansionTile(
       key: ValueKey('memoryFact-${fact.id}'),
-      title: Text(fact.label),
+      title: Text(fact.field == 'visual_identity'
+          ? 'Identité visuelle'
+          : fact.field == 'visual_current'
+          ? 'Apparence actuelle'
+          : fact.label),
       subtitle: Text(fact.text, maxLines: 2, overflow: TextOverflow.ellipsis),
       leading: Icon(
         fact.pinned ? Icons.push_pin : Icons.bookmark_outline,
@@ -369,10 +373,31 @@ class _LiveMemoryPageState extends State<LiveMemoryPage> {
                   '${facts.where((f) => f.category == category.key).length} souvenirs',
                 ),
                 children: [
-                  for (final fact in facts.where(
-                    (f) => f.category == category.key,
-                  ))
-                    _factTile(fact),
+                  if (category.key == 'character')
+                    for (final entity in facts
+                        .where((f) => f.category == 'character')
+                        .map((f) => f.entityId).toSet())
+                      Card(
+                        child: ExpansionTile(
+                          key: ValueKey('memoryCharacter-$entity'),
+                          title: Text(facts.firstWhere((f) =>
+                              f.category == 'character' &&
+                              f.entityId == entity).label),
+                          subtitle: const Text(
+                              'Faits narratifs et apparence visuelle'),
+                          children: [
+                            for (final fact in facts.where((f) =>
+                                f.category == 'character' &&
+                                f.entityId == entity))
+                              _factTile(fact),
+                          ],
+                        ),
+                      )
+                  else
+                    for (final fact in facts.where(
+                      (f) => f.category == category.key,
+                    ))
+                      _factTile(fact),
                 ],
               ),
         ],
