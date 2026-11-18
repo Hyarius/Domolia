@@ -561,25 +561,22 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
     }
     const titles = <AiNarrativeTask, String>{
       AiNarrativeTask.narrator: 'Narrateur',
-      AiNarrativeTask.jsonifier: 'JSONificateur',
-
-      AiNarrativeTask.memory: 'Extraction mémoire (à chaque tour)',
+      AiNarrativeTask.memory: 'Mémoire automatique',
     };
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SizedBox(height: DomoliaSpacing.compact),
       const Divider(),
       const SizedBox(height: DomoliaSpacing.compact),
-      const Text('IA par tâche', style: TextStyle(
+      const Text('Modèles et budgets par tâche', style: TextStyle(
         color: DomoliaColors.goldLight, fontSize: 19,
         fontWeight: FontWeight.w700)),
       const SizedBox(height: 8),
       const Text('Choisissez parmi les profils déjà configurés. '
         'Ces paramètres s’appliquent par défaut à toutes les Parties ; '
-        'chaque conversation peut les surcharger. ''Le contexte initial du Livre est préparé localement, sans IA de compression.',
+        'chaque Partie peut les surcharger.',
         style: TextStyle(color: DomoliaColors.muted)),
       const SizedBox(height: DomoliaSpacing.field),
-      for (final task in AiNarrativeTask.values.where(
-          (task) => task != AiNarrativeTask.optimizer)) ...[
+      for (final task in AiNarrativeTask.active) ...[
         Builder(builder: (context) {
           final chosen = routing.profileFor(task);
           final known = chosen != null &&
@@ -595,7 +592,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                   : null),
             items: [
               DropdownMenuItem(value: '', child: Text(
-                task == AiNarrativeTask.jsonifier || task == AiNarrativeTask.memory
+                task == AiNarrativeTask.memory
                     ? 'Même IA que le narrateur' : 'Profil du Livre')),
               for (final profile in controller.profiles)
                 DropdownMenuItem(value: profile.id, child: Text(
@@ -720,7 +717,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                 const SizedBox(height: 8),
               ],
               const Text(
-                'Fournisseur IA',
+                'Profils IA',
                 style: TextStyle(
                   color: DomoliaColors.goldLight,
                   fontSize: 25,
@@ -736,7 +733,6 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               const SizedBox(height: DomoliaSpacing.section),
               _profileAndStatus(c),
               const SizedBox(height: DomoliaSpacing.section),
-              _taskProfiles(c),
               if (c.selectedKind == AiProviderKind.customAi) ...[
               TextField(
                 controller: _base,
@@ -999,6 +995,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                   key: const ValueKey('aiTestReply'),
                 ),
               ],
+              _taskProfiles(c),
             ],
           ),
         );

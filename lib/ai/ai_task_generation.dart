@@ -1,7 +1,13 @@
 import 'dart:convert';
 
 /// Controls for the narrative AI calls, independent from credentials and models.
-enum AiNarrativeTask { narrator, jsonifier, optimizer, memory }
+enum AiNarrativeTask {
+  narrator, jsonifier, optimizer, memory;
+
+  /// Legacy task keys remain readable; only these tasks are configurable
+  /// in the current narrative UI.
+  static const active = [narrator, memory];
+}
 
 /// A task uses this configuration unless a Party overrides an individual field.
 class AiTaskGenerationSettings {

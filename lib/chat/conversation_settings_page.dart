@@ -598,7 +598,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                 fontSize: 21, fontWeight: FontWeight.bold))),
         ]),
         const SizedBox(height: 24),
-        const Text('Connexion IA', style: TextStyle(
+        const Text('Narration et illustrations', style: TextStyle(
             color: DomoliaColors.goldLight, fontSize: 18)),
         if (!_loaded)
           const LinearProgressIndicator()
@@ -672,6 +672,11 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                   onChanged: _saving || widget.chat.busy
                       ? null : _setIllustrationMode,
                 ),
+                const SizedBox(height: DomoliaSpacing.section),
+                const Divider(),
+                const SizedBox(height: DomoliaSpacing.compact),
+                const Text('Mémoire narrative', style: TextStyle(
+                  color: DomoliaColors.goldLight, fontSize: 18)),
                 const SizedBox(height: DomoliaSpacing.field),
                 SwitchListTile(
                   key: const ValueKey('conversationMemoryEnabled'),
@@ -689,7 +694,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                   label: 'Mémoire — profil de cette Partie',
                   value: _memoryProfile,
                   profiles: profiles,
-                  inheritedLabel: 'Même IA que le narrateur (défaut)',
+                  inheritedLabel: 'Profil mémoire par défaut',
                   additional: const [
                     DropdownMenuItem(value: '#disabled',
                         child: Text('Désactiver cette tâche')),
@@ -697,7 +702,14 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                         child: Text('Même IA que le narrateur')),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: DomoliaSpacing.field),
+                OutlinedButton.icon(
+                  key: const ValueKey('conversationOpenMemory'),
+                  onPressed: widget.onOpenMemory,
+                  icon: const Icon(Icons.auto_stories_outlined),
+                  label: const Text('Consulter et corriger la mémoire'),
+                ),
+                const SizedBox(height: DomoliaSpacing.field),
                 Builder(builder: (context) {
                   final inherited = widget.taskRouting?.profileFor(
                     AiNarrativeTask.narrator,
@@ -723,13 +735,12 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                 const SizedBox(height: 16),
                 const Divider(),
                 const SizedBox(height: DomoliaSpacing.compact),
-                const Text('Budget et raisonnement par tâche',
-                  style: TextStyle(color: DomoliaColors.goldLight,
-                      fontSize: 17)),
-                const SizedBox(height: DomoliaSpacing.compact),
-                for (final task in AiNarrativeTask.values.where(
-                    (task) => task != AiNarrativeTask.jsonifier &&
-                        task != AiNarrativeTask.optimizer)) ...[
+                ExpansionTile(
+                  key: const ValueKey('conversationAdvancedSettings'),
+                  title: const Text('Réglages IA avancés'),
+                  subtitle: const Text('Budgets et contexte du Livre'),
+                  children: [
+                for (final task in AiNarrativeTask.active) ...[
                   _taskGenerationControls(task),
                   const SizedBox(height: DomoliaSpacing.field),
                 ],
@@ -752,28 +763,17 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Le contexte de départ est préparé localement, sans appel '
-                   'à une IA de compression. Les scénarios détaillés restent '
-                   'dans le Livre et sont recherchés au besoin. Le profil '
-                   'd’optimiseur historique n’est plus utilisé.',
+                  'Le contexte est préparé localement. Cette action '
+                  'ne consomme aucun crédit IA.',
                   style: TextStyle(color: DomoliaColors.muted),
+                ),
+                  ],
                 ),
               ],
             );
           },
         ),
-        const SizedBox(height: DomoliaSpacing.section),
-        const Divider(),
-        const SizedBox(height: DomoliaSpacing.compact),
-        const Text('Mémoire narrative', style: TextStyle(
-            color: DomoliaColors.goldLight, fontSize: 18)),
-        const SizedBox(height: DomoliaSpacing.field),
-        OutlinedButton.icon(
-          key: const ValueKey('conversationOpenMemory'),
-          onPressed: widget.onOpenMemory,
-          icon: const Icon(Icons.auto_stories_outlined),
-          label: const Text('Consulter et corriger la mémoire'),
-        ),
+ 
         const SizedBox(height: DomoliaSpacing.section),
         const Divider(),
         const SizedBox(height: DomoliaSpacing.compact),
@@ -781,7 +781,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
         const SizedBox(height: DomoliaSpacing.section),
         const Divider(),
         const SizedBox(height: DomoliaSpacing.compact),
-        const Text('Historique', style: TextStyle(
+        const Text('Exports et historique', style: TextStyle(
             color: DomoliaColors.goldLight, fontSize: 18)),
         const SizedBox(height: DomoliaSpacing.field),
         Wrap(spacing: 8, runSpacing: 8, children: [
@@ -795,7 +795,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
             key: const ValueKey('bookRawExport'),
             onPressed: _exportBook,
             icon: const Icon(Icons.menu_book_outlined),
-            label: const Text('Livre (JSON brut)'),
+            label: const Text('Exporter le Livre (JSON)'),
           ),
           OutlinedButton.icon(
             key: const ValueKey('aiPipelineExport'),
@@ -816,7 +816,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
         const Text(
           'Le Livre contient son Lore et ses paramètres narratifs. '
           'Le diagnostic IA regroupe les requêtes, les réponses brutes, '
-          'les phases RAW/JSON et les erreurs encore disponibles. '
+          'et les erreurs encore disponibles. '
           'Il peut contenir des informations personnelles ; '
           'les traces supprimées ne sont pas récupérables.',
           style: TextStyle(color: DomoliaColors.muted),

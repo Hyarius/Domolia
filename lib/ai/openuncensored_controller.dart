@@ -508,6 +508,28 @@ class OuCreditsController extends ChangeNotifier {
     return true;
   }) ?? false;
 
+  /// The normal UI edits only the active narrator. Preserve legacy task
+  /// models and profile references, including a model no longer listed.
+  Future<bool> setNarratorModel(String modelId) async => await _run(() async {
+    if (active == null) {
+      throw const OpenUncensoredFailure('Aucune clé active.');
+    }
+    if (_catalogue.isEmpty) _catalogue = await api.models();
+    if (!_catalogue.any((model) => model.id == modelId && model.available)) {
+      throw const OpenUncensoredFailure('Modèle narratif indisponible.');
+    }
+    final next = _state.copyWith(mode: OuQuality.advanced.name, models: {
+      ..._chooseModels(OuQuality.balanced),
+      ..._state.models,
+      'narrator': modelId,
+    });
+    await _write(next);
+    if (!await _configure(next)) return false;
+    notice = 'Modèle narratif enregistré.';
+    return true;
+  }) ?? false;
+
+  /// Compatibility for previously saved advanced configuration.
   Future<bool> setAdvanced(Map<String, String> models) async => await _run(() async {
     if (_catalogue.isEmpty) _catalogue = await api.models();
     for (final task in ['narrator', 'jsonifier', 'optimizer']) {

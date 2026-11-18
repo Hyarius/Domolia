@@ -743,6 +743,7 @@ class _HomePageState extends State<HomePage> {
               controller: _credits,
               onBack: () => unawaited(_goBack()),
               showBackButton: false,
+              onOpenAiProfiles: () => unawaited(_navigateTo(_Page.aiProviders)),
             )
           : _page == _Page.imageSettings ? ImageSettingsPage(
               ai: _ai,
@@ -868,10 +869,13 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         const SizedBox(height: DomoliaSpacing.section),
+        const Text('Intelligence artificielle', style: TextStyle(
+          color: DomoliaColors.goldLight, fontSize: 18)),
+        const SizedBox(height: DomoliaSpacing.compact),
         ListTile(
           leading: const Icon(Icons.smart_toy_outlined, color: DomoliaColors.gold),
           title: const Text('Crédits IA'),
-          subtitle: const Text('OpenUncensored, clés et modèles'),
+          subtitle: const Text('OpenUncensored : solde, clés et modèle narratif'),
           trailing: const Icon(Icons.chevron_right),
           onTap: _openAiSettings,
         ),
@@ -880,7 +884,7 @@ class _HomePageState extends State<HomePage> {
           key: const ValueKey('settingsAiProviders'),
           leading: const Icon(Icons.hub_outlined, color: DomoliaColors.gold),
           title: const Text('Fournisseurs IA'),
-          subtitle: const Text('ChatGPT, modèles NSFW et IA par tâche'),
+          subtitle: const Text('Connexions, narrateur, mémoire et budgets'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => unawaited(_navigateTo(_Page.aiProviders)),
         ),
@@ -894,6 +898,10 @@ class _HomePageState extends State<HomePage> {
           onTap: () => _openImageSettings(),
         ),
         const Divider(),
+        const SizedBox(height: DomoliaSpacing.section),
+        const Text('Application', style: TextStyle(
+          color: DomoliaColors.goldLight, fontSize: 18)),
+        const SizedBox(height: DomoliaSpacing.compact),
         ListTile(
           leading: const Icon(Icons.system_update_alt_rounded, color: DomoliaColors.gold),
           title: const Text('Mises à jour'),
