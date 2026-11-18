@@ -760,7 +760,7 @@ void main() {
     final provider = OpenAiCompatibleChatProvider(
       diagnostics:recorder,
       client:MockClient((_) async => http.Response(
-        '{"error":{"message":"private-secret"}}', 504)),
+        '{"error":{"message":"text-key"}}', 504)),
     );
     final ai = AiConnectionController(store:_Store(), provider:provider);
     addTearDown(ai.dispose);
@@ -791,7 +791,7 @@ void main() {
     expect(captured.single.statusCode, 504);
     expect(captured.single.toJson()['interpretation']['error'],
       contains('délai dépassé'));
-    expect(captured.single.exportJson(), isNot(contains('private-secret')));
+    expect(captured.single.exportJson(), isNot(contains('text-key')));
   });
 
 }
