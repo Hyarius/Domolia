@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:domolia/ai/ai_controller.dart';
+import 'package:domolia/ai/ai_diagnostics.dart';
 import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/books/book_lore.dart';
 import 'package:domolia/books/book_definition.dart';
@@ -19,6 +20,8 @@ import 'package:domolia/theme/domolia_theme.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 class _Store implements AiProfileStore {
   @override
@@ -681,6 +684,114 @@ void main() {
     expect(controller.error, contains('Metteur en scène IA : Accès refusé'));
     expect(controller.error, contains('HTTP 403'));
     expect(image.calls, 0);
+  });
+
+
+  test('Director HTTP exchanges are scoped to illustration and exported',
+      () async {
+    final recorder = AiExchangeRecorder();
+    final narratorExchange = recorder.begin(
+      provider:'test',method:'POST',url:'https://example.invalid/chat',
+      requestBody:'{"model":"narrator"}',secret:'narrator-secret',
+      accept:'application/json',
+    );
+    final captured = <AiExchange>[];
+    final provider = OpenAiCompatibleChatProvider(
+      diagnostics:recorder,
+      client:MockClient((request) async {
+        expect(request.url.path, '/v1/chat/completions');
+        expect(request.headers['Authorization'], 'Bearer text-key');
+        final requestBody = jsonDecode(request.body) as Map<String,dynamic>;
+        expect(requestBody['model'], 'text');
+        return http.Response(jsonEncode({'choices':[{'message':{
+          'role':'assistant',
+          'content':jsonEncode({
+            'shot':'medium','angle':'eye_level','focusIds':[],
+            'composition':'centered','lighting':'soft',
+            'palette':'warm','mood':'calm',
+            'visualSubject':'Une voisine dans le salon',
+            'visualAction':'Elle ferme la porte',
+            'visualSetting':'Un salon éclairé',
+          }),
+        }}]}), 200);
+      }),
+    );
+    final ai = AiConnectionController(store:_Store(), provider:provider);
+    addTearDown(ai.dispose);
+    await ai.initialize();
+    final prefs = ImagePreferences();
+    addTearDown(prefs.dispose);
+    await prefs.initialize();
+    final events = <ChatTimelineEvent>[
+      const ChatEntry(id:1, speaker:ChatSpeaker.player,
+        name:'Vous', text:'Je regarde ma voisine.'),
+      const ChatIllustrationIntent(id:2, playerEventId:1,
+        description:'Ma voisine ferme la porte du salon.'),
+    ];
+    final records = _ImageRecords()..timeline = () => events;
+    final controller = IllustrationController(
+      sessionId:'director-capture',ai:ai,preferences:prefs,
+      records:records,timeline:()=>events,
+      lore:()=>const BookLore(),memory:()=>const [],
+      awaitNarrativeWrites:() async {},files:_MemoryFiles(),
+      diagnostics:recorder,onExchangeCaptured:captured.add,
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    await controller.prepare(2);
+
+    expect(controller.error, isNull);
+    expect(controller.forIntent(2)?.state, IllustrationJobState.ready);
+    expect(captured, hasLength(1));
+    expect(captured.single.stage, 'image_direction');
+    expect(captured.single.playerEventId, 1);
+    expect(captured.single.statusCode, 200);
+    expect(captured.single.completedAtUtc, isNotNull);
+    expect(captured.single.toJson()['request']['body']['model'], 'text');
+    expect(captured.single.toJson()['response']['rawBody'],
+      contains('visualSubject'));
+    expect(recorder.last, same(narratorExchange));
+    expect(captured.single.exportJson(), isNot(contains('text-key')));
+  });
+
+  test('Director HTTP failure is captured with original status', () async {
+    final recorder = AiExchangeRecorder();
+    final captured = <AiExchange>[];
+    final provider = OpenAiCompatibleChatProvider(
+      diagnostics:recorder,
+      client:MockClient((_) async => http.Response(
+        '{"error":{"message":"private-secret"}}', 504)),
+    );
+    final ai = AiConnectionController(store:_Store(), provider:provider);
+    addTearDown(ai.dispose);
+    await ai.initialize();
+    final prefs = ImagePreferences();
+    addTearDown(prefs.dispose);
+    await prefs.initialize();
+    final events = <ChatTimelineEvent>[
+      const ChatEntry(id:1,speaker:ChatSpeaker.player,
+        name:'Vous',text:'Je regarde.'),
+      const ChatIllustrationIntent(id:2,playerEventId:1,
+        description:'La fenêtre derrière ma voisine.'),
+    ];
+    final records = _ImageRecords()..timeline = () => events;
+    final controller = IllustrationController(
+      sessionId:'director-error',ai:ai,preferences:prefs,
+      records:records,timeline:()=>events,lore:()=>const BookLore(),
+      memory:()=>const [],awaitNarrativeWrites:() async {},
+      files:_MemoryFiles(),diagnostics:recorder,
+      onExchangeCaptured:captured.add,
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    await controller.prepare(2);
+    expect(controller.error, contains('délai dépassé'));
+    expect(captured, hasLength(1));
+    expect(captured.single.stage, 'image_direction');
+    expect(captured.single.statusCode, 504);
+    expect(captured.single.toJson()['interpretation']['error'],
+      contains('délai dépassé'));
+    expect(captured.single.exportJson(), isNot(contains('private-secret')));
   });
 
 }
