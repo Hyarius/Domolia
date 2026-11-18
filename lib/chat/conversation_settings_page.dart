@@ -286,7 +286,9 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   /// Revert this Party's overrides, not its narrative or Live Memory.
   Future<void> _resetToBookSettings() async {
     if (_saving || !_loaded || _loadFailed || widget.chat.busy ||
-        widget.chat.pendingRaw != null) return;
+        widget.chat.pendingRaw != null) {
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialog) => AlertDialog(
@@ -312,7 +314,9 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
       ),
     ) ?? false;
     if (!confirmed || !mounted || _saving || widget.chat.busy ||
-        widget.chat.pendingRaw != null) return;
+        widget.chat.pendingRaw != null) {
+      return;
+    }
 
     setState(() => _saving = true);
     ImageGenerationOptions? previousImageOverride;
