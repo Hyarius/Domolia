@@ -479,8 +479,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     expect(find.byKey(const ValueKey('imageApprovePrompt')),findsOneWidget);
     expect(image.calls,0);
+    // Director prompts can be longer than a phone viewport. Scroll to the
+    // actual confirmation rather than tapping an off-screen control.
+    await tester.ensureVisible(find.byKey(const ValueKey('imageApprovePrompt')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('imageApprovePrompt')));
     await tester.pump(const Duration(milliseconds: 200));
+    await tester.ensureVisible(find.byKey(const ValueKey('imageGenerate')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('imageGenerate')));
     await tester.pump(const Duration(milliseconds: 200));
     await tester.tap(find.byKey(const ValueKey('imageConfirmGenerate')));
