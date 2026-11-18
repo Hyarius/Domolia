@@ -712,6 +712,7 @@ class _HomePageState extends State<HomePage> {
                   ai: _ai,
                   chat: _chat,
                   taskRouting: _taskRouting,
+                  imagePreferences: _imagePreferences,
                   onOpenMemory: _liveMemory == null ? null :
                       () => unawaited(_navigateTo(_Page.memory)),
                   bookId: _selectedBookId!,
