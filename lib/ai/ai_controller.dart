@@ -537,7 +537,167 @@ class AiConnectionController extends ChangeNotifier {
         index = next.indexWhere((p) =>
             p.id == 'default' &&
             p.kind == AiProviderKind.customAi &&
-            p.baseUrl.replaceFirst(RegExp(r'/+$'), '') == defaultAiBaseUrl);
+            p.baseUrl.replaceFirst(RegExp(r'/+
+      if (index < 0) {
+        index = next.indexWhere((p) =>
+            p.kind == AiProviderKind.customAi &&
+            p.baseUrl.replaceFirst(RegExp(r'/+$'), '') == defaultAiBaseUrl &&
+            p.apiKey == key);
+      }
+      if (index < 0 && !createProfileIfMissing) {
+        // The user removed the last shared profile deliberately.
+        return true;
+      }
+      final previous = index < 0 ? null : next[index];
+      final id = previous?.id ?? ouNarratorProfileId;
+      final capability = narratorToolCompatibility ??
+          (narratorToolsSupported == true
+              ? AiToolCallingCompatibility.supported
+              : previous != null &&
+                      previous.model == model &&
+                      previous.apiKey == key
+                  ? previous.toolCallingCompatibility
+                  : AiToolCallingCompatibility.unknown);
+      final profile = AiProfile(
+        id: id,
+        name: previous?.name ?? 'OpenUncensored',
+        baseUrl: defaultAiBaseUrl,
+        model: model,
+        apiKey: key,
+        nsfwCompatibility: AiNsfwCompatibility.supported,
+        toolCallingCompatibility: capability,
+      );
+      if (index < 0) {
+        next.add(profile);
+      } else {
+        next[index] = profile;
+      }
+      final selectedId = activateManagedProfile ? id : _selectedId;
+      await store.write(AiProfilesState(
+        profiles: next, selectedId: selectedId));
+      _profiles = next;
+      _selectedId = selectedId;
+      _invalidate(id);
+      message = null;
+      return true;
+    } catch (_) {
+      message = 'Impossible d’enregistrer le profil OpenUncensored.';
+      return false;
+    } finally {
+      busy = false;
+      _notify();
+    }
+  }
+
+  Future<void> removeKey() async {
+    if (_closed || busy) return;
+    busy = true;
+    _notify();
+    try {
+      final next = [
+        for (final profile in _profiles)
+          profile.id == _selectedId ? profile.copyWith(apiKey: '') : profile,
+      ];
+      await store.write(AiProfilesState(profiles: next, selectedId: _selectedId));
+      _profiles = next;
+      _invalidate(_selectedId);
+      message = 'Clé API supprimée du stockage sécurisé.';
+    } catch (_) {
+      message = 'Impossible de supprimer la clé API.';
+    } finally {
+      busy = false;
+      _notify();
+    }
+  }
+
+  Future<void> loadModels() async {
+    if (_closed || busy) return;
+    busy = true;
+    message = null;
+    _notify();
+    try {
+      if (selectedKind == AiProviderKind.chatGpt) {
+        if (chatGpt == null) {
+          throw const AiProviderException('Connexion ChatGPT indisponible.');
+        }
+        final list = await chatGpt!.listModels(_selectedId);
+        _catalogues[_selectedId] = list;
+        message = list.isEmpty ? 'Aucun modèle ChatGPT disponible.'
+            : 'Catalogue ChatGPT chargé.';
+        return;
+      }
+      final configuration = selectedProfile.configuration;
+      if (configuration.apiKey.isEmpty) {
+        throw const AiProviderException(
+          'Enregistrez une clé API pour charger les modèles.',
+        );
+      }
+      final fetched = await provider.listModels(configuration);
+      _catalogues[_selectedId] = fetched;
+      message = fetched.isEmpty
+          ? 'Aucun modèle disponible pour ce profil.'
+          : 'Catalogue de modèles chargé.';
+    } on AiProviderException catch (error) {
+      message = error.userMessage;
+    } catch (_) {
+      message = 'Impossible de charger les modèles.';
+    } finally {
+      busy = false;
+      _notify();
+    }
+  }
+
+  Future<void> testConnection() async {
+    if (_closed || busy) return;
+    final id = _selectedId;
+    busy = true;
+    message = null;
+    _errors.remove(id);
+    _replies.remove(id);
+    _statuses[id] = AiConnectionStatus.testing;
+    _notify();
+    try {
+      final binding = await connectionForProfile(id);
+      if (binding.configuration.apiKey.isEmpty) {
+        throw const AiProviderException('Enregistrez une clé API avant de tester.');
+      }
+      final reply = await binding.provider.complete(
+        binding.configuration,
+        messages: const [
+          AiMessage(
+            role: 'user',
+            content:
+                'Réponds en français, en une phrase très courte, pour confirmer la connexion.',
+          ),
+        ],
+        maxTokens: 64,
+      );
+      _statuses[id] = AiConnectionStatus.connected;
+      _replies[id] =
+          reply.length > 320 ? '${reply.substring(0, 320)}…' : reply;
+    } on AiProviderException catch (error) {
+      _statuses[id] = AiConnectionStatus.invalid;
+      _errors[id] = error.userMessage;
+    } catch (_) {
+      _statuses[id] = AiConnectionStatus.invalid;
+      _errors[id] =
+          'API injoignable ou réponse inattendue. Vérifiez votre réseau et les paramètres.';
+    } finally {
+      busy = false;
+      _notify();
+    }
+  }
+
+  @override
+  void dispose() {
+    _closed = true;
+    super.dispose();
+  }
+}
+), '') == defaultAiBaseUrl &&
+            (p.apiKey == key ||
+                (createProfileIfMissing &&
+                    (p.apiKey.isEmpty || p.apiKey.startsWith('ou-')))));
       }
       if (index < 0) {
         index = next.indexWhere((p) =>
