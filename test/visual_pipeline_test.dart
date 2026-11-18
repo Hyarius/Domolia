@@ -287,6 +287,7 @@ void main() {
         era: 'Présent alternatif', secrets: 'NE PAS RÉVÉLER'),
       characters: [
         LoreCharacter(id: 'naelle', name: 'Naëlle',
+          description: 'Femme adulte de 32 ans, silhouette élancée',
           appearance: 'Cheveux noirs très longs, teint clair',
           role: 'Visiteuse', secrets: 'Information jamais révélée'),
       ],
@@ -354,6 +355,7 @@ void main() {
     expect(selected.characters.single.id, 'naelle');
     expect(selected.places.single.id, 'atelier');
     expect(selected.evidence, contains('Cheveux noirs très longs'));
+    expect(selected.evidence, contains('32 ans, silhouette élancée'));
     expect(selected.evidence, contains('Collants noirs et jupe sombre'));
     expect(selected.evidence, contains('parquet sombre'));
     expect(selected.evidence, isNot(contains('Manteau rouge')));
