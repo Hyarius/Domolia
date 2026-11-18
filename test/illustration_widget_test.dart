@@ -235,6 +235,7 @@ void main() {
     expect(find.byKey(const ValueKey('chatIllustrateLastScene')),
       findsOneWidget);
     expect(find.byKey(const ValueKey('imagePreparePrompt')),findsOneWidget);
+    expect(find.byKey(const ValueKey('imagePromptText')),findsOneWidget);
     expect(image.calls,0);
     await tester.tap(find.byKey(const ValueKey('imagePreparePrompt')));
     await tester.pump(const Duration(milliseconds: 500));
@@ -266,12 +267,25 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     expect(image.calls,1);
     expect(find.byKey(const ValueKey('chatGeneratedImage')),findsOneWidget);
+    // Once the image is available, the chat shows the image alone.
+    expect(find.byKey(const ValueKey('imagePromptText')),findsNothing);
+    expect(find.byKey(const ValueKey('imageRegenerate')),findsNothing);
     await tester.ensureVisible(find.byKey(const ValueKey('chatGeneratedImage')));
+    await tester.pumpAndSettle();
+    // Actions remain accessible by long-pressing the completed image.
+    await tester.longPress(find.byKey(const ValueKey('chatGeneratedImage')));
+    await tester.pumpAndSettle();
+    expect(find.text('Régénérer l’image'),findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('imageActionCopyPrompt')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('chatGeneratedImage')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('imagePromptExport')),findsOneWidget);
     expect(find.byTooltip('Exporter le prompt (JSON)'),findsOneWidget);
+    expect(find.byKey(const ValueKey('imageRegenerate')),findsOneWidget);
+    await tester.tap(find.text('Prompt et modèle'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Prompt final :'),findsOneWidget);
   });
 
   test('No image configuration required with an OpenUncensored API key',
