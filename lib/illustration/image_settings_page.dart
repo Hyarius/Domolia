@@ -64,8 +64,9 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
       (widget.sessionId == null || _override);
 
   AiProfile? get _imageProfile {
+    final id = _options.resolveProfiles(widget.ai.profiles).profileId;
     for (final item in widget.ai.profiles) {
-      if (item.id == _options.profileId && _supportsImages(item)) return item;
+      if (item.id == id && _supportsImages(item)) return item;
     }
     return null;
   }
@@ -126,11 +127,12 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
     try {
       final next = _options;
       next.validate();
-      if (_imageProfile == null || _selectedModel == null) {
+      if (_imageProfile == null ||
+          (next.model.isNotEmpty && _selectedModel == null)) {
         throw const FormatException('Sélectionnez un modèle et des options valides.');
       }
-      if (next.directorProfileId.isEmpty ||
-          !widget.ai.profiles.any((p) => p.id == next.directorProfileId)) {
+      if (next.resolveProfiles(widget.ai.profiles)
+          .directorProfileId.isEmpty) {
         throw const FormatException('Sélectionnez un metteur en scène IA.');
       }
       if (widget.sessionId == null) {
@@ -200,9 +202,11 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
         else ...[
           DropdownButtonFormField<String>(
             key: const ValueKey('imageProviderProfile'),
-            initialValue: _imageProfile?.id,
+            initialValue: _options.profileId.isEmpty ? '' : _imageProfile?.id,
             decoration: const InputDecoration(labelText: 'Profil graphique'),
             items: [
+              const DropdownMenuItem(value: '',
+                  child: Text('Automatique (OpenUncensored)')),
               for (final p in widget.ai.profiles)
                 if (_supportsImages(p))
                   DropdownMenuItem(value: p.id, child: Text(p.name)),
@@ -222,9 +226,11 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
             key: const ValueKey('imageDirectorProfile'),
             initialValue: widget.ai.profiles.any(
                 (p) => p.id == _options.directorProfileId)
-                ? _options.directorProfileId : null,
+                ? _options.directorProfileId : '',
             decoration: const InputDecoration(labelText: 'Metteur en scène IA'),
             items: [
+              const DropdownMenuItem(value: '',
+                  child: Text('Automatique (OpenUncensored)')),
               for (final p in widget.ai.profiles)
                 DropdownMenuItem(value: p.id, child: Text(p.name)),
             ],
@@ -237,9 +243,11 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           if (_loadingModels) const LinearProgressIndicator(),
           DropdownButtonFormField<String>(
             key: const ValueKey('imageModel'),
-            initialValue: model?.id,
+            initialValue: model?.id ?? '',
             decoration: const InputDecoration(labelText: 'Modèle graphique'),
             items: [
+              const DropdownMenuItem(value: '',
+                  child: Text('Automatique (recommandé)')),
               for (final m in _models)
                 DropdownMenuItem(value: m.id, child: Text(m.id)),
             ],
