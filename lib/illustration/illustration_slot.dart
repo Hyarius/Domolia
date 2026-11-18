@@ -79,6 +79,15 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
                 icon: const Icon(Icons.close)),
               const Spacer(),
               IconButton(
+                key: const ValueKey('imageRegenerate'),
+                tooltip: 'Régénérer l’image (nouvelle facturation)',
+                icon: const Icon(Icons.refresh),
+                onPressed: () {
+                  Navigator.pop(context);
+                  widget.onGenerate();
+                },
+              ),
+              IconButton(
                 key: const ValueKey('imagePromptExport'),
                 tooltip: 'Exporter le prompt (JSON)',
                 onPressed: () => _exportPrompt(context, record),
@@ -198,7 +207,8 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
           ListTile(
             key: const ValueKey('imageActionGenerate'),
             leading: const Icon(Icons.brush_outlined),
-            title: const Text('Générer cette image'),
+            title: Text(state == IllustrationJobState.available
+                ? 'Régénérer l’image' : 'Générer cette image'),
             onTap: () async {
               Navigator.pop(sheet);
               if (state == null) {
@@ -263,25 +273,27 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
       key: ValueKey('imageSlot-' + widget.intent.id.toString()),
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(4, 4, 4, 20),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
+      padding: available ? EdgeInsets.zero : const EdgeInsets.all(14),
+      decoration: available ? null : BoxDecoration(
         border: Border.all(color: DomoliaColors.goldDark),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Illustration',
-            style: TextStyle(color: DomoliaColors.goldLight,
-                fontWeight: FontWeight.bold)),
-          const SizedBox(height: 6),
-          GestureDetector(
-            key: const ValueKey('imagePromptText'),
-            onLongPress: working ? null :
-                () => _showPromptActions(prompt, record?.state),
-            child: Text(prompt,
-              style: const TextStyle(color: DomoliaColors.cream)),
-          ),
+          if (!available) ...[
+            const Text('Illustration',
+              style: TextStyle(color: DomoliaColors.goldLight,
+                  fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            GestureDetector(
+              key: const ValueKey('imagePromptText'),
+              onLongPress: working ? null :
+                  () => _showPromptActions(prompt, record?.state),
+              child: Text(prompt,
+                style: const TextStyle(color: DomoliaColors.cream)),
+            ),
+          ],
           if (!working && (prepared || approved)) ...[
             const SizedBox(height: 8),
             Text(prepared ? 'Description à valider'
@@ -308,7 +320,6 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
             ]),
           ],
           if (available) ...[
-            const SizedBox(height: 10),
             for (final file in record.fileNames)
               FutureBuilder<Uint8List?>(
                 future: _image(file),
@@ -328,6 +339,8 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
                     child: InkWell(
                       key: const ValueKey('chatGeneratedImage'),
                       onTap: () => _showFullScreen(bytes, record),
+                      onLongPress: working ? null :
+                          () => _showPromptActions(prompt, record.state),
                       child: Image.memory(
                         bytes, fit: BoxFit.contain,
                         height: 300, width: double.infinity,
@@ -338,12 +351,6 @@ class _IllustrationSlotState extends State<IllustrationSlot> {
                   );
                 },
               ),
-            TextButton.icon(
-              key: const ValueKey('imageRegenerate'),
-              onPressed: working ? null : widget.onGenerate,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Régénérer (nouvelle facturation)'),
-            ),
           ] else if (working ||
               record?.state == IllustrationJobState.preparing ||
               record?.state == IllustrationJobState.generating) ...[
