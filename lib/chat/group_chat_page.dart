@@ -415,6 +415,15 @@ class _GroupChatPageState extends State<GroupChatPage> {
         _imageDialogOpen) {
       return;
     }
+    final current = illustrations.forIntent(intentId);
+    if (current == null) {
+      await illustrations.prepare(intentId);
+      return;
+    }
+    if (current.state == IllustrationJobState.ready) {
+      _showExportMessage('Validez la description avant de générer l’image.');
+      return;
+    }
     _imageDialogOpen = true;
     try {
       final accepted = await showDialog<bool>(
