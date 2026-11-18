@@ -243,10 +243,14 @@ class IllustrationController extends ChangeNotifier {
       if (directorInvoked && !directorRecorded) {
         await _directionUsage(start: start, failed: true);
       }
-      error = failure is StateError ? failure.message
+      error = failure is AiProviderException
+          ? 'Metteur en scène IA : ${failure.userMessage}'
+          : failure is StateError ? failure.message
           : failure is FormatException
-          ? 'Description du metteur en scène invalide.'
-          : 'Préparation du prompt impossible. Vérifiez le profil IA.';
+          ? 'Description du metteur en scène invalide. '
+              'Réessayez ou choisissez un autre modèle de texte.'
+          : 'Préparation du prompt interrompue. '
+              'Réessayez et vérifiez le profil du metteur en scène IA.';
       errorIntentId = intentId;
       _notify();
     } finally {
@@ -476,8 +480,12 @@ class IllustrationController extends ChangeNotifier {
         await _directionUsage(start: start, failed: true);
       }
       final message = failure is ImageGenerationFailure
-          ? failure.message : failure is FormatException
-          ? 'Réponse du metteur en scène invalide. Vérifiez son modèle IA.'
+          ? failure.message
+          : failure is AiProviderException
+          ? 'Metteur en scène IA : ${failure.userMessage}'
+          : failure is FormatException
+          ? 'Réponse du metteur en scène invalide. '
+              'Réessayez ou choisissez un autre modèle de texte.'
           : failure is StateError ? failure.message
           : 'Erreur de génération. Vérifiez le fournisseur et les crédits.';
       error = message;
