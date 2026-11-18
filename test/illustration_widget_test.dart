@@ -11,6 +11,7 @@ import 'package:domolia/chat/chat_protocol.dart';
 import 'package:domolia/chat/group_chat_page.dart';
 import 'package:domolia/illustration/illustration_controller.dart';
 import 'package:domolia/illustration/illustration_records.dart';
+import 'package:domolia/memory/live_memory.dart';
 import 'package:domolia/illustration/image_preferences.dart';
 import 'package:domolia/illustration/image_providers.dart';
 import 'package:domolia/theme/domolia_theme.dart';
@@ -51,6 +52,31 @@ class _Text implements AiChatProvider {
       'visualSubject':'Un personnage dans le décor',
       'visualAction':'Le personnage observe les lieux',
       'visualSetting':'Un intérieur calme',
+    });
+  }
+}
+
+class _VisualText extends _Text {
+  int calls = 0;
+
+  @override
+  Future<String> complete(AiConfiguration configuration, {
+    required List<AiMessage> messages, int maxTokens = 300,
+  }) async {
+    calls++;
+    return jsonEncode({
+      'shot':'medium', 'angle':'eye_level',
+      'focusIds':['party:boulangere'],
+      'composition':'centered', 'lighting':'soft',
+      'palette':'warm', 'mood':'calm',
+      'visualSubject':'La boulangère au comptoir',
+      'visualAction':'Elle ajuste son tablier',
+      'visualSetting':'Une boulangerie',
+      'appearances':[{
+        'id':'party:boulangere',
+        'identity':'Cheveux bruns et yeux verts',
+        'current':'Tablier beige',
+      }],
     });
   }
 }
@@ -397,4 +423,62 @@ void main() {
     expect(find.byKey(const ValueKey('chatGeneratedImage')),findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  test('Prompt is prepared and approved before the image API is used',
+      () async {
+    final text = _VisualText();
+    final ai = AiConnectionController(store:_Store(), provider:text);
+    addTearDown(ai.dispose);
+    await ai.initialize();
+    final preferences = ImagePreferences();
+    addTearDown(preferences.dispose);
+    await preferences.initialize();
+    await preferences.saveApplication(const ImageGenerationOptions(
+      profileId:'image', directorProfileId:'director', model:'test-image',
+    ));
+    final events = <ChatTimelineEvent>[
+      const ChatEntry(id:1, speaker:ChatSpeaker.character,
+          name:'Boulangère', text:'Bonjour.'),
+      const ChatEntry(id:2, speaker:ChatSpeaker.narrator,
+          name:'Narrateur', text:'Elle ajuste son tablier.'),
+      const ChatIllustrationIntent(id:3, playerEventId:1,
+          description:'La boulangère au comptoir.'),
+    ];
+    final records = _ImageRecords()..timeline = () => events;
+    final image = _Image();
+    final visualFacts = <LiveMemoryFact>[];
+    final controller = IllustrationController(
+      sessionId:'prepared', ai:ai, preferences:preferences,
+      records:records, timeline:() => events,
+      lore:() => const BookLore(), memory:() => visualFacts,
+      awaitNarrativeWrites:() async {}, files:_MemoryFiles(),
+      providerFactory:(_) => image,
+      onAcceptVisualFacts:(facts) async => visualFacts.addAll(facts),
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    await controller.prepare(3);
+    final draft = controller.forIntent(3);
+    expect(draft?.state, IllustrationJobState.ready);
+    expect(draft?.prompt, contains('Boulangère'));
+    expect(text.calls, 1);
+    expect(image.calls, 0);
+
+    await controller.editPrompt(3, '${draft!.prompt}\nPlan plus rapproché.');
+    expect(controller.forIntent(3)?.state, IllustrationJobState.ready);
+    await controller.approvePrompt(3);
+    expect(controller.forIntent(3)?.state, IllustrationJobState.approved);
+    expect(visualFacts, hasLength(2));
+    expect(visualFacts.where((f) => f.field == 'visual_identity')
+        .single.text, 'Cheveux bruns et yeux verts');
+    expect(visualFacts.where((f) => f.field == 'visual_current')
+        .single.text, 'Tablier beige');
+    expect(image.calls, 0);
+
+    await controller.generate(3);
+    expect(image.calls, 1);
+    expect(text.calls, 1);
+    expect(controller.forIntent(3)?.state, IllustrationJobState.available);
+    expect(controller.forIntent(3)?.prompt, contains('Plan plus rapproché.'));
+  });
+
 }
