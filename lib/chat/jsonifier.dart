@@ -45,7 +45,7 @@ conditions en faits déjà accomplis.
 INTERDIT
 Pas de champ "text", pas d'indices start/end, ni Markdown ni commentaire.
 N'invente aucun dialogue, fait, personnage ou changement de scène.
-''';;
+''';
 
 /// Complete formatter output, keeping the source narrative independent
 /// from its optional, non-authoritative future context.
