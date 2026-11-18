@@ -207,6 +207,11 @@ void main() {
     // No paid generation happens during catalogue loading or selection.
     expect(probes, 0);
     await tester.ensureVisible(
+      find.byKey(const ValueKey('ouToolTestingAdvanced')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('ouToolTestingAdvanced')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
       find.byKey(const ValueKey('ouToolProbe')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('ouAdvanced-narrator-$defaultAiModel')), findsOneWidget);
