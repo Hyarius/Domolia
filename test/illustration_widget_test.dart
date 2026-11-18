@@ -713,7 +713,9 @@ void main() {
             'visualAction':'Elle ferme la porte',
             'visualSetting':'Un salon éclairé',
           }),
-        }}]}), 200);
+        }}]}), 200, headers: {
+          'content-type': 'application/json; charset=utf-8',
+        });
       }),
     );
     final ai = AiConnectionController(store:_Store(), provider:provider);
