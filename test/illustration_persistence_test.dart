@@ -47,6 +47,7 @@ void main() {
       model: 'gpt-image-2', createdAtUtc: DateTime.utc(2026, 11, 17),
       prompt: 'Soren referme le tiroir.',
       negativePrompt: 'aucune bulle de texte',
+      visualStyle: 'Aquarelle délicate',
       appearanceProposals: const [
         {
           'id': 'party:soren',
@@ -59,6 +60,8 @@ void main() {
     expect(await first.saveIllustrationIfCurrent(record), isTrue);
     expect((await first.listIllustrations('s')).single.negativePrompt,
       'aucune bulle de texte');
+    expect((await first.listIllustrations('s')).single.visualStyle,
+      'Aquarelle délicate');
     expect((await first.listIllustrations('s')).single.fileNames,
       ['img-request-first-0.png']);
     expect((await first.listIllustrations('s')).single.appearanceProposals,
@@ -75,6 +78,8 @@ void main() {
       'gpt-image-2');
     expect((await second.listIllustrations('s')).single.negativePrompt,
       'aucune bulle de texte');
+    expect((await second.listIllustrations('s')).single.visualStyle,
+      'Aquarelle délicate');
     expect((await second.listIllustrations('s')).single.appearanceProposals.single['id'],
       'party:soren');
     await second.updateSession(session.copyWith(
@@ -159,6 +164,7 @@ void main() {
     final records = await upgraded.listIllustrations('s');
     expect(records.single.prompt, 'Description historique');
     expect(records.single.appearanceProposals, isEmpty);
+    expect(records.single.visualStyle, isEmpty);
   });
 
   test('Binary images survive restart and orphan pruning', () async {
