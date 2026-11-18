@@ -934,10 +934,12 @@ void main() {
     expect(stored.formatterProfileId, isNull);
     expect(stored.aiProfileId, isNull);
 
-    final advanced = find.byKey(
-        const ValueKey('conversationAdvancedSettings'));
+    // Target the tile's title, not the entire (potentially very tall)
+    // ExpansionTile; tapping its center can hit outside a small screen.
+    final advanced = find.text('Réglages IA avancés');
     await tester.scrollUntilVisible(advanced, 180);
     await tester.ensureVisible(advanced);
+    await tester.pumpAndSettle();
     await tester.tap(advanced);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.byKey(
@@ -1003,10 +1005,12 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    final advanced = find.byKey(
-        const ValueKey('conversationAdvancedSettings'));
+    // Target the tile's title, not the entire (potentially very tall)
+    // ExpansionTile; tapping its center can hit outside a small screen.
+    final advanced = find.text('Réglages IA avancés');
     await tester.scrollUntilVisible(advanced, 180);
     await tester.ensureVisible(advanced);
+    await tester.pumpAndSettle();
     await tester.tap(advanced);
     await tester.pumpAndSettle();
     final token = find.byKey(

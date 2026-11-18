@@ -310,7 +310,7 @@ class IllustrationController extends ChangeNotifier {
       }
       final message = failure is ImageGenerationFailure
           ? failure.message : failure is FormatException
-          ? 'Mise en scène invalide ou insuffisamment attestée.'
+          ? 'Réponse du metteur en scène invalide. Vérifiez son modèle IA.'
           : failure is StateError ? failure.message
           : 'Erreur de génération. Vérifiez le fournisseur et les crédits.';
       error = message;

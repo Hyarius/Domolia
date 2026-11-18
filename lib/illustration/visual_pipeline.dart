@@ -149,7 +149,7 @@ class VisualDirection {
     } catch (_) {
       throw const FormatException('Réponse de direction artistique non JSON.');
     }
-     if (data.keys.toSet().difference(const {
+    if (data.keys.toSet().difference(const {
       'shot','angle','focusIds','composition','lighting','palette','mood',
       'illustratable','visualSubject','visualAction','visualSetting',
     }).isNotEmpty ||
