@@ -150,6 +150,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
       'provider TEXT NOT NULL, model TEXT NOT NULL, '
       'created_at INTEGER NOT NULL, prompt TEXT NOT NULL, '
       'negative_prompt TEXT NOT NULL DEFAULT \'\', '
+      'appearance_proposals_json TEXT NOT NULL DEFAULT \'[]\', '
       'files_json TEXT NOT NULL, mime_type TEXT, error TEXT, cost_usd REAL, '
       'FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE)',
     );
@@ -206,6 +207,15 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
             row['created_at'] as int, isUtc: true),
           prompt: row['prompt'] as String,
           negativePrompt: row['negative_prompt'] as String? ?? '',
+          appearanceProposals: [
+            for (final value in (jsonDecode(
+                row['appearance_proposals_json'] as String? ?? '[]') as List))
+              if (value is Map)
+                {
+                  for (final key in ['id', 'identity', 'current'])
+                    key: value[key]?.toString() ?? '',
+                },
+          ],
           fileNames: (jsonDecode(row['files_json'] as String) as List)
               .cast<String>(),
           mimeType: row['mime_type'] as String?,
@@ -258,6 +268,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
         'created_at': record.createdAtUtc.microsecondsSinceEpoch,
         'prompt': record.prompt,
         'negative_prompt': record.negativePrompt,
+        'appearance_proposals_json': jsonEncode(record.appearanceProposals),
         'files_json': jsonEncode(record.fileNames),
         'mime_type': record.mimeType,
         'error': record.error,
@@ -451,7 +462,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
     return _db ??= await (_factoryOverride ?? databaseFactory).openDatabase(
       location,
       options: OpenDatabaseOptions(
-      version: 14,
+      version: 15,
       onConfigure: (db) async =>
           db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, version) async {
@@ -490,6 +501,10 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
         if (oldVersion >= 13 && oldVersion < 14) {
           await db.execute('ALTER TABLE illustration_generations '
               "ADD COLUMN negative_prompt TEXT NOT NULL DEFAULT ''");
+        }
+        if (oldVersion >= 13 && oldVersion < 15) {
+          await db.execute('ALTER TABLE illustration_generations '
+              "ADD COLUMN appearance_proposals_json TEXT NOT NULL DEFAULT '[]'");
         }
         if (oldVersion < 12) {
           final sessions = await db.rawQuery(
