@@ -45,6 +45,7 @@ import 'illustration/illustration_controller.dart';
 import 'illustration/illustration_records.dart';
 import 'illustration/image_preferences.dart';
 import 'illustration/image_settings_page.dart';
+import 'settings/app_reset.dart';
 
 void main() {
   runZonedGuarded(() async {
@@ -79,6 +80,7 @@ class DomoliaApp extends StatelessWidget {
     this.chatController,
     this.narratorSettingsController,
     this.bookLibraryController,
+    this.onResetApp,
   });
 
   final UpdateController? updateController;
@@ -87,6 +89,7 @@ class DomoliaApp extends StatelessWidget {
   final NarrativeChatController? chatController;
   final NarratorSettingsController? narratorSettingsController;
   final BookLibraryController? bookLibraryController;
+  final Future<void> Function()? onResetApp;
 
   @override
   Widget build(BuildContext context) {
@@ -108,6 +111,7 @@ class DomoliaApp extends StatelessWidget {
         chat: chatController,
         narratorSettings: narratorSettingsController,
         books: bookLibraryController,
+        onResetApp: onResetApp,
       ),
     );
   }
@@ -124,6 +128,7 @@ class HomePage extends StatefulWidget {
     this.chat,
     this.narratorSettings,
     this.books,
+    this.onResetApp,
   });
   final UpdateController? updates;
   final AiConnectionController? ai;
@@ -131,6 +136,7 @@ class HomePage extends StatefulWidget {
   final NarrativeChatController? chat;
   final NarratorSettingsController? narratorSettings;
   final BookLibraryController? books;
+  final Future<void> Function()? onResetApp;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -142,6 +148,7 @@ class _HomePageState extends State<HomePage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   GlobalKey<BookEditorPageState> _bookEditorKey = GlobalKey<BookEditorPageState>();
   bool _leavingBook = false;
+  bool _resetting = false;
   late final UpdateController _updates;
   late final bool _ownsUpdates;
   final AiExchangeRecorder _aiDiagnostics = AiExchangeRecorder();
@@ -859,6 +866,76 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<void> _resetApp() async {
+    if (_resetting) return;
+    if (_chat.busy || _credits.busy ||
+        _illustrations?.hasInFlight == true ||
+        _updates.phase == UpdatePhase.downloading) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Une opération est en cours. Terminez-la avant '
+            'de réinitialiser Domolia.'),
+      ));
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Réinitialiser Domolia ?'),
+        content: const Text(
+          'Cette opération supprimera définitivement tous les Livres, '
+          'Parties, mémoires, illustrations, diagnostics, téléchargements '
+          'et réglages locaux.\\n\\n'
+          'Seules les clés API enregistrées et l’historique des clés '
+          'OpenUncensored seront conservés. Les fichiers déjà exportés '
+          'hors de Domolia ne seront pas modifiés.\\n\\n'
+          'Cette action est irréversible.',
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('resetAppCancel'),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            key: const ValueKey('resetAppConfirm'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Effacer les données'),
+          ),
+        ],
+      ),
+    ) ?? false;
+    if (!confirmed || !mounted) return;
+    setState(() => _resetting = true);
+    try {
+      if (widget.onResetApp != null) {
+        await widget.onResetApp!();
+      } else {
+        final storage = _books.store;
+        final service = AppResetService(
+          closeDatabase: () async {
+            await _awaitSessionWrites?.call();
+            if (storage is SqliteBookStore) await storage.close();
+          },
+        );
+        await service.reset();
+      }
+      if (mounted && widget.onResetApp == null) {
+        // New widget tree recreates all providers, controllers and routing
+        // caches from pristine persisted state. No payable API call is made.
+        runApp(DomoliaApp(key: UniqueKey()));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Réinitialisation incomplète. Les clés API sont '
+              'conservées ; relancez Domolia avant de réessayer.'),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _resetting = false);
+    }
+  }
+
   Widget _buildSettings() => SafeArea(
     child: ListView(
       padding: const EdgeInsets.all(24),
@@ -929,6 +1006,19 @@ class _HomePageState extends State<HomePage> {
           subtitle: const Text('Consulter, copier, exporter et effacer le journal'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => unawaited(_navigateTo(_Page.logs)),
+        ),
+        const Divider(),
+        ListTile(
+          key: const ValueKey('settingsFactoryReset'),
+          leading: const Icon(Icons.restart_alt_rounded,
+              color: Colors.redAccent),
+          title: const Text('Réinitialiser l’application'),
+          subtitle: const Text('Tout effacer sauf les clés API'),
+          trailing: _resetting
+              ? const SizedBox(width: 20, height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.chevron_right),
+          onTap: _resetting ? null : () => unawaited(_resetApp()),
         ),
       ],
     ),
