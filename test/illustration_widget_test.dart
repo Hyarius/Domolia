@@ -74,6 +74,26 @@ class _Text implements AiChatProvider {
   }
 }
 
+class _FailOnceDirector extends _Text {
+  Object? nextFailure;
+  String? nextText;
+
+  @override
+  Future<String> complete(AiConfiguration configuration, {
+    required List<AiMessage> messages, int maxTokens = 300,
+  }) async {
+    final failure = nextFailure;
+    nextFailure = null;
+    if (failure != null) throw failure;
+    final replacement = nextText;
+    nextText = null;
+    if (replacement != null) return replacement;
+    return super.complete(
+      configuration, messages: messages, maxTokens: maxTokens,
+    );
+  }
+}
+
 class _VisualText extends _Text {
   int calls = 0;
 
@@ -572,6 +592,95 @@ void main() {
     expect(text.calls, 1);
     expect(controller.forIntent(3)?.state, IllustrationJobState.available);
     expect(controller.forIntent(3)?.prompt, contains('Plan plus rapproché.'));
+  });
+
+  test('Director failures explain the issue and allow preparation retry',
+      () async {
+    final director = _FailOnceDirector()
+      ..nextFailure = const AiProviderException(
+        'Aucune réponse du fournisseur sous 25 s.',
+        kind: AiProviderErrorKind.timeout,
+      );
+    final ai = AiConnectionController(store:_Store(), provider:director);
+    addTearDown(ai.dispose);
+    await ai.initialize();
+    final prefs = ImagePreferences();
+    addTearDown(prefs.dispose);
+    await prefs.initialize();
+    await prefs.saveApplication(const ImageGenerationOptions(
+      profileId:'image', directorProfileId:'director', model:'test-image',
+    ));
+    final events = <ChatTimelineEvent>[
+      const ChatEntry(id:1, speaker:ChatSpeaker.narrator,
+        name:'Narrateur', text:'Un rayon de soleil éclaire la cuisine.'),
+      const ChatIllustrationIntent(id:2, playerEventId:1,
+        description:'La lumière sur la table.'),
+    ];
+    final records = _ImageRecords()..timeline = () => events;
+    final image = _Image();
+    final controller = IllustrationController(
+      sessionId:'director-retry', ai:ai, preferences:prefs, records:records,
+      timeline:() => events, lore:() => const BookLore(),
+      memory:() => const [], awaitNarrativeWrites:() async {},
+      files:_MemoryFiles(), providerFactory:(_) => image,
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+
+    await controller.prepare(2);
+    expect(controller.error, contains('Metteur en scène IA'));
+    expect(controller.error, contains('25 s'));
+    expect(controller.error, isNot(contains('Vérifiez le profil IA')));
+    expect(controller.errorIntentId, 2);
+    expect(controller.forIntent(2), isNull);
+    expect(image.calls, 0);
+
+    await controller.prepare(2);
+    expect(controller.error, isNull);
+    expect(controller.errorIntentId, isNull);
+    expect(controller.forIntent(2)?.state, IllustrationJobState.ready);
+    expect(image.calls, 0);
+  });
+
+  test('Invalid director JSON and provider errors remain distinguishable',
+      () async {
+    final director = _FailOnceDirector()..nextText = 'not-json';
+    final ai = AiConnectionController(store:_Store(), provider:director);
+    addTearDown(ai.dispose);
+    await ai.initialize();
+    final prefs = ImagePreferences();
+    addTearDown(prefs.dispose);
+    await prefs.initialize();
+    final events = <ChatTimelineEvent>[
+      const ChatEntry(id:1, speaker:ChatSpeaker.narrator,
+        name:'Narrateur', text:'Une lampe éclaire le salon.'),
+      const ChatIllustrationIntent(id:2, playerEventId:1,
+        description:'La lampe dans le salon.'),
+    ];
+    final records = _ImageRecords()..timeline = () => events;
+    final image = _Image();
+    final controller = IllustrationController(
+      sessionId:'director-bad-json', ai:ai, preferences:prefs,
+      records:records, timeline:() => events, lore:() => const BookLore(),
+      memory:() => const [], awaitNarrativeWrites:() async {},
+      files:_MemoryFiles(), providerFactory:(_) => image,
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+
+    await controller.prepare(2);
+    expect(controller.error, contains('Description du metteur en scène invalide'));
+    expect(controller.forIntent(2), isNull);
+    expect(image.calls, 0);
+
+    director.nextFailure = const AiProviderException(
+      'Accès refusé (HTTP 403).',
+      kind: AiProviderErrorKind.access,
+    );
+    await controller.generate(2);
+    expect(controller.error, contains('Metteur en scène IA : Accès refusé'));
+    expect(controller.error, contains('HTTP 403'));
+    expect(image.calls, 0);
   });
 
 }
