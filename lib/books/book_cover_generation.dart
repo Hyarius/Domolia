@@ -83,12 +83,13 @@ class BookCoverGenerator {
   }) async {
     connection.validate();
     book.validate();
-    if (connection.profileId.isEmpty || connection.model.isEmpty) {
+    final effective = connection.resolveProfiles(profiles);
+    if (effective.profileId.isEmpty) {
       throw const ImageGenerationFailure(ImageFailureKind.unsupported,
           'Génération d’image non configurée : choisissez un profil '
           'graphique et un modèle dans les réglages IA.');
     }
-    final matches = profiles.where((p) => p.id == connection.profileId);
+    final matches = profiles.where((p) => p.id == effective.profileId);
     if (matches.isEmpty) {
       throw const ImageGenerationFailure(ImageFailureKind.unsupported,
           'Profil graphique introuvable. Ouvrez les réglages IA.');
@@ -100,12 +101,7 @@ class BookCoverGenerator {
           ? OpenAiImageGenerationProvider()
           : OpenUncensoredImageGenerationProvider());
     final catalog = await provider.listModels(profile.apiKey);
-    final available = catalog.where((m) => m.id == connection.model);
-    if (available.isEmpty) {
-      throw const ImageGenerationFailure(ImageFailureKind.unsupported,
-          'Modèle graphique indisponible pour cette couverture.');
-    }
-    final capability = available.first;
+    final capability = selectImageModel(catalog, effective.model);
     // Portrait first; fall back only to a supported format, never silently
     // send an invalid size or quality to a paid API.
     const portrait = ['1024x1536', '1024x1792', 'auto', '1024x1024'];
@@ -119,13 +115,14 @@ class BookCoverGenerator {
       throw const ImageGenerationFailure(ImageFailureKind.unsupported,
           'Plafond de dépense strict impossible : coût maximal inconnu.');
     }
-    final quality = book.illustrationSettings.quality;
+    final quality = providerId == 'openuncensored'
+        ? null : book.illustrationSettings.quality;
     if (quality != null && !capability.qualities.contains(quality)) {
       throw const ImageGenerationFailure(ImageFailureKind.unsupported,
           'Qualité de couverture non prise en charge par ce modèle.');
     }
     final result = await provider.generate(ImageGenerationRequest(
-      model: connection.model,
+      model: capability.id,
       prompt: buildPrompt(book),
       size: sizes.first,
       quality: quality,
