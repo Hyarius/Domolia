@@ -14,6 +14,7 @@ import '../chat/chat_controller.dart';
 import '../chat/chat_protocol.dart';
 import '../chat/chat_exports.dart';
 import '../theme/domolia_theme.dart';
+import '../illustration/image_preferences.dart';
 
 /// Conversation-level settings only select already configured AI profiles.
 class ConversationSettingsPage extends StatefulWidget {
@@ -23,7 +24,7 @@ class ConversationSettingsPage extends StatefulWidget {
     this.bookTitle, this.sessionTitle, required this.onBack,
     this.onExportBookJson, this.onLoadAiDiagnostics, this.onExportAiTrace,
     this.onPurgeAiDiagnostics, this.onLoadAiUsage,
-    this.taskRouting, this.onOpenMemory,
+    this.taskRouting, this.onOpenMemory, this.imagePreferences,
     this.showBackButton = true,
   });
   final BookLibraryController library;
@@ -45,6 +46,7 @@ class ConversationSettingsPage extends StatefulWidget {
   final Future<List<AiUsageRecord>> Function()? onLoadAiUsage;
   final AiTaskRouting? taskRouting;
   final VoidCallback? onOpenMemory;
+  final ImagePreferences? imagePreferences;
   @override
   State<ConversationSettingsPage> createState() => _ConversationSettingsPageState();
 }
@@ -278,6 +280,68 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
         },
       ),
     ]);
+  }
+
+  /// Revert this Party's overrides, not its narrative or Live Memory.
+  Future<void> _resetToBookSettings() async {
+    if (_saving || !_loaded || _loadFailed || widget.chat.busy ||
+        widget.chat.pendingRaw != null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Revenir aux réglages du Livre ?'),
+        content: const Text(
+          'Les surcharges de cette Partie (profils IA, mémoire, '
+          'consultations, budgets et illustrations) seront retirées. '
+          'Les réglages du Livre ou de l’application seront utilisés.\\n\\n'
+          'Le récit, les souvenirs, les images et le Livre ne seront '
+          'pas modifiés.'),
+        actions: [
+          TextButton(
+            key: const ValueKey('conversationResetCancel'),
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            key: const ValueKey('conversationResetConfirm'),
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Rétablir'),
+          ),
+        ],
+      ),
+    ) ?? false;
+    if (!confirmed || !mounted || _saving || widget.chat.busy ||
+        widget.chat.pendingRaw != null) return;
+
+    setState(() => _saving = true);
+    ImageGenerationOptions? previousImageOverride;
+    var imageOverrideRemoved = false;
+    try {
+      final preferences = widget.imagePreferences;
+      if (preferences != null) {
+        previousImageOverride = await preferences.overrideFor(widget.sessionId);
+        await preferences.saveParty(widget.sessionId, null);
+        imageOverrideRemoved = true;
+      }
+      try {
+        await widget.library.resetSessionSettings(widget.sessionId);
+      } catch (_) {
+        // Undo the preference change if the durable session update failed.
+        if (imageOverrideRemoved && previousImageOverride != null) {
+          await preferences!.saveParty(widget.sessionId, previousImageOverride);
+        }
+        rethrow;
+      }
+      widget.chat.setIllustrationMode(
+          widget.library.byId(widget.bookId)?.illustrationMode ??
+              IllustrationMode.disabled);
+      await _load();
+      _notify('Réglages de la Partie rétablis depuis le Livre.');
+    } catch (_) {
+      _notify('Impossible de rétablir les réglages de cette Partie.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Future<void> _recompileLore() async {
@@ -632,6 +696,15 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                 profiles.any((profile) => profile.id == _selected);
             return Column(crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                OutlinedButton.icon(
+                  key: const ValueKey('conversationResetToBook'),
+                  onPressed: _saving || widget.chat.busy ||
+                      widget.chat.pendingRaw != null
+                      ? null : _resetToBookSettings,
+                  icon: const Icon(Icons.restart_alt_rounded),
+                  label: const Text('Rétablir les réglages du Livre'),
+                ),
+                const SizedBox(height: DomoliaSpacing.field),
                 if (!exists) const Text(
                   'La configuration précédente a été supprimée.',
                   style: TextStyle(color: DomoliaColors.goldLight)),
