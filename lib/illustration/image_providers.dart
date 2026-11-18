@@ -153,7 +153,7 @@ abstract class _HttpImageProvider implements ImageGenerationProvider {
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode(body);
     }
-    final exchange = diagnostics?.begin(
+    final AiExchange? exchange = (diagnostics ?? AiExchangeRecorder()).begin(
       provider: id,
       method: request.method,
       url: request.url.toString(),
