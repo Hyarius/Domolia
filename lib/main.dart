@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'theme/domolia_theme.dart';
 import 'chat/chat_controller.dart';
+import 'chat/chat_protocol.dart';
 import 'chat/group_chat_page.dart';
 import 'chat/conversation_settings_page.dart';
 import 'chat/narrator_settings.dart';
