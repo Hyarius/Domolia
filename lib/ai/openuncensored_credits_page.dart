@@ -411,7 +411,10 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
           icon: const Icon(Icons.tune_rounded),
           label: const Text('Profils et budgets IA'),
         ),
-        const Text('La mémoire et les budgets se règlent dans les profils IA.',
+        const Text('Une clé OpenUncensored utilise un seul profil IA '
+          'par défaut. Pour employer des modèles différents, créez '
+          'vos profils dans les réglages IA, puis attribuez-les aux '
+          'tâches Narrateur, Mémoire et autres.',
           style: TextStyle(color: DomoliaColors.muted)),
       ],
     ]);
@@ -618,17 +621,6 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
           ],
           const SizedBox(height: DomoliaSpacing.section),
           _models(),
-          if (widget.sandbox == null && controller.ai.profiles.any((p) =>
-              !p.id.startsWith('openuncensored-managed-') &&
-              p.apiKey.isNotEmpty)) ...[
-            const SizedBox(height: DomoliaSpacing.section),
-            const Divider(),
-            const SizedBox(height: DomoliaSpacing.compact),
-            const Text('Anciens profils IA conservés dans le stockage sécurisé. '
-              'Ils ne sont pas supprimés par cette configuration. '
-              'Les Livres et Parties avec d’anciennes références restent lisibles.',
-              style: TextStyle(color: DomoliaColors.muted)),
-          ],
           const SizedBox(height: 16),
         ],
       ));
