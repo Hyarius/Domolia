@@ -121,13 +121,17 @@ class VisualSceneSelector {
     // Names from confirmed Party memory also identify visually described
     // characters who have not spoken in this scene.
     for (final fact in memory) {
-      if (partyCharacters.length >= 5) break;
+      if (partyCharacters.length >= 5) {
+        break;
+      }
       if (fact.category != 'character' ||
           !fact.entityId.startsWith('party:') ||
           fact.sourceTurnId > intent.playerEventId ||
           fact.certainty != 'confirmed' ||
           fact.visibility != 'player' ||
-          !_mentioned(relevantText, [fact.label])) continue;
+          !_mentioned(relevantText, [fact.label])) {
+        continue;
+      }
       partyCharacters.putIfAbsent(fact.entityId, () => fact.label);
     }
     final places = <LorePlace>[
@@ -456,11 +460,10 @@ String validatedImagePrompt(VisualScene scene, VisualDirection direction,
   return [
     'Une seule illustration de fiction : un instant concret du récit, '
         'sans collage ni mise en page.',
-    'SUJET PRINCIPAL : ' + VisualDirection._visualField(
+    'Sujet visible : ' + VisualDirection._visualField(
         direction.visualSubject, scene) + '.',
-    'ACTION PRIORITAIRE (doit se comprendre visuellement) : ' +
-        VisualDirection._visualField(direction.visualAction, scene) + '.',
-    // Keep the original wording for existing prompt-export compatibility.
+    'ACTION PRIORITAIRE : le geste suivant doit être immédiatement lisible '
+        'dans la pose, le contact et le déplacement des membres.',
     'Action visible : ' + VisualDirection._visualField(
         direction.visualAction, scene) + '.',
     if (direction.bodyPose.isNotEmpty)
@@ -476,7 +479,7 @@ String validatedImagePrompt(VisualScene scene, VisualDirection direction,
                   .map((c) => c.name).toList().firstOrNull ?? appearance.id)) +
           ') — identité : ' + appearance.identity +
           ' ; apparence actuelle : ' + appearance.current + '.',
-    'ENVIRONNEMENT PRÉSENT : ' + VisualDirection._visualField(
+    'Décor visible : ' + VisualDirection._visualField(
         direction.visualSetting, scene) + '.',
     'Style graphique : ' + style + '.',
     'Plan : ' + direction.shot + ', angle : ' + direction.angle +
