@@ -14,8 +14,13 @@ du fournisseur graphique. Le détail de l'image permet d'exporter le
 prompt historique et ses métadonnées en JSON, sans requête payante. Le générateur d'images est appelé **uniquement après
 confirmation explicite du joueur**.
 
-Le choix de la direction artistique est limité à des valeurs structurées ;
-il ne peut pas retourner librement de nouveaux objets ou personnages.
+Dès qu'une intention [IMAGE] existe dans la Partie, l'action de
+génération est disponible sur son slot. Le metteur en scène fournit
+uniquement une direction artistique structurée et ne décide pas de la
+recevabilité de l'illustration. Le format historique `illustratable`
+est ignoré s'il est encore renvoyé par un ancien modèle.
+La validation porte sur la structure technique et la fidélité aux faits ;
+elle ne peut pas retourner librement de nouveaux objets ou personnages.
 Cette validation ne garantit pas la fidélité sémantique d'un modèle
 graphique. Les éléments douteux sont mis en quarantaine et non
 promus en faits certains.

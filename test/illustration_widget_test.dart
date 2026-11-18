@@ -47,7 +47,7 @@ class _Text implements AiChatProvider {
     return jsonEncode({
       'shot':'medium','angle':'eye_level','focusIds':[],
       'composition':'rule_of_thirds','lighting':'soft',
-      'palette':'muted','mood':'calm','illustratable':true,
+      'palette':'muted','mood':'calm',
       'visualSubject':'Un personnage dans le décor',
       'visualAction':'Le personnage observe les lieux',
       'visualSetting':'Un intérieur calme',
@@ -326,7 +326,7 @@ void main() {
         text.gate!.complete(jsonEncode({
           'shot':'medium','angle':'eye_level','focusIds':[],
           'composition':'rule_of_thirds','lighting':'soft',
-          'palette':'muted','mood':'calm','illustratable':true,
+          'palette':'muted','mood':'calm',
       'visualSubject':'Un personnage dans le décor',
       'visualAction':'Le personnage observe les lieux',
       'visualSetting':'Un intérieur calme',
@@ -380,7 +380,7 @@ void main() {
     text.gate!.complete(jsonEncode({
       'shot':'medium','angle':'eye_level','focusIds':[],
       'composition':'rule_of_thirds','lighting':'soft',
-      'palette':'muted','mood':'calm','illustratable':true,
+      'palette':'muted','mood':'calm',
       'visualSubject':'Un personnage dans le décor',
       'visualAction':'Le personnage observe les lieux',
       'visualSetting':'Un intérieur calme',

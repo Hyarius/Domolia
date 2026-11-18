@@ -934,6 +934,12 @@ void main() {
     expect(stored.formatterProfileId, isNull);
     expect(stored.aiProfileId, isNull);
 
+    final advanced = find.byKey(
+        const ValueKey('conversationAdvancedSettings'));
+    await tester.scrollUntilVisible(advanced, 180);
+    await tester.ensureVisible(advanced);
+    await tester.tap(advanced);
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.byKey(
       const ValueKey('conversationRecompileLore')), 180);
     await tester.tap(find.byKey(const ValueKey('conversationRecompileLore')));
@@ -997,6 +1003,12 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
+    final advanced = find.byKey(
+        const ValueKey('conversationAdvancedSettings'));
+    await tester.scrollUntilVisible(advanced, 180);
+    await tester.ensureVisible(advanced);
+    await tester.tap(advanced);
+    await tester.pumpAndSettle();
     final token = find.byKey(
         const ValueKey('conversationTokens-narrator-0'));
     await tester.scrollUntilVisible(token, 230);
