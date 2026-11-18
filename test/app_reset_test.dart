@@ -1,4 +1,5 @@
 import 'package:domolia/ai/ai_provider.dart';
+import 'package:domolia/ai/openuncensored_api.dart';
 import 'package:domolia/ai/openuncensored_vault.dart';
 import 'package:domolia/settings/app_reset.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -117,7 +118,7 @@ void main() {
     expect(order, isEmpty);
   });
 
-  test('Failed credential persistence prevents any destructive cleanup',
+  test('No credentials yields a clean default OpenUncensored profile',
       () async {
     final order = <String>[];
     final profiles = _Profiles(null, order);
