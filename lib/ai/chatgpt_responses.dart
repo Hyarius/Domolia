@@ -268,7 +268,7 @@ class ChatGptResponsesProvider
         if (configuration.reasoningEffort != null)
           'reasoning': {'effort': configuration.reasoningEffort},
       });
-    final exchange = diagnostics?.begin(
+    final AiExchange? exchange = (diagnostics ?? AiExchangeRecorder()).begin(
       provider: 'chatgpt-responses',
       method: request.method,
       url: request.url.toString(),
