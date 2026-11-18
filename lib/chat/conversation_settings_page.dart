@@ -787,7 +787,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                   final inherited = widget.taskRouting?.profileFor(
                     AiNarrativeTask.narrator,
                   );
-                  final chosen = _selected ?? inherited ?? _inheritedNarratorProfile;
+                  final chosen = _selected ?? _inheritedNarratorProfile ?? inherited;
                   final profile = [
                     for (final p in profiles) if (p.id == chosen) p,
                   ];
