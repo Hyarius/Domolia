@@ -278,9 +278,17 @@ void main() {
     await showPage(tester, size: const Size(430, 1100),
       taskRouting: routing);
 
-    // JSONifier is independently configurable in the common provider UI.
+    final taskSettings = find.byKey(const ValueKey('aiTaskSettings'));
+    await tester.scrollUntilVisible(taskSettings, 250,
+      scrollable: find.byType(Scrollable).first);
+    await tester.ensureVisible(taskSettings);
+    await tester.pumpAndSettle();
+    await tester.tap(taskSettings);
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('aiTaskTokens-jsonifier-4096')),
-      findsOneWidget);
+      findsNothing);
+    expect(find.byKey(const ValueKey('aiTaskTokens-optimizer-4096')),
+      findsNothing);
     final token = find.byKey(const ValueKey('aiTaskTokens-narrator-8192'));
     await tester.scrollUntilVisible(token, 250,
       scrollable: find.byType(Scrollable).first);
@@ -292,7 +300,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(routing.generationFor(AiNarrativeTask.narrator).maxOutputTokens,
       4096);
-    // Changing the narrator must not change the JSONifier budget.
+    // Preserve legacy preferences even though they are no longer displayed.
     expect(routing.generationFor(AiNarrativeTask.jsonifier).maxOutputTokens,
       4096);
 

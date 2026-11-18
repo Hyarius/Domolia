@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'theme/domolia_theme.dart';
 import 'chat/chat_controller.dart';
+import 'chat/chat_protocol.dart';
 import 'chat/group_chat_page.dart';
 import 'chat/conversation_settings_page.dart';
 import 'chat/narrator_settings.dart';
@@ -41,6 +42,11 @@ import 'updates/update_io.dart';
 import 'updates/update_widgets.dart';
 import 'logging/app_logger.dart';
 import 'logging/app_logs_page.dart';
+import 'illustration/illustration_controller.dart';
+import 'illustration/illustration_records.dart';
+import 'illustration/image_preferences.dart';
+import 'illustration/image_settings_page.dart';
+import 'settings/app_reset.dart';
 
 void main() {
   runZonedGuarded(() async {
@@ -75,6 +81,7 @@ class DomoliaApp extends StatelessWidget {
     this.chatController,
     this.narratorSettingsController,
     this.bookLibraryController,
+    this.onResetApp,
   });
 
   final UpdateController? updateController;
@@ -83,6 +90,7 @@ class DomoliaApp extends StatelessWidget {
   final NarrativeChatController? chatController;
   final NarratorSettingsController? narratorSettingsController;
   final BookLibraryController? bookLibraryController;
+  final Future<void> Function()? onResetApp;
 
   @override
   Widget build(BuildContext context) {
@@ -104,12 +112,13 @@ class DomoliaApp extends StatelessWidget {
         chat: chatController,
         narratorSettings: narratorSettingsController,
         books: bookLibraryController,
+        onResetApp: onResetApp,
       ),
     );
   }
 }
 
-enum _Page { home, books, book, chat, about, settings, updates, ai, aiProviders, diagnostics, logs, conversationSettings, memory }
+enum _Page { home, books, book, chat, about, settings, updates, ai, aiProviders, diagnostics, logs, conversationSettings, memory, imageSettings }
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -120,6 +129,7 @@ class HomePage extends StatefulWidget {
     this.chat,
     this.narratorSettings,
     this.books,
+    this.onResetApp,
   });
   final UpdateController? updates;
   final AiConnectionController? ai;
@@ -127,6 +137,7 @@ class HomePage extends StatefulWidget {
   final NarrativeChatController? chat;
   final NarratorSettingsController? narratorSettings;
   final BookLibraryController? books;
+  final Future<void> Function()? onResetApp;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -138,10 +149,14 @@ class _HomePageState extends State<HomePage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   GlobalKey<BookEditorPageState> _bookEditorKey = GlobalKey<BookEditorPageState>();
   bool _leavingBook = false;
+  bool _resetting = false;
   late final UpdateController _updates;
   late final bool _ownsUpdates;
   final AiExchangeRecorder _aiDiagnostics = AiExchangeRecorder();
   final AiTaskRouting _taskRouting = AiTaskRouting();
+  final ImagePreferences _imagePreferences = ImagePreferences();
+  IllustrationController? _illustrations;
+  String? _imageSettingsSessionId;
   late final AiConnectionController _ai;
   late final OuCreditsController _credits;
   late final bool _ownsCredits;
@@ -208,6 +223,8 @@ class _HomePageState extends State<HomePage> {
     if (_ownsUpdates) _updates.dispose();
     if (_ownsChat) _chat.dispose();
     _liveMemory?.dispose();
+    _illustrations?.dispose();
+    _imagePreferences.dispose();
     if (_ownsNarratorSettings) _narratorSettings.dispose();
     if (_ownsBooks) {
       if (_books.store is SqliteBookStore) {
@@ -291,14 +308,23 @@ class _HomePageState extends State<HomePage> {
     unawaited(_navigateTo(_Page.books));
   }
 
-  void _openBook(BookDefinition book) {
+  int _bookEditorInitialTab = 0;
+
+  void _openBook(BookDefinition book, {int initialTab = 0}) {
     unawaited(_ai.initialize());
     setState(() {
       _history.add(_page);
       _selectedBookId = book.id;
+      _bookEditorInitialTab = initialTab;
       _bookEditorKey = GlobalKey<BookEditorPageState>();
       _page = _Page.book;
     });
+  }
+
+  void _openCurrentBookLore() {
+    final bookId = _selectedBookId;
+    final book = bookId == null ? null : _books.byId(bookId);
+    if (book != null) _openBook(book, initialTab: 1);
   }
 
   Future<void> _createBookFromHome() async {
@@ -353,6 +379,18 @@ class _HomePageState extends State<HomePage> {
     }
     if (!await _canLeaveCurrentPage() || !mounted || _history.isEmpty) return;
     setState(() => _page = _history.removeLast());
+    if (_page == _Page.chat &&
+        _activeSessionId != null && _selectedBookId != null) {
+      // The Book may have been edited/reset without restarting this Party.
+      final current = await _books.session(_activeSessionId!);
+      if (mounted && _page == _Page.chat) {
+        _chat.setIllustrationMode(
+          current?.illustrationModeOverride ??
+              _books.byId(_selectedBookId!)?.illustrationMode ??
+              IllustrationMode.disabled,
+        );
+      }
+    }
     if (_page == _Page.home) unawaited(_refreshRecent());
   }
 
@@ -362,6 +400,7 @@ class _HomePageState extends State<HomePage> {
       await _ai.initialize();
       await _taskRouting.initialize();
       if (!mounted) return;
+      void Function(AiExchange)? captureIllustrationExchange;
       if (_ownsChat) {
         Future<NarrativeAiEndpoint> endpointForId(
             String id, AiNarrativeTask task) async {
@@ -388,9 +427,10 @@ class _HomePageState extends State<HomePage> {
 
         Future<String> narratorProfileId() async {
           final current = await _books.session(session.id);
+          // Party override > Book binding > application default.
           final chosen = current?.aiProfileId ??
-              _taskRouting.profileFor(AiNarrativeTask.narrator) ??
-              await _books.profileFor(book.id);
+              await _books.profileFor(book.id) ??
+              _taskRouting.profileFor(AiNarrativeTask.narrator);
           if (chosen == null || chosen.isEmpty) {
             throw const AiProviderException(
               'Choisissez une configuration IA pour le narrateur.',
@@ -407,22 +447,17 @@ class _HomePageState extends State<HomePage> {
         final AiUsageStore? usageStore =
             storage is AiUsageStore ? storage as AiUsageStore : null;
         final creditedNarratorExchanges = <int>{};
-        void captureExchange(AiExchange exchange) {
-          // The usage ledger is separate from bounded, purgeable diagnostics.
-          // A tool round is one billed LLM request, not another fee per tool.
-          final usage = AiUsageRecord.fromExchange(session.id, exchange);
-          // Freeze the payload synchronously: queued SQLite writes must not
-          // accidentally serialize a later mutation of the same HTTP record.
+        void persistExchange(AiExchange exchange, {bool recordUsage = true}) {
+          // Freeze the payload before it enters the async SQLite write queue.
+          // Image requests have a separate usage ledger and must not be
+          // double-counted as narration or as paid image operations.
           final diagnosticJson = exchange.exportJson();
-          if ((exchange.stage == 'narrator_structured' ||
-              (exchange.stage?.startsWith('narrator_tool_round_') ?? false)) &&
-              creditedNarratorExchanges.add(
-                  exchange.createdAtUtc.microsecondsSinceEpoch)) {
-            final key = _credits.active;
-            if (key != null) unawaited(_credits.refresh(key.id));
-          }
+          final usage = recordUsage
+              ? AiUsageRecord.fromExchange(session.id, exchange) : null;
           writes = writes.then((_) async {
-            if (usageStore != null) await usageStore.putUsage(usage);
+            if (usage != null && usageStore != null) {
+              await usageStore.putUsage(usage);
+            }
             final retention =
                 await const AiDiagnosticsRetentionPreferences().limit();
             if (retention == 0) return;
@@ -436,11 +471,24 @@ class _HomePageState extends State<HomePage> {
               retention,
             );
           }).catchError((Object failure, StackTrace stackTrace) {
-            AppLogger.error('Comptabilisation IA non enregistrée',
+            AppLogger.error('Diagnostic IA non enregistré',
                 component: 'diagnostics', error: failure,
                 stackTrace: stackTrace);
           });
         }
+        void captureExchange(AiExchange exchange) {
+          // A tool round is one billed LLM request, not one fee per tool.
+          if ((exchange.stage == 'narrator_structured' ||
+              (exchange.stage?.startsWith('narrator_tool_round_') ?? false)) &&
+              creditedNarratorExchanges.add(
+                  exchange.createdAtUtc.microsecondsSinceEpoch)) {
+            final key = _credits.active;
+            if (key != null) unawaited(_credits.refresh(key.id));
+          }
+          persistExchange(exchange);
+        }
+        captureIllustrationExchange = (exchange) =>
+            persistExchange(exchange, recordUsage: false);
         _liveMemory = storage is LiveMemoryStore &&
                 storage is NarrativeSnapshotStore
             ? LiveMemoryCoordinator(
@@ -471,6 +519,8 @@ class _HomePageState extends State<HomePage> {
           provider: _ai.provider,
           configuration: () => null,
           narrator: book.narrator,
+          // Book settings can change while this Party remains open.
+          narratorProvider: () => (_books.byId(book.id) ?? book).narrator,
           structuredStreamingEnabled: true,
           illustrationMode: session.illustrationModeOverride ??
               book.illustrationMode,
@@ -520,6 +570,44 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       _chat.restoreTimeline(session.timeline, rawGenerations: rawGenerations);
       _chat.beginConversation();
+      _illustrations?.dispose();
+      _illustrations = null;
+      if (_books.store is IllustrationRecordStore && _ownsChat) {
+        final store = _books.store as IllustrationRecordStore;
+        final illustrationController = IllustrationController(
+          sessionId: session.id,
+          ai: _ai,
+          preferences: _imagePreferences,
+          records: store,
+          timeline: () => _chat.timeline,
+          lore: () => _books.byId(book.id)?.lore ?? book.lore,
+          visualSettings: () => _books.byId(book.id)?.illustrationSettings ??
+              book.illustrationSettings,
+          memory: () => _liveMemory?.facts ?? const [],
+          onAcceptVisualFacts: (facts) async {
+            await _liveMemory?.acceptVisualFacts(facts);
+          },
+          awaitNarrativeWrites: () => _awaitSessionWrites?.call()
+              ?? Future<void>.value(),
+          files: LocalIllustrationFiles(),
+          usage: store is AiUsageStore ? store as AiUsageStore : null,
+          diagnostics: _aiDiagnostics,
+          onExchangeCaptured: captureIllustrationExchange,
+          onOpenUncensoredCharge: () {
+            final active = _credits.active;
+            if (active != null) unawaited(_credits.refresh(active.id));
+          },
+        );
+        try {
+          await illustrationController.initialize();
+          _illustrations = illustrationController;
+        } catch (_) {
+          illustrationController.dispose();
+          // The narrative remains usable if image storage is unavailable.
+          AppLogger.warning('Chargement des illustrations indisponible',
+              component: 'illustrations');
+        }
+      }
       setState(() {
         _selectedBookId = book.id;
         _activeBookTitle = book.title;
@@ -536,6 +624,11 @@ class _HomePageState extends State<HomePage> {
         const SnackBar(content: Text('Impossible d’ouvrir cette partie.')),
       );
     }
+  }
+
+  void _openImageSettings({String? sessionId}) {
+    _imageSettingsSessionId = sessionId;
+    unawaited(_navigateTo(_Page.imageSettings));
   }
 
   void _openAiSettings() {
@@ -577,6 +670,13 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         actions: [
+          if (_page == _Page.chat && _selectedBookId != null)
+            IconButton(
+              key: const ValueKey('chatBookLoreAppBar'),
+              tooltip: 'Lore du Livre',
+              onPressed: _openCurrentBookLore,
+              icon: const Icon(Icons.auto_stories_outlined),
+            ),
           if (_page == _Page.chat)
             IconButton(
               key: const ValueKey('chatSettingsAppBar'),
@@ -606,12 +706,16 @@ class _HomePageState extends State<HomePage> {
               ? BookEditorPage(
                   key: _bookEditorKey,
                   book: _books.byId(_selectedBookId!)!,
+                  initialTab: _bookEditorInitialTab,
+                  imagePreferences: _imagePreferences,
                   library: _books,
                   ai: _ai,
                   onPlay: _openBookSession,
                 )
           : _page == _Page.chat ? GroupChatPage(
               controller: _chat,
+              illustrations: _illustrations,
+              onOpenImageSettings: () => _openImageSettings(sessionId: _activeSessionId),
               onOpenSettings: _openConversationSettings,
               bookTitle: _activeBookTitle,
               sessionTitle: _activeSessionTitle,
@@ -635,6 +739,8 @@ class _HomePageState extends State<HomePage> {
                   ai: _ai,
                   chat: _chat,
                   taskRouting: _taskRouting,
+                  imagePreferences: _imagePreferences,
+                  onAwaitSessionWrites: _awaitSessionWrites,
                   onOpenMemory: _liveMemory == null ? null :
                       () => unawaited(_navigateTo(_Page.memory)),
                   bookId: _selectedBookId!,
@@ -676,6 +782,14 @@ class _HomePageState extends State<HomePage> {
               controller: _credits,
               onBack: () => unawaited(_goBack()),
               showBackButton: false,
+              onOpenAiProfiles: () => unawaited(_navigateTo(_Page.aiProviders)),
+            )
+          : _page == _Page.imageSettings ? ImageSettingsPage(
+              ai: _ai,
+              preferences: _imagePreferences,
+              sessionId: _imageSettingsSessionId,
+              showBackButton: false,
+              onBack: () => unawaited(_goBack()),
             )
           : _page == _Page.aiProviders ? AiSettingsPanel(
               controller: _ai,
@@ -781,6 +895,72 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<void> _resetApp() async {
+    if (_resetting) return;
+    if (_chat.busy || _credits.busy ||
+        _illustrations?.hasInFlight == true ||
+        _updates.phase == UpdatePhase.downloading) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Une opération est en cours. Terminez-la avant '
+            'de réinitialiser Domolia.'),
+      ));
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Réinitialiser Domolia ?'),
+        content: const Text(
+          'Les paramètres de Domolia (IA, narrateur, illustrations, '
+          'mises à jour et préférences par Partie) reviendront à leurs '
+          'valeurs par défaut. OpenUncensored sera sélectionné '
+          'automatiquement.\n\n'
+          'Vos Livres, Parties, mémoires, illustrations, diagnostics, '
+          'fichiers et toutes vos clés API enregistrées seront conservés. '
+          'Aucun crédit ne sera acheté ou consommé.',
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('resetAppCancel'),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            key: const ValueKey('resetAppConfirm'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Réinitialiser les réglages'),
+          ),
+        ],
+      ),
+    ) ?? false;
+    if (!confirmed || !mounted) return;
+    setState(() => _resetting = true);
+    try {
+      if (widget.onResetApp != null) {
+        await widget.onResetApp!();
+      } else {
+        // Settings only: never close, erase or migrate the library database.
+        // The reset service preserves all books, sessions and API secrets.
+        await AppResetService().reset();
+      }
+      if (mounted && widget.onResetApp == null) {
+        // Recreate settings controllers from defaults without changing
+        // the persisted books, sessions or illustration files.
+        runApp(DomoliaApp(key: UniqueKey()));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Réinitialisation des réglages incomplète. '
+              'Vos Livres, Parties et clés API sont conservés. '
+              'Relancez Domolia avant de réessayer.'),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _resetting = false);
+    }
+  }
+
   Widget _buildSettings() => SafeArea(
     child: ListView(
       padding: const EdgeInsets.all(24),
@@ -794,10 +974,13 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         const SizedBox(height: DomoliaSpacing.section),
+        const Text('Intelligence artificielle', style: TextStyle(
+          color: DomoliaColors.goldLight, fontSize: 18)),
+        const SizedBox(height: DomoliaSpacing.compact),
         ListTile(
           leading: const Icon(Icons.smart_toy_outlined, color: DomoliaColors.gold),
           title: const Text('Crédits IA'),
-          subtitle: const Text('OpenUncensored, clés et modèles'),
+          subtitle: const Text('OpenUncensored : solde, clés et modèle narratif'),
           trailing: const Icon(Icons.chevron_right),
           onTap: _openAiSettings,
         ),
@@ -806,11 +989,24 @@ class _HomePageState extends State<HomePage> {
           key: const ValueKey('settingsAiProviders'),
           leading: const Icon(Icons.hub_outlined, color: DomoliaColors.gold),
           title: const Text('Fournisseurs IA'),
-          subtitle: const Text('ChatGPT, modèles NSFW et IA par tâche'),
+          subtitle: const Text('Connexions, narrateur, mémoire et budgets'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => unawaited(_navigateTo(_Page.aiProviders)),
         ),
         const Divider(),
+        ListTile(
+          key: const ValueKey('settingsImages'),
+          leading: const Icon(Icons.brush_outlined, color: DomoliaColors.gold),
+          title: const Text('Génération d’images'),
+          subtitle: const Text('Fournisseur, modèle et metteur en scène IA'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _openImageSettings(),
+        ),
+        const Divider(),
+        const SizedBox(height: DomoliaSpacing.section),
+        const Text('Application', style: TextStyle(
+          color: DomoliaColors.goldLight, fontSize: 18)),
+        const SizedBox(height: DomoliaSpacing.compact),
         ListTile(
           leading: const Icon(Icons.system_update_alt_rounded, color: DomoliaColors.gold),
           title: const Text('Mises à jour'),
@@ -835,6 +1031,19 @@ class _HomePageState extends State<HomePage> {
           subtitle: const Text('Consulter, copier, exporter et effacer le journal'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => unawaited(_navigateTo(_Page.logs)),
+        ),
+        const Divider(),
+        ListTile(
+          key: const ValueKey('settingsFactoryReset'),
+          leading: const Icon(Icons.restart_alt_rounded,
+              color: Colors.redAccent),
+          title: const Text('Réinitialiser les réglages'),
+          subtitle: const Text('Rétablir les réglages sans perdre vos Livres ni vos clés'),
+          trailing: _resetting
+              ? const SizedBox(width: 20, height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.chevron_right),
+          onTap: _resetting ? null : () => unawaited(_resetApp()),
         ),
       ],
     ),

@@ -277,6 +277,33 @@ class LiveMemoryCoordinator extends ChangeNotifier {
     await refresh();
   }
 
+  /// Store only artist proposals approved by the player. The manual
+  /// corrections in Live Memory remain authoritative over new proposals.
+  Future<void> acceptVisualFacts(Iterable<LiveMemoryFact> suggestions) async {
+    for (final proposal in suggestions) {
+      if (proposal.category != 'character' ||
+          !{'visual_identity', 'visual_current'}.contains(proposal.field) ||
+          proposal.text.trim().isEmpty ||
+          proposal.text.length > 800) {
+        throw const FormatException('Proposition visuelle invalide.');
+      }
+      final current = _facts.where((f) => f.id == proposal.id).toList();
+      // Once accepted, permanent physical traits never drift just because
+      // a later director proposes a different haircut or face.
+      if (current.isNotEmpty &&
+          (current.first.manual ||
+              current.first.pinned ||
+              proposal.field == 'visual_identity')) {
+        continue;
+      }
+      await store.saveMemoryOverride(
+        sessionId,
+        LiveMemoryOverride(proposal.id, fact: proposal),
+      );
+    }
+    await refresh();
+  }
+
   Future<void> deleteFact(LiveMemoryFact fact) async {
     await store.saveMemoryOverride(
       sessionId,

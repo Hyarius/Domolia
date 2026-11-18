@@ -14,6 +14,7 @@ import '../chat/chat_controller.dart';
 import '../chat/chat_protocol.dart';
 import '../chat/chat_exports.dart';
 import '../theme/domolia_theme.dart';
+import '../illustration/image_preferences.dart';
 
 /// Conversation-level settings only select already configured AI profiles.
 class ConversationSettingsPage extends StatefulWidget {
@@ -23,8 +24,8 @@ class ConversationSettingsPage extends StatefulWidget {
     this.bookTitle, this.sessionTitle, required this.onBack,
     this.onExportBookJson, this.onLoadAiDiagnostics, this.onExportAiTrace,
     this.onPurgeAiDiagnostics, this.onLoadAiUsage,
-    this.taskRouting, this.onOpenMemory,
-    this.showBackButton = true,
+    this.taskRouting, this.onOpenMemory, this.imagePreferences,
+    this.onAwaitSessionWrites, this.showBackButton = true,
   });
   final BookLibraryController library;
   final AiConnectionController ai;
@@ -45,6 +46,8 @@ class ConversationSettingsPage extends StatefulWidget {
   final Future<List<AiUsageRecord>> Function()? onLoadAiUsage;
   final AiTaskRouting? taskRouting;
   final VoidCallback? onOpenMemory;
+  final ImagePreferences? imagePreferences;
+  final Future<void> Function()? onAwaitSessionWrites;
   @override
   State<ConversationSettingsPage> createState() => _ConversationSettingsPageState();
 }
@@ -278,6 +281,74 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
         },
       ),
     ]);
+  }
+
+  /// Revert this Party's overrides, not its narrative or Live Memory.
+  Future<void> _resetToBookSettings() async {
+    if (_saving || !_loaded || _loadFailed || widget.chat.busy ||
+        widget.chat.pendingRaw != null) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Revenir aux réglages du Livre ?'),
+        content: const Text(
+          'Les surcharges de cette Partie (profils IA, mémoire, '
+          'consultations, budgets et illustrations) seront retirées. '
+          'Les réglages du Livre ou de l’application seront utilisés.\n\n'
+          'Le récit, les souvenirs, les images et le Livre ne seront '
+          'pas modifiés.'),
+        actions: [
+          TextButton(
+            key: const ValueKey('conversationResetCancel'),
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            key: const ValueKey('conversationResetConfirm'),
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Rétablir'),
+          ),
+        ],
+      ),
+    ) ?? false;
+    if (!confirmed || !mounted || _saving || widget.chat.busy ||
+        widget.chat.pendingRaw != null) {
+      return;
+    }
+
+    setState(() => _saving = true);
+    ImageGenerationOptions? previousImageOverride;
+    var imageOverrideRemoved = false;
+    try {
+      // Drain queued RAW/timeline writes before updating the session row.
+      await widget.onAwaitSessionWrites?.call();
+      final preferences = widget.imagePreferences;
+      if (preferences != null) {
+        previousImageOverride = await preferences.overrideFor(widget.sessionId);
+        await preferences.saveParty(widget.sessionId, null);
+        imageOverrideRemoved = true;
+      }
+      try {
+        await widget.library.resetSessionSettings(widget.sessionId);
+      } catch (_) {
+        // Undo the preference change if the durable session update failed.
+        if (imageOverrideRemoved && previousImageOverride != null) {
+          await preferences!.saveParty(widget.sessionId, previousImageOverride);
+        }
+        rethrow;
+      }
+      widget.chat.setIllustrationMode(
+          widget.library.byId(widget.bookId)?.illustrationMode ??
+              IllustrationMode.disabled);
+      await _load();
+      _notify('Réglages de la Partie rétablis depuis le Livre.');
+    } catch (_) {
+      _notify('Impossible de rétablir les réglages de cette Partie.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Future<void> _recompileLore() async {
@@ -598,7 +669,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                 fontSize: 21, fontWeight: FontWeight.bold))),
         ]),
         const SizedBox(height: 24),
-        const Text('Connexion IA', style: TextStyle(
+        const Text('Narration et illustrations', style: TextStyle(
             color: DomoliaColors.goldLight, fontSize: 18)),
         if (!_loaded)
           const LinearProgressIndicator()
@@ -632,6 +703,15 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                 profiles.any((profile) => profile.id == _selected);
             return Column(crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                OutlinedButton.icon(
+                  key: const ValueKey('conversationResetToBook'),
+                  onPressed: _saving || widget.chat.busy ||
+                      widget.chat.pendingRaw != null
+                      ? null : _resetToBookSettings,
+                  icon: const Icon(Icons.restart_alt_rounded),
+                  label: const Text('Rétablir les réglages du Livre'),
+                ),
+                const SizedBox(height: DomoliaSpacing.field),
                 if (!exists) const Text(
                   'La configuration précédente a été supprimée.',
                   style: TextStyle(color: DomoliaColors.goldLight)),
@@ -667,11 +747,16 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                     const DropdownMenuItem(value: 'suggestions',
                         child: Text('Suggestions')),
                     const DropdownMenuItem(value: 'automatic',
-                        child: Text('Automatique (non disponible)')),
+                        child: Text('Automatique (préparation uniquement)')),
                   ],
                   onChanged: _saving || widget.chat.busy
                       ? null : _setIllustrationMode,
                 ),
+                const SizedBox(height: DomoliaSpacing.section),
+                const Divider(),
+                const SizedBox(height: DomoliaSpacing.compact),
+                const Text('Mémoire narrative', style: TextStyle(
+                  color: DomoliaColors.goldLight, fontSize: 18)),
                 const SizedBox(height: DomoliaSpacing.field),
                 SwitchListTile(
                   key: const ValueKey('conversationMemoryEnabled'),
@@ -689,7 +774,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                   label: 'Mémoire — profil de cette Partie',
                   value: _memoryProfile,
                   profiles: profiles,
-                  inheritedLabel: 'Même IA que le narrateur (défaut)',
+                  inheritedLabel: 'Profil mémoire par défaut',
                   additional: const [
                     DropdownMenuItem(value: '#disabled',
                         child: Text('Désactiver cette tâche')),
@@ -697,12 +782,19 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                         child: Text('Même IA que le narrateur')),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: DomoliaSpacing.field),
+                OutlinedButton.icon(
+                  key: const ValueKey('conversationOpenMemory'),
+                  onPressed: widget.onOpenMemory,
+                  icon: const Icon(Icons.auto_stories_outlined),
+                  label: const Text('Consulter et corriger la mémoire'),
+                ),
+                const SizedBox(height: DomoliaSpacing.field),
                 Builder(builder: (context) {
                   final inherited = widget.taskRouting?.profileFor(
                     AiNarrativeTask.narrator,
                   );
-                  final chosen = _selected ?? inherited ?? _inheritedNarratorProfile;
+                  final chosen = _selected ?? _inheritedNarratorProfile ?? inherited;
                   final profile = [
                     for (final p in profiles) if (p.id == chosen) p,
                   ];
@@ -723,13 +815,12 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                 const SizedBox(height: 16),
                 const Divider(),
                 const SizedBox(height: DomoliaSpacing.compact),
-                const Text('Budget et raisonnement par tâche',
-                  style: TextStyle(color: DomoliaColors.goldLight,
-                      fontSize: 17)),
-                const SizedBox(height: DomoliaSpacing.compact),
-                for (final task in AiNarrativeTask.values.where(
-                    (task) => task != AiNarrativeTask.jsonifier &&
-                        task != AiNarrativeTask.optimizer)) ...[
+                ExpansionTile(
+                  key: const ValueKey('conversationAdvancedSettings'),
+                  title: const Text('Réglages IA avancés'),
+                  subtitle: const Text('Budgets et contexte du Livre'),
+                  children: [
+                for (final task in AiNarrativeTask.active) ...[
                   _taskGenerationControls(task),
                   const SizedBox(height: DomoliaSpacing.field),
                 ],
@@ -752,28 +843,17 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Le contexte de départ est préparé localement, sans appel '
-                   'à une IA de compression. Les scénarios détaillés restent '
-                   'dans le Livre et sont recherchés au besoin. Le profil '
-                   'd’optimiseur historique n’est plus utilisé.',
+                  'Le contexte est préparé localement. Cette action '
+                  'ne consomme aucun crédit IA.',
                   style: TextStyle(color: DomoliaColors.muted),
+                ),
+                  ],
                 ),
               ],
             );
           },
         ),
-        const SizedBox(height: DomoliaSpacing.section),
-        const Divider(),
-        const SizedBox(height: DomoliaSpacing.compact),
-        const Text('Mémoire narrative', style: TextStyle(
-            color: DomoliaColors.goldLight, fontSize: 18)),
-        const SizedBox(height: DomoliaSpacing.field),
-        OutlinedButton.icon(
-          key: const ValueKey('conversationOpenMemory'),
-          onPressed: widget.onOpenMemory,
-          icon: const Icon(Icons.auto_stories_outlined),
-          label: const Text('Consulter et corriger la mémoire'),
-        ),
+ 
         const SizedBox(height: DomoliaSpacing.section),
         const Divider(),
         const SizedBox(height: DomoliaSpacing.compact),
@@ -781,7 +861,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
         const SizedBox(height: DomoliaSpacing.section),
         const Divider(),
         const SizedBox(height: DomoliaSpacing.compact),
-        const Text('Historique', style: TextStyle(
+        const Text('Exports et historique', style: TextStyle(
             color: DomoliaColors.goldLight, fontSize: 18)),
         const SizedBox(height: DomoliaSpacing.field),
         Wrap(spacing: 8, runSpacing: 8, children: [
@@ -795,7 +875,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
             key: const ValueKey('bookRawExport'),
             onPressed: _exportBook,
             icon: const Icon(Icons.menu_book_outlined),
-            label: const Text('Livre (JSON brut)'),
+            label: const Text('Exporter le Livre (JSON)'),
           ),
           OutlinedButton.icon(
             key: const ValueKey('aiPipelineExport'),
@@ -816,7 +896,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
         const Text(
           'Le Livre contient son Lore et ses paramètres narratifs. '
           'Le diagnostic IA regroupe les requêtes, les réponses brutes, '
-          'les phases RAW/JSON et les erreurs encore disponibles. '
+          'et les erreurs encore disponibles. '
           'Il peut contenir des informations personnelles ; '
           'les traces supprimées ne sont pas récupérables.',
           style: TextStyle(color: DomoliaColors.muted),

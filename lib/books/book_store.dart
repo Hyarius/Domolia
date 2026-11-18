@@ -1,4 +1,7 @@
 import '../chat/raw_generation.dart';
+import '../illustration/illustration_records.dart';
+import '../illustration/visual_pipeline.dart';
+import 'book_lore.dart';
 import '../chat/chat_protocol.dart';
 import '../memory/live_memory.dart';
 import 'dart:convert';
@@ -52,7 +55,7 @@ abstract interface class LiveMemoryStore {
   Future<Set<int>> analyzedMemoryTurns(String sessionId);
 }
 
-class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemoryStore, AiUsageStore {
+class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemoryStore, AiUsageStore, IllustrationRecordStore {
   SqliteBookStore({DatabaseFactory? factory, this.databasePath})
       : _factoryOverride = factory;
 
@@ -135,6 +138,147 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
         AiUsageRecord.fromJson(jsonDecode(row['payload_json'] as String)
             as Map<String, dynamic>),
     ];
+  }
+
+
+  static Future<void> _createIllustrations(Database db) async {
+    await db.execute(
+      'CREATE TABLE IF NOT EXISTS illustration_generations ('
+      'request_id TEXT PRIMARY KEY, '
+      'session_id TEXT NOT NULL, intent_id INTEGER NOT NULL, '
+      'source_hash TEXT NOT NULL, state TEXT NOT NULL, '
+      'provider TEXT NOT NULL, model TEXT NOT NULL, '
+      'created_at INTEGER NOT NULL, prompt TEXT NOT NULL, '
+      'negative_prompt TEXT NOT NULL DEFAULT \'\', '
+      'appearance_proposals_json TEXT NOT NULL DEFAULT \'[]\', '
+      'visual_style TEXT NOT NULL DEFAULT \'\', '
+      'files_json TEXT NOT NULL, mime_type TEXT, error TEXT, cost_usd REAL, '
+      'FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS illustration_by_intent '
+      'ON illustration_generations(session_id, intent_id, created_at DESC)',
+    );
+  }
+
+
+  /// Remove obsolete metadata inside the same transaction that rewrites the
+  /// timeline. Files are garbage-collected independently after commit.
+  static Future<void> _pruneIllustrations(
+      DatabaseExecutor txn, BookSession session) async {
+    final hashes = <int, String>{};
+    final selector = const VisualSceneSelector();
+    for (final intent in session.timeline.whereType<ChatIllustrationIntent>()) {
+      if (intent.state == IllustrationIntentState.cancelled ||
+          intent.state == IllustrationIntentState.ignored) {
+        continue;
+      }
+      hashes[intent.id] = selector.select(
+        intent: intent, timeline: session.timeline, lore: const BookLore(),
+      ).sourceHash;
+    }
+    final rows = await txn.query('illustration_generations',
+      columns: ['request_id', 'intent_id', 'source_hash'],
+      where: 'session_id = ?', whereArgs: [session.id]);
+    for (final row in rows) {
+      if (hashes[row['intent_id']] != row['source_hash']) {
+        await txn.delete('illustration_generations',
+          where: 'request_id = ?', whereArgs: [row['request_id']]);
+      }
+    }
+  }
+
+  @override
+  Future<List<StoredIllustration>> listIllustrations(String sessionId) async {
+    final rows = await (await database).query(
+      'illustration_generations', where: 'session_id = ?',
+      whereArgs: [sessionId], orderBy: 'created_at ASC',
+    );
+    return [
+      for (final row in rows)
+        StoredIllustration(
+          requestId: row['request_id'] as String,
+          sessionId: row['session_id'] as String,
+          intentId: row['intent_id'] as int,
+          sourceHash: row['source_hash'] as String,
+          state: IllustrationJobState.values.byName(row['state'] as String),
+          provider: row['provider'] as String,
+          model: row['model'] as String,
+          createdAtUtc: DateTime.fromMicrosecondsSinceEpoch(
+            row['created_at'] as int, isUtc: true),
+          prompt: row['prompt'] as String,
+          negativePrompt: row['negative_prompt'] as String? ?? '',
+          visualStyle: row['visual_style'] as String? ?? '',
+          appearanceProposals: [
+            for (final value in (jsonDecode(
+                row['appearance_proposals_json'] as String? ?? '[]') as List))
+              if (value is Map)
+                {
+                  for (final key in ['id', 'identity', 'current'])
+                    key: value[key]?.toString() ?? '',
+                },
+          ],
+          fileNames: (jsonDecode(row['files_json'] as String) as List)
+              .cast<String>(),
+          mimeType: row['mime_type'] as String?,
+          error: row['error'] as String?,
+          costUsd: (row['cost_usd'] as num?)?.toDouble(),
+        ),
+    ];
+  }
+
+  @override
+  Future<Set<String>> retainedIllustrationFiles() async {
+    final rows = await (await database).query('illustration_generations',
+      columns: ['files_json']);
+    return {
+      for (final row in rows)
+        for (final name in (jsonDecode(row['files_json'] as String) as List))
+          if (name is String) name,
+    };
+  }
+
+  @override
+  Future<bool> saveIllustrationIfCurrent(StoredIllustration record) async {
+    final db = await database;
+    return db.transaction<bool>((txn) async {
+      final sessions = await txn.query('sessions',
+        columns: ['timeline_json'], where: 'id = ?',
+        whereArgs: [record.sessionId], limit: 1);
+      if (sessions.isEmpty) return false;
+      final timeline = BookSession.decodeTimeline(
+          sessions.single['timeline_json'] as String);
+      final matched = timeline.whereType<ChatIllustrationIntent>()
+          .where((e) => e.id == record.intentId).toList();
+      if (matched.length != 1 ||
+          matched.single.state == IllustrationIntentState.cancelled ||
+          matched.single.state == IllustrationIntentState.ignored) {
+        return false;
+      }
+      // Compare only historical timeline evidence. Later turns are excluded.
+      final current = const VisualSceneSelector().select(
+        intent: matched.single, timeline: timeline, lore: const BookLore());
+      if (current.sourceHash != record.sourceHash) return false;
+      await txn.insert('illustration_generations', {
+        'request_id': record.requestId,
+        'session_id': record.sessionId,
+        'intent_id': record.intentId,
+        'source_hash': record.sourceHash,
+        'state': record.state.name,
+        'provider': record.provider,
+        'model': record.model,
+        'created_at': record.createdAtUtc.microsecondsSinceEpoch,
+        'prompt': record.prompt,
+        'negative_prompt': record.negativePrompt,
+        'visual_style': record.visualStyle,
+        'appearance_proposals_json': jsonEncode(record.appearanceProposals),
+        'files_json': jsonEncode(record.fileNames),
+        'mime_type': record.mimeType,
+        'error': record.error,
+        'cost_usd': record.costUsd,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      return true;
+    });
   }
 
   @override
@@ -269,6 +413,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
       if (updated != 1) {
         throw StateError('Partie supprimée ou introuvable.');
       }
+      await _pruneIllustrations(txn, session);
       // Atomically invalidate memory from deleted/regenerated source turns.
       // Manual overrides live in a separate table and remain untouched.
       final valid = {
@@ -320,7 +465,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
     return _db ??= await (_factoryOverride ?? databaseFactory).openDatabase(
       location,
       options: OpenDatabaseOptions(
-      version: 12,
+      version: 15,
       onConfigure: (db) async =>
           db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, version) async {
@@ -352,8 +497,20 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
         await _createRawGenerations(db);
         await _createMemoryTables(db);
         await _createUsage(db);
+        await _createIllustrations(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 13) await _createIllustrations(db);
+        if (oldVersion >= 13 && oldVersion < 14) {
+          await db.execute('ALTER TABLE illustration_generations '
+              "ADD COLUMN negative_prompt TEXT NOT NULL DEFAULT ''");
+        }
+        if (oldVersion >= 13 && oldVersion < 15) {
+          await db.execute('ALTER TABLE illustration_generations '
+              "ADD COLUMN appearance_proposals_json TEXT NOT NULL DEFAULT '[]'");
+          await db.execute('ALTER TABLE illustration_generations '
+              "ADD COLUMN visual_style TEXT NOT NULL DEFAULT ''");
+        }
         if (oldVersion < 12) {
           final sessions = await db.rawQuery(
               "SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'");
@@ -522,18 +679,23 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
       if (updated == 0) {
         await txn.insert('sessions', {'id': session.id, ...values});
       }
+      await _pruneIllustrations(txn, session);
     });
   }
 
   @override
   Future<void> updateSession(BookSession session) async {
     // A late autosave must never reinsert a session the user has deleted.
-    await (await database).update('sessions', {
-      'title': session.title,
-      'timeline_json': session.encodeTimeline(),
-      'updated_at': DateTime.now().microsecondsSinceEpoch,
-    }, where: 'id = ? AND book_id = ?',
-      whereArgs: [session.id, session.bookId]);
+    final db = await database;
+    await db.transaction((txn) async {
+      final updated = await txn.update('sessions', {
+        'title': session.title,
+        'timeline_json': session.encodeTimeline(),
+        'updated_at': DateTime.now().microsecondsSinceEpoch,
+      }, where: 'id = ? AND book_id = ?',
+        whereArgs: [session.id, session.bookId]);
+      if (updated == 1) await _pruneIllustrations(txn, session);
+    });
   }
 
   @override

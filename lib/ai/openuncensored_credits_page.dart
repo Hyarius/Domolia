@@ -6,7 +6,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../theme/domolia_theme.dart';
-import 'ai_task_generation.dart';
 import 'openuncensored_api.dart';
 import 'openuncensored_controller.dart';
 import 'openuncensored_vault.dart';
@@ -20,11 +19,13 @@ class OpenUncensoredCreditsPage extends StatefulWidget {
     required this.onBack,
     this.showBackButton = true,
     this.sandbox,
+    this.onOpenAiProfiles,
   });
   final OuCreditsController controller;
   final VoidCallback onBack;
   final bool showBackButton;
   final OpenUncensoredSandbox? sandbox;
+  final VoidCallback? onOpenAiProfiles;
 
   @override
   State<OpenUncensoredCreditsPage> createState() =>
@@ -37,7 +38,6 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
   Timer? _poller;
   int _pollCount = 0;
   bool _checking = false;
-  Map<String, String> _advanced = {};
 
   @override
   void initState() {
@@ -53,7 +53,6 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
       await widget.controller.initialize();
     }
     if (!mounted) return;
-    _advanced = Map.of(widget.controller.taskModels);
     if (widget.controller.pending != null) {
       await _check();
       _startPoller();
@@ -329,17 +328,19 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
   Widget _models() {
     final controller = widget.controller;
     final enabled = controller.active != null && !controller.busy;
-    final options = controller.catalogue;
+    final options = controller.catalogue.where((m) => m.available).toList();
+    final selected = controller.taskModels['narrator'];
+    final selectedAvailable = options.any((m) => m.id == selected);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const Text('Qualité narrative', style: TextStyle(
+      const Text('Modèle narratif', style: TextStyle(
         color: DomoliaColors.goldLight, fontSize: 18)),
       const SizedBox(height: DomoliaSpacing.field),
       DropdownButtonFormField<OuQuality>(
         key: ValueKey('ouPreset-${controller.quality.name}'),
-        initialValue: controller.quality == OuQuality.advanced ?
-            null : controller.quality,
-        hint: controller.quality == OuQuality.advanced
-            ? const Text('Avancé (personnalisé)') : null,
+        isExpanded: true,
+        initialValue: controller.quality == OuQuality.advanced
+            ? null : controller.quality,
+        hint: const Text('Personnalisé'),
         decoration: const InputDecoration(labelText: 'Préréglage'),
         items: const [
           DropdownMenuItem(value: OuQuality.economical,
@@ -353,117 +354,68 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
           if (value != null) unawaited(controller.setPreset(value));
         },
       ),
-      const SizedBox(height: DomoliaSpacing.compact),
-      const Text('Le mode Économique désactive l’optimiseur facultatif. '
-        'Les prix et modèles sont consultés auprès du fournisseur.',
-        style: TextStyle(color: DomoliaColors.muted)),
       const SizedBox(height: DomoliaSpacing.field),
-      OutlinedButton(onPressed: controller.busy ? null : () async {
-        await controller.loadModels();
-        if (mounted) {
-          setState(() {
-            _advanced = Map.of(controller.taskModels);
-          });
-        }
-      }, child: const Text('Actualiser les modèles')),
-      const SizedBox(height: DomoliaSpacing.compact),
-      ExpansionTile(title: const Text('Modèles avancés'), children: [
-        if (options.isEmpty) const Padding(
-          padding: EdgeInsets.all(12),
-          child: Text('Chargez le catalogue pour afficher les modèles disponibles.')),
-        for (final task in ['narrator', 'jsonifier', 'optimizer'])
-          Builder(builder: (context) {
-            final eligible = options;
-            final selected = _advanced[task];
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-              child: eligible.isEmpty ?
-                Text('Aucun modèle disponible pour $task')
-                : Column(crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    DropdownButtonFormField<String>(
-                      key: ValueKey('ouAdvanced-$task-${selected ?? ""}'),
-                      initialValue: eligible.any((m) => m.id == selected)
-                          ? selected : null,
-                      isExpanded: true,
-                      decoration: InputDecoration(labelText: switch (task) {
-                        'narrator' => 'Narrateur RAW',
-                        'jsonifier' => 'JSONificateur',
-                        _ => 'Optimiseur de Lore',
-                      }),
-                      items: [
-                        for (final model in eligible)
-                          DropdownMenuItem(value: model.id,
-                            child: Text(model.id,
-                                overflow: TextOverflow.ellipsis)),
-                      ],
-                      onChanged: !enabled ? null : (id) {
-                        if (id != null) setState(() => _advanced[task] = id);
-                      },
-                    ),
-                    if (task == 'narrator' && selected != null &&
-                        eligible.any((m) => m.id == selected)) ...[
-                      const SizedBox(height: DomoliaSpacing.compact),
-                      Text(_toolStatus(selected),
-                        key: const ValueKey('ouToolStatus'),
-                        style: const TextStyle(color: DomoliaColors.muted)),
-                      const SizedBox(height: DomoliaSpacing.compact),
-                      OutlinedButton.icon(
-                        key: const ValueKey('ouToolProbe'),
-                        onPressed: !enabled || widget.sandbox != null
-                            ? null : () => _probeNarrator(selected),
-                        icon: const Icon(Icons.science_outlined),
-                        label: const Text('Tester le Tool Calling'),
-                      ),
-                      const Text('Test facultatif et potentiellement facturé. '
-                        'Un modèle non vérifié reste disponible pour '
-                        'la narration classique.',
-                        style: TextStyle(color: DomoliaColors.muted)),
-                    ],
-                  ],
-                ),
-            );
-          }),
-        const SizedBox(height: DomoliaSpacing.field),
-        FilledButton(
-          onPressed: !enabled || !['narrator','jsonifier','optimizer']
-            .every((task) => _advanced.containsKey(task)) ? null :
-            () => controller.setAdvanced(_advanced),
-          child: const Text('Appliquer les modèles avancés'),
-        ),
-      ]),
-      const SizedBox(height: DomoliaSpacing.section),
-      const Divider(),
-      const SizedBox(height: DomoliaSpacing.compact),
-      const Text('Limites de génération', style: TextStyle(
-        color: DomoliaColors.goldLight, fontSize: 17)),
-      const SizedBox(height: DomoliaSpacing.field),
-      for (final task in AiNarrativeTask.values) ...[
-        DropdownButtonFormField<int>(
-          key: ValueKey('ouTokens-${task.name}'),
-          initialValue: controller.routing.generationFor(task).maxOutputTokens,
-          decoration: InputDecoration(labelText: switch (task) {
-            AiNarrativeTask.narrator => 'Narrateur RAW',
-            AiNarrativeTask.jsonifier => 'JSONificateur',
-            AiNarrativeTask.optimizer => 'Optimiseur de Lore',
-            AiNarrativeTask.memory => 'Extracteur de mémoire',
-          }),
+      if (options.isEmpty) ...[
+        if (selected != null)
+          Text('Modèle enregistré : $selected',
+            style: const TextStyle(color: DomoliaColors.muted)),
+        const Text('Actualisez le catalogue pour choisir un autre modèle.'),
+      ] else ...[
+        DropdownButtonFormField<String>(
+          key: ValueKey('ouAdvanced-narrator-${selected ?? ""}'),
+          initialValue: selectedAvailable ? selected : null,
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Narrateur'),
           items: [
-            for (final count in AiTaskGenerationSettings.tokenChoices)
-              DropdownMenuItem(value: count, child: Text('$count tokens')),
+            for (final model in options)
+              DropdownMenuItem(value: model.id,
+                child: Text(model.id, overflow: TextOverflow.ellipsis)),
           ],
-          onChanged: !enabled ? null : (count) async {
-            if (count != null) {
-              final previous = controller.routing.generationFor(task);
-              await controller.routing.setGeneration(task,
-                AiTaskGenerationSettings(
-                  maxOutputTokens: count,
-                  reasoningEffort: previous.reasoningEffort,
-                ));
+          onChanged: !enabled ? null : (id) {
+            if (id != null && id != selected) {
+              unawaited(controller.setNarratorModel(id));
             }
           },
         ),
+        if (selected != null && !selectedAvailable)
+          const Text('Le modèle enregistré n’est plus dans le catalogue.',
+            style: TextStyle(color: DomoliaColors.muted)),
+        if (selected != null && selectedAvailable) ...[
+          const SizedBox(height: DomoliaSpacing.compact),
+          Text(_toolStatus(selected),
+            key: const ValueKey('ouToolStatus'),
+            style: const TextStyle(color: DomoliaColors.muted)),
+          const SizedBox(height: DomoliaSpacing.compact),
+          OutlinedButton.icon(
+            key: const ValueKey('ouToolProbe'),
+            onPressed: !enabled || widget.sandbox != null
+                ? null : () => _probeNarrator(selected),
+            icon: const Icon(Icons.science_outlined),
+            label: const Text('Tester le Tool Calling'),
+          ),
+          const Text('Test facultatif, potentiellement facturé.',
+            style: TextStyle(color: DomoliaColors.muted)),
+        ],
+      ],
+      const SizedBox(height: DomoliaSpacing.field),
+      OutlinedButton.icon(
+        onPressed: controller.busy ? null : controller.loadModels,
+        icon: const Icon(Icons.refresh_rounded),
+        label: const Text('Actualiser les modèles'),
+      ),
+      if (widget.onOpenAiProfiles != null) ...[
         const SizedBox(height: DomoliaSpacing.field),
+        OutlinedButton.icon(
+          key: const ValueKey('ouOpenAiProfiles'),
+          onPressed: widget.onOpenAiProfiles,
+          icon: const Icon(Icons.tune_rounded),
+          label: const Text('Profils et budgets IA'),
+        ),
+        const Text('Une clé OpenUncensored utilise un seul profil IA '
+          'par défaut. Pour employer des modèles différents, créez '
+          'vos profils dans les réglages IA, puis attribuez-les aux '
+          'tâches Narrateur, Mémoire et autres.',
+          style: TextStyle(color: DomoliaColors.muted)),
       ],
     ]);
   }
@@ -669,17 +621,6 @@ class _OpenUncensoredCreditsPageState extends State<OpenUncensoredCreditsPage>
           ],
           const SizedBox(height: DomoliaSpacing.section),
           _models(),
-          if (widget.sandbox == null && controller.ai.profiles.any((p) =>
-              !p.id.startsWith('openuncensored-managed-') &&
-              p.apiKey.isNotEmpty)) ...[
-            const SizedBox(height: DomoliaSpacing.section),
-            const Divider(),
-            const SizedBox(height: DomoliaSpacing.compact),
-            const Text('Anciens profils IA conservés dans le stockage sécurisé. '
-              'Ils ne sont pas supprimés par cette configuration. '
-              'Les Livres et Parties avec d’anciennes références restent lisibles.',
-              style: TextStyle(color: DomoliaColors.muted)),
-          ],
           const SizedBox(height: 16),
         ],
       ));

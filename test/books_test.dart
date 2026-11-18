@@ -17,6 +17,8 @@ import 'package:domolia/chat/chat_protocol.dart';
 import 'package:domolia/chat/narrator.dart';
 import 'package:domolia/chat/narrator_settings.dart';
 import 'package:domolia/chat/raw_generation.dart';
+import 'package:domolia/illustration/image_preferences.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:domolia/theme/domolia_theme.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -338,7 +340,7 @@ void main() {
     expect(opened!.title, 'Livre A');
   });
 
-  testWidgets('Four editable tabs and NSFW warning work on narrow Android',
+  testWidgets('Five editable tabs and NSFW warning work on narrow Android',
       (tester) async {
     tester.view.physicalSize = const Size(320, 780);
     tester.view.devicePixelRatio = 1;
@@ -371,9 +373,14 @@ void main() {
     await tester.tap(find.text('Système'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('bookOpenings')), findsOneWidget);
-    await tester.tap(find.text('Livre').last);
+    await tester.tap(find.byKey(const ValueKey('bookNav-0')));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const ValueKey('bookNsfw')));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('bookNsfw')), 180,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('bookTab-0')),
+        matching: find.byType(Scrollable)).first,
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('bookNsfw')));
     await tester.pumpAndSettle();
@@ -387,6 +394,57 @@ void main() {
       findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('Les paramètres artistiques et la description de couverture '
+      'sont propres au Livre', (tester) async {
+    tester.view.physicalSize = const Size(430, 1100);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final library = BookLibraryController(store: _MemoryBooks());
+    addTearDown(library.dispose);
+    await library.initialize();
+    final book = await library.create('Livre illustré');
+    final ai = AiConnectionController(
+      store: _Profiles(const AiProfilesState(
+        profiles: [_profile], selectedId: 'profile-1')),
+      provider: _NoNetwork(),
+    );
+    addTearDown(ai.dispose);
+    await tester.pumpWidget(MaterialApp(theme: DomoliaTheme.dark,
+      home: BookEditorPage(book: book, library: library,
+        ai: ai, onPlay: (_, session) async {}, initialTab: 4)));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('bookImageStyle')),
+      'Aquarelle nocturne');
+    await tester.enterText(
+      find.byKey(const ValueKey('bookImageNegativePrompt')), 'texte, logos');
+    await tester.pump(const Duration(milliseconds: 650));
+    await tester.pumpAndSettle();
+    expect(library.byId(book.id)!.illustrationSettings.style,
+      'Aquarelle nocturne');
+    expect(library.byId(book.id)!.illustrationSettings.negativePrompt,
+      'texte, logos');
+
+    await tester.tap(find.byKey(const ValueKey('bookNav-0')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('bookGenerateCover')));
+    await tester.tap(find.byKey(const ValueKey('bookGenerateCover')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(
+      find.byKey(const ValueKey('bookCoverDescription'))).controller!.text,
+      book.illustrationSettings.coverPrompt);
+    await tester.enterText(find.byKey(const ValueKey('bookCoverDescription')),
+      'Un phare dans la brume');
+    await tester.tap(find.byKey(const ValueKey('bookCoverConfirmGeneration')));
+    await tester.pumpAndSettle();
+    expect(library.byId(book.id)!.illustrationSettings.coverPrompt,
+      'Un phare dans la brume');
+    expect(library.byId(book.id)!.coverBase64, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Une partie peut être supprimée après confirmation, sans toucher aux autres',
       (tester) async {
     final store = _MemoryBooks();
@@ -878,6 +936,14 @@ void main() {
     expect(stored.formatterProfileId, isNull);
     expect(stored.aiProfileId, isNull);
 
+    // Target the tile's title, not the entire (potentially very tall)
+    // ExpansionTile; tapping its center can hit outside a small screen.
+    final advanced = find.text('Réglages IA avancés');
+    await tester.scrollUntilVisible(advanced, 180);
+    await tester.ensureVisible(advanced);
+    await tester.pumpAndSettle();
+    await tester.tap(advanced);
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.byKey(
       const ValueKey('conversationRecompileLore')), 180);
     await tester.tap(find.byKey(const ValueKey('conversationRecompileLore')));
@@ -941,6 +1007,14 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
+    // Target the tile's title, not the entire (potentially very tall)
+    // ExpansionTile; tapping its center can hit outside a small screen.
+    final advanced = find.text('Réglages IA avancés');
+    await tester.scrollUntilVisible(advanced, 180);
+    await tester.ensureVisible(advanced);
+    await tester.pumpAndSettle();
+    await tester.tap(advanced);
+    await tester.pumpAndSettle();
     final token = find.byKey(
         const ValueKey('conversationTokens-narrator-0'));
     await tester.scrollUntilVisible(token, 230);
@@ -968,6 +1042,217 @@ void main() {
     expect(stored.generationOverrides[AiNarrativeTask.narrator]!
         .reasoningEffort, 'none');
     expect(stored.generationOverrides[AiNarrativeTask.jsonifier], isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  test('Resetting Party settings leaves its timeline, Lore and Book intact',
+      () async {
+    final store = _MemoryBooks();
+    final library = BookLibraryController(store: store);
+    addTearDown(library.dispose);
+    await library.initialize();
+    final book = await library.create('Livre original');
+    await library.save(book.copyWith(
+      illustrationMode: IllustrationMode.automatic,
+      narrativeStyle: 'Personnalisé dans le Livre',
+    ));
+    final source = BookSession(
+      id: 'party-reset', bookId: book.id, title: 'Partie préservée',
+      timeline: const [
+        ChatEntry(id: 1, speaker: ChatSpeaker.player,
+            name: 'Vous', text: 'Je reste dans la pièce.'),
+      ],
+      aiProfileId: 'override',
+      formatterProfileId: 'fmt',
+      optimizerProfileId: 'opt',
+      memoryProfileId: '#disabled',
+      memoryEnabled: false,
+      toolCallingEnabled: false,
+      illustrationModeOverride: IllustrationMode.disabled,
+      generationOverrides: {
+        AiNarrativeTask.narrator:
+            AiTaskGenerationOverride(maxOutputTokens: 4096),
+      },
+      optimizedLore: 'Résumé historique',
+      optimizedLoreHash: 'hash',
+    );
+    await store.putSession(source);
+    await library.resetSessionSettings(source.id);
+    final restored = (await library.session(source.id))!;
+    expect(restored.title, source.title);
+    expect(restored.timeline, hasLength(1));
+    expect((restored.timeline.first as ChatEntry).text,
+        'Je reste dans la pièce.');
+    expect(restored.optimizedLore, 'Résumé historique');
+    expect(restored.optimizedLoreHash, 'hash');
+    expect(restored.aiProfileId, isNull);
+    expect(restored.formatterProfileId, isNull);
+    expect(restored.optimizerProfileId, isNull);
+    expect(restored.memoryProfileId, isNull);
+    expect(restored.memoryEnabled, isTrue);
+    expect(restored.toolCallingEnabled, isTrue);
+    expect(restored.illustrationModeOverride, isNull);
+    expect(restored.generationOverrides, isEmpty);
+    expect(library.byId(book.id)!.narrativeStyle,
+        'Personnalisé dans le Livre');
+    await library.resetSessionSettings(source.id);
+    expect((await library.session(source.id))!.timeline, hasLength(1));
+    await expectLater(library.resetSessionSettings('missing'),
+        throwsA(isA<StateError>()));
+  });
+
+  testWidgets('Party reset confirmation restores Book and image inheritance',
+      (tester) async {
+    tester.view.physicalSize = const Size(430, 1150);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    SharedPreferences.setMockInitialValues({});
+    final images = ImagePreferences();
+    addTearDown(images.dispose);
+    await images.initialize();
+    await images.saveApplication(const ImageGenerationOptions(
+      profileId: 'app-images', model: 'app-model'));
+    final library = BookLibraryController(store: _MemoryBooks());
+    addTearDown(library.dispose);
+    await library.initialize();
+    final book = await library.create('Livre des réglages');
+    await library.save(book.copyWith(
+        illustrationMode: IllustrationMode.automatic));
+    final party = await library.newSession(book);
+    await library.setSessionProfile(party.id, 'profile-1');
+    await library.setSessionIllustrationMode(
+        party.id, IllustrationMode.disabled);
+    await library.setSessionMemoryEnabled(party.id, false);
+    await library.setSessionToolCallingEnabled(party.id, false);
+    await library.setSessionGenerationOverride(
+        party.id, AiNarrativeTask.narrator,
+        const AiTaskGenerationOverride(maxOutputTokens: 4096));
+    await images.saveParty(party.id, const ImageGenerationOptions(
+      profileId: 'party-images', model: 'party-model'));
+    final ai = AiConnectionController(
+      store: _Profiles(const AiProfilesState(
+        profiles: [_profile], selectedId: 'profile-1')),
+      provider: _NoNetwork(),
+    );
+    addTearDown(ai.dispose);
+    final chat = NarrativeChatController(
+      provider: _NoNetwork(), configuration: () => null,
+    );
+    addTearDown(chat.dispose);
+    await tester.pumpWidget(MaterialApp(theme: DomoliaTheme.dark,
+      home: Scaffold(body: ConversationSettingsPage(
+        library: library, ai: ai, chat: chat, imagePreferences: images,
+        bookId: book.id, sessionId: party.id, onBack: () {},
+      )),
+    ));
+    await tester.pumpAndSettle();
+    final button = find.byKey(const ValueKey('conversationResetToBook'));
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(find.text('Revenir aux réglages du Livre ?'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('conversationResetCancel')));
+    await tester.pumpAndSettle();
+    expect((await library.session(party.id))!.aiProfileId, 'profile-1');
+    expect((await images.forSession(party.id)).model, 'party-model');
+
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('conversationResetConfirm')));
+    await tester.pumpAndSettle();
+    final restored = (await library.session(party.id))!;
+    expect(restored.aiProfileId, isNull);
+    expect(restored.illustrationModeOverride, isNull);
+    expect(restored.memoryEnabled, isTrue);
+    expect(restored.toolCallingEnabled, isTrue);
+    expect(restored.generationOverrides, isEmpty);
+    expect(await images.overrideFor(party.id), isNull);
+    expect((await images.forSession(party.id)).model, 'app-model');
+    expect(library.byId(book.id)!.illustrationMode,
+        IllustrationMode.automatic);
+    expect(find.text('Profil par défaut du Livre'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Book reset restores only default narrative and image settings',
+      (tester) async {
+    tester.view.physicalSize = const Size(430, 1250);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final library = BookLibraryController(store: _MemoryBooks());
+    addTearDown(library.dispose);
+    await library.initialize();
+    final original = await library.create('Un Livre conservé');
+    final custom = original.copyWith(
+      narrativeStyle: 'Narration personnalisée',
+      detailLevel: 5,
+      tuning: const NarrativeTuning(responseLength: 1, scenePacing: 4,
+          styleKeywords: ['lent']),
+      illustrationMode: IllustrationMode.automatic,
+      illustrationSettings: const BookIllustrationSettings(
+        size: '1024x1536', quality: 'high', count: 2,
+        style: 'Gravure', negativePrompt: 'logo',
+        coverPrompt: 'Couverture personnalisée',
+      ),
+      openingMessages: ['Une ouverture personnelle.'],
+      tags: {'nsfw'},
+    );
+    await library.save(custom);
+    final party = await library.newSession(custom);
+    await library.setProfile(custom.id, 'profile-1');
+    final ai = AiConnectionController(
+      store: _Profiles(const AiProfilesState(
+        profiles: [_profile], selectedId: 'profile-1')),
+      provider: _NoNetwork(),
+    );
+    addTearDown(ai.dispose);
+    await tester.pumpWidget(MaterialApp(theme: DomoliaTheme.dark,
+      home: BookEditorPage(book: custom, library: library, ai: ai,
+          initialTab: 3, onPlay: (_, _) async {}),
+    ));
+    await tester.pumpAndSettle();
+    final reset = find.byKey(const ValueKey('bookResetSettings'));
+    await tester.ensureVisible(reset);
+    await tester.tap(reset);
+    await tester.pumpAndSettle();
+    expect(find.text('Rétablir les réglages du Livre ?'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('bookResetCancel')));
+    await tester.pumpAndSettle();
+    expect(library.byId(custom.id)!.detailLevel, 5);
+    await tester.tap(reset);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('bookResetConfirm')));
+    await tester.pumpAndSettle();
+
+    final saved = library.byId(custom.id)!;
+    const defaultBook = BookDefinition(id: 'x', title: 'x');
+    expect(saved.narrativeStyle, defaultBook.narrativeStyle);
+    expect(saved.detailLevel, defaultBook.detailLevel);
+    expect(saved.tuning.responseLength,
+        defaultBook.tuning.responseLength);
+    expect(saved.tuning.styleKeywords, isEmpty);
+    expect(saved.illustrationMode, defaultBook.illustrationMode);
+    expect(saved.illustrationSettings.toJson(),
+        defaultBook.illustrationSettings.toJson());
+    expect(saved.title, custom.title);
+    expect(saved.tags, contains('nsfw'));
+    expect(saved.openingMessages, custom.openingMessages);
+    expect(await library.profileFor(custom.id), 'profile-1');
+    expect((await library.session(party.id))!.bookId, custom.id);
+    await tester.tap(find.byKey(const ValueKey('bookNav-4')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<DropdownButtonFormField<String>>(
+        find.byKey(const ValueKey('bookImageSize'))).initialValue,
+        defaultBook.illustrationSettings.size);
+    expect(tester.widget<TextField>(
+        find.byKey(const ValueKey('bookImageStyle'))).controller!.text,
+        defaultBook.illustrationSettings.style);
     expect(tester.takeException(), isNull);
   });
 

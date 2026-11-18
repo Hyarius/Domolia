@@ -171,31 +171,37 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Narrative token fields have consistent vertical spacing',
+  testWidgets('Credits exposes only active model and no duplicate budgets',
       (tester) async {
+    await credits.importKey('ou-cus_ALPHA_TEST_123456');
+    await credits.loadModels();
     await showCredits(tester, screen: const Size(480, 2200));
-    final narrator = find.byKey(const ValueKey('ouTokens-narrator'));
-    final jsonifier = find.byKey(const ValueKey('ouTokens-jsonifier'));
-    final optimizer = find.byKey(const ValueKey('ouTokens-optimizer'));
-    expect(narrator, findsOneWidget);
-    expect(jsonifier, findsOneWidget);
-    expect(optimizer, findsOneWidget);
-    final firstGap = tester.getTopLeft(jsonifier).dy -
-        tester.getBottomLeft(narrator).dy;
-    final secondGap = tester.getTopLeft(optimizer).dy -
-        tester.getBottomLeft(jsonifier).dy;
-    expect(firstGap, greaterThanOrEqualTo(DomoliaSpacing.field - 1));
-    expect(secondGap, greaterThanOrEqualTo(DomoliaSpacing.field - 1));
+    expect(find.byKey(const ValueKey('ouAdvanced-narrator-$defaultAiModel')),
+        findsOneWidget);
+    expect(find.text('JSONificateur'), findsNothing);
+    expect(find.text('Optimiseur de Lore'), findsNothing);
+    expect(find.text('Appliquer les modèles avancés'), findsNothing);
+    expect(find.byKey(const ValueKey('ouTokens-narrator')), findsNothing);
+    final narrator = find.byKey(
+        const ValueKey('ouAdvanced-narrator-$defaultAiModel'));
+    await tester.ensureVisible(narrator);
+    await tester.pumpAndSettle();
+    await tester.tap(narrator);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('unverified-rp').last);
+    await tester.pumpAndSettle();
+    expect(credits.taskModels['narrator'], 'unverified-rp');
+    expect(probes, 0);
     expect(tester.takeException(), isNull);
   });
+
   testWidgets('Unknown narrator is shown and paid test needs confirmation',
       (tester) async {
     await credits.importKey('ou-cus_ALPHA_TEST_123456');
     await credits.loadModels();
     await showCredits(tester, screen: const Size(480, 2400));
-    await tester.ensureVisible(find.text('Modèles avancés'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Modèles avancés'));
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('ouAdvanced-narrator-$defaultAiModel')));
     await tester.pumpAndSettle();
 
     // No paid generation happens during catalogue loading or selection.

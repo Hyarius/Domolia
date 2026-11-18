@@ -1,0 +1,13 @@
+{
+  "format": "domolia-illustration-prompt-v1",
+  "createdAtUtc": "2026-01-01T00:00:00.000Z",
+  "requestId": "request-example",
+  "sessionId": "partie-exemple",
+  "intentId": 3,
+  "provider": "example",
+  "model": "example-image",
+  "costUsd": null,
+  "style": "aquarelle",
+  "negativePrompt": "texte, légendes, filigranes",
+  "prompt": "Une femme adulte d’environ trente ans, cheveux roux courts légèrement ondulés, teint clair et yeux verts, se tient sur un chemin rocheux face à un phare. Elle porte une veste bleu marine à col relevé et un pantalon sombre, les deux mains posées sur une rambarde humide. Le buste est légèrement penché vers la mer, le visage tourné de trois quarts, le regard fixé sur le faisceau lumineux qui traverse la brume. Au premier plan, les rochers sont couverts d’embruns ; derrière elle, le phare blanc domine la côte escarpée. Plan moyen en pied, caméra à hauteur des yeux, lumière froide du crépuscule, contrastes doux, style aquarelle. À exclure : texte, légendes, filigranes."
+}

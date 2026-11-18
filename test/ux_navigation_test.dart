@@ -147,6 +147,7 @@ class _Prefs implements UpdatePreferences {
 Future<void> _showApp(WidgetTester tester, {
   bool withSession = false,
   _Books? store,
+  Future<void> Function()? onResetApp,
 }) async {
   SharedPreferences.setMockInitialValues({});
   final storage = store ?? _Books();
@@ -186,6 +187,7 @@ Future<void> _showApp(WidgetTester tester, {
     updateController: updates, aiController: ai,
     creditsController: credits, chatController: chat,
     bookLibraryController: library,
+    onResetApp: onResetApp,
   ));
   await tester.pumpAndSettle();
 }
@@ -311,6 +313,22 @@ void main() {
     expect(find.text('Mes Parties'), findsOneWidget);
   });
 
+  testWidgets('Depuis une Partie, le raccourci ouvre le Lore du Livre',
+      (tester) async {
+    await _showApp(tester, withSession: true);
+    await tester.tap(find.byKey(const ValueKey('recentSession-journey')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('groupChatInput')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('chatBookLoreAppBar')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('bookLoreTab')), findsOneWidget);
+    expect(tester.widget<NavigationBar>(
+        find.byKey(const ValueKey('bookTabs'))).selectedIndex, 1);
+    await _systemBack(tester);
+    expect(find.byKey(const ValueKey('groupChatInput')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Retour protège un Livre dont la sauvegarde a échoué',
       (tester) async {
     await _showApp(tester);
@@ -349,6 +367,34 @@ void main() {
     expect(find.widgetWithText(ListTile, 'Crédits IA'), findsOneWidget);
   });
 
+  testWidgets('Réinitialisation demande confirmation et peut être annulée',
+      (tester) async {
+    var count = 0;
+    await _showApp(tester, onResetApp: () async => count++);
+    await _drawerItem(tester, 'Paramètres');
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('settingsFactoryReset')),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const ValueKey('settingsFactoryReset')));
+    await tester.pumpAndSettle();
+    expect(find.text('Réinitialiser Domolia ?'), findsOneWidget);
+    expect(find.textContaining('clés API enregistrées'), findsOneWidget);
+    expect(find.textContaining('Vos Livres, Parties'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Réinitialiser les réglages'), findsOneWidget);
+    expect(count, 0);
+    await tester.tap(find.byKey(const ValueKey('resetAppCancel')));
+    await tester.pumpAndSettle();
+    expect(count, 0);
+    await tester.tap(find.byKey(const ValueKey('settingsFactoryReset')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('resetAppConfirm')));
+    await tester.pumpAndSettle();
+    expect(count, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Paramètres, crédits, mises à jour et dialogue',
       (tester) async {
     await _showApp(tester);
@@ -363,7 +409,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('settingsAiProviders')));
     await tester.pumpAndSettle();
     expect(find.byType(AiSettingsPanel), findsOneWidget);
-    expect(find.text('Fournisseur IA'), findsOneWidget);
+    expect(find.text('Profils IA'), findsOneWidget);
     await _systemBack(tester);
     expect(find.widgetWithText(ListTile, 'Crédits IA'), findsOneWidget);
 

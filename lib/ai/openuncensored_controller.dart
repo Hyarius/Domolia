@@ -86,7 +86,8 @@ class OuCreditsController extends ChangeNotifier {
     }
     await _write(_state.copyWith(toolChecks: next));
     if (_state.models['narrator'] == modelId) {
-      if (!await _configure(_state)) {
+      if (!await _configure(_state, activateProfile: false,
+          routeTasks: false)) {
         throw const OpenUncensoredFailure(
             'Test enregistré, mais profil du narrateur non mis à jour.');
       }
@@ -146,21 +147,9 @@ class OuCreditsController extends ChangeNotifier {
       }
       _state = state;
       _vaultReady = true;
-      // A process can be killed between writing a newly claimed key and
-      // preparing its managed AI profiles. Repair that partial setup on boot.
-      final selected = state.find(state.activeKeyId);
-      if (selected != null) {
-        final managed = ai.profiles.where((profile) =>
-            profile.id == AiConnectionController.ouNarratorProfileId).toList();
-        if (managed.isEmpty || managed.first.apiKey != selected.secret) {
-          // Repair the managed key without overwriting an explicit ChatGPT
-          // narrator, JSONifier or memory routing chosen by the user.
-          if (!await _configure(state,
-              activateProfile: false, routeTasks: false)) {
-            error = 'Clé conservée, mais configuration du narrateur à reprendre.';
-          }
-        }
-      }
+      // A saved key is not permission to recreate a deleted AI profile.
+      // Keep vault recovery independent of user-managed connection profiles.
+
     } catch (_) {
       error = 'Le coffre sécurisé est indisponible. Aucune clé n’a été supprimée.';
     } finally {
@@ -253,6 +242,7 @@ class OuCreditsController extends ChangeNotifier {
   Future<bool> _configure(OuVaultState snapshot, {
     bool activateProfile = true,
     bool routeTasks = true,
+    bool createProfileIfMissing = false,
   }) async {
     final key = snapshot.find(snapshot.activeKeyId);
     if (key == null) return true;
@@ -280,17 +270,39 @@ class OuCreditsController extends ChangeNotifier {
       jsonifierModel: models['jsonifier'] ?? defaultAiModel,
       optimizerModel: models['optimizer'] ?? defaultAiModel,
       activateManagedProfile: activateProfile,
+      createProfileIfMissing: createProfileIfMissing,
     );
     if (!applied) return false;
-    if (!routeTasks) return true;
-    await routing.setProfile(
-      AiNarrativeTask.narrator, AiConnectionController.ouNarratorProfileId);
-    await routing.setProfile(
-      AiNarrativeTask.jsonifier, AiConnectionController.ouJsonifierProfileId);
-    await routing.setProfile(
+    final sharedId = ai.openUncensoredProfileIdFor(key.secret);
+    if (!routeTasks || sharedId == null) return true;
+    // The economical preset disables the optional optimizer by default,
+    // without creating an optimizer profile or overriding a user selection.
+    if (snapshot.mode == OuQuality.economical.name &&
+        routing.profileFor(AiNarrativeTask.optimizer) == null) {
+      await routing.setProfile(AiNarrativeTask.optimizer, '#disabled');
+    }
+    // Existing task selection takes precedence over the payment account's
+    // suggested model. An unconfigured task may inherit the shared profile.
+    for (final task in [
+      AiNarrativeTask.narrator,
+      AiNarrativeTask.jsonifier,
       AiNarrativeTask.optimizer,
-      snapshot.mode == OuQuality.economical.name ? '#disabled' :
-          AiConnectionController.ouOptimizerProfileId);
+    ]) {
+      final selectedId = routing.profileFor(task);
+      if (selectedId == null) {
+        if (task == AiNarrativeTask.narrator) {
+          await routing.setProfile(task, sharedId);
+        }
+      } else if ((selectedId ==
+              AiConnectionController.ouJsonifierProfileId ||
+          selectedId == AiConnectionController.ouOptimizerProfileId ||
+          selectedId == AiConnectionController.ouNarratorProfileId) &&
+          !ai.profiles.any((p) => p.id == selectedId)) {
+        // A retired auto-generated profile can safely use the shared
+        // connection instead. Never overwrite a user-selected profile.
+        await routing.setProfile(task, sharedId);
+      }
+    }
     return true;
   }
 
@@ -337,7 +349,8 @@ class OuCreditsController extends ChangeNotifier {
     // Persist first. If activating a managed profile fails, the key remains
     // recoverable from the encrypted history.
     await _write(snapshot);
-    if (!await _configure(snapshot)) {
+    if (!await _configure(snapshot,
+        createProfileIfMissing: true)) {
       throw const OpenUncensoredFailure('Clé conservée, mais activation IA impossible.');
     }
     notice = 'Clé validée et activée. Les anciens crédits restent sur leurs clés.';
@@ -358,7 +371,8 @@ class OuCreditsController extends ChangeNotifier {
       models: _state.models.isEmpty ? _chooseModels(quality) : _state.models,
     );
     await _write(next);
-    if (!await _configure(next)) {
+    if (!await _configure(next,
+        createProfileIfMissing: true)) {
       throw const OpenUncensoredFailure('Clé enregistrée, activation IA impossible.');
     }
     notice = 'Clé active remplacée. Aucun crédit n’a été transféré.';
@@ -469,7 +483,8 @@ class OuCreditsController extends ChangeNotifier {
     if (_catalogue.isEmpty) {
       try { _catalogue = await api.models(); } catch (_) { /* Offline fallback. */ }
     }
-    if (!await _configure(next)) {
+    if (!await _configure(next,
+        createProfileIfMissing: true)) {
       throw const OpenUncensoredFailure(
         'Clé sauvegardée dans l’historique, mais configuration IA indisponible.');
     }
@@ -508,6 +523,28 @@ class OuCreditsController extends ChangeNotifier {
     return true;
   }) ?? false;
 
+  /// The normal UI edits only the active narrator. Preserve legacy task
+  /// models and profile references, including a model no longer listed.
+  Future<bool> setNarratorModel(String modelId) async => await _run(() async {
+    if (active == null) {
+      throw const OpenUncensoredFailure('Aucune clé active.');
+    }
+    if (_catalogue.isEmpty) _catalogue = await api.models();
+    if (!_catalogue.any((model) => model.id == modelId && model.available)) {
+      throw const OpenUncensoredFailure('Modèle narratif indisponible.');
+    }
+    final next = _state.copyWith(mode: OuQuality.advanced.name, models: {
+      ..._chooseModels(OuQuality.balanced),
+      ..._state.models,
+      'narrator': modelId,
+    });
+    await _write(next);
+    if (!await _configure(next)) return false;
+    notice = 'Modèle narratif enregistré.';
+    return true;
+  }) ?? false;
+
+  /// Compatibility for previously saved advanced configuration.
   Future<bool> setAdvanced(Map<String, String> models) async => await _run(() async {
     if (_catalogue.isEmpty) _catalogue = await api.models();
     for (final task in ['narrator', 'jsonifier', 'optimizer']) {

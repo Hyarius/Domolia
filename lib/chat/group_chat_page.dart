@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -5,7 +6,11 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../ai/ai_diagnostics.dart';
+import '../ai/ai_provider.dart';
 import '../theme/domolia_theme.dart';
+import '../illustration/illustration_controller.dart';
+import '../illustration/illustration_slot.dart';
+import '../illustration/illustration_records.dart';
 import 'chat_controller.dart';
 import 'chat_protocol.dart';
 
@@ -19,9 +24,13 @@ class GroupChatPage extends StatefulWidget {
     this.onLoadDiagnostics,
     this.onPurgeDiagnostics,
     this.onExportDiagnostic,
+    this.illustrations,
+    this.onOpenImageSettings,
   });
 
   final NarrativeChatController controller;
+  final IllustrationController? illustrations;
+  final VoidCallback? onOpenImageSettings;
   final VoidCallback onOpenSettings;
   final String? bookTitle;
   final String? sessionTitle;
@@ -39,6 +48,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
   final _scroll = ScrollController();
   int? _lastTimelineEventId;
   int? _highlightedMessageId;
+  bool _imageDialogOpen = false;
 
   @override
   void initState() {
@@ -75,6 +85,13 @@ class _GroupChatPageState extends State<GroupChatPage> {
     final last = timeline.isEmpty ? null : timeline.last;
     if (last?.id == _lastTimelineEventId) return;
     _lastTimelineEventId = last?.id;
+
+    if (last is ChatIllustrationIntent && widget.illustrations != null) {
+      // Text-only direction pass. No image generation occurs here.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(widget.illustrations!.prepare(last.id));
+      });
+    }
 
     // Keep the freshly sent player message in view, but never jump to the
     // END of a newly committed AI answer. Long answers begin where reading
@@ -393,13 +410,138 @@ class _GroupChatPageState extends State<GroupChatPage> {
   }
 
 
+  Future<void> _generateImage(int intentId) async {
+    final illustrations = widget.illustrations;
+    if (illustrations == null || illustrations.isBusy(intentId) ||
+        _imageDialogOpen) {
+      return;
+    }
+    final current = illustrations.forIntent(intentId);
+    if (current == null) {
+      await illustrations.prepare(intentId);
+      return;
+    }
+    if (current.state == IllustrationJobState.ready) {
+      _showExportMessage('Validez la description avant de générer l’image.');
+      return;
+    }
+    _imageDialogOpen = true;
+    try {
+      final accepted = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Générer cette illustration ?'),
+          content: Text(
+            illustrations.forIntent(intentId)?.state ==
+                    IllustrationJobState.approved
+                ? 'La description est validée. Seule la génération '
+                    'd’image sera lancée ; elle peut être facturée. '
+                    'Coût inconnu. Aucun nouvel essai n’est automatique.'
+                : 'La préparation IA et la génération d’image peuvent '
+                    'être facturées. Coût inconnu. '
+                    'Aucun nouvel essai n’est automatique.'),
+          actions: [
+            if (widget.onOpenImageSettings != null)
+              TextButton.icon(
+                key: const ValueKey('imageConfirmSettings'),
+                onPressed: () {
+                  Navigator.pop(dialogContext, false);
+                  widget.onOpenImageSettings?.call();
+                },
+                icon: const Icon(Icons.tune_rounded),
+                label: const Text('Réglages'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              key: const ValueKey('imageConfirmGenerate'),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Générer'),
+            ),
+          ],
+        ),
+      );
+      if (accepted == true && mounted) {
+        // Non-blocking; controller checks double clicks and rewind races.
+        illustrations.generate(intentId);
+      }
+    } finally {
+      _imageDialogOpen = false;
+    }
+  }
+
+  Future<void> _illustrateLatest() async {
+    final illustrations = widget.illustrations;
+    if (illustrations == null) return;
+    final intent = illustrations.lastUnillustratedIntent;
+    if (intent != null) {
+      final state = illustrations.forIntent(intent)?.state;
+      if (state == IllustrationJobState.approved) {
+        await _generateImage(intent);
+      } else if (state == IllustrationJobState.ready) {
+        _showExportMessage('Validez la description dans l’encart image.');
+      } else {
+        await illustrations.prepare(intent);
+      }
+      return;
+    }
+    final messageId = illustrations.lastAiMessageWithoutIntent;
+    if (messageId == null ||
+        !widget.controller.canIllustrateMessage(messageId)) {
+      _showExportMessage('Aucune scène récente à illustrer.');
+      return;
+    }
+    if (_imageDialogOpen) return;
+    _imageDialogOpen = true;
+    bool create;
+    try {
+      create = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Créer une intention visuelle ?'),
+          content: const Text('La narration ne contient pas d’intention '
+            'non générée. Créer une proposition après le dernier '
+            'message IA, sans rien inventer ?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              key: const ValueKey('imageCreateIntent'),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Créer l’intention'),
+            ),
+          ],
+        ),
+      ) ?? false;
+    } finally {
+      _imageDialogOpen = false;
+    }
+    if (!create || !mounted) return;
+    try {
+      final inserted = await widget.controller.illustrateMessage(messageId);
+      if (!inserted || !mounted) return;
+      final nextIntent = illustrations.lastUnillustratedIntent;
+      if (nextIntent != null) await illustrations.prepare(nextIntent);
+    } catch (_) {
+      _showExportMessage('Impossible de créer l’intention d’image.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final chat = widget.controller;
     return AnimatedBuilder(
-      animation: chat,
+      animation: Listenable.merge([
+        chat, if (widget.illustrations != null) widget.illustrations!,
+      ]),
       builder: (context, _) {
         final transcript = chat.timeline;
+        final illustrationStatus = widget.illustrations?.activityLabel;
+        final illustrationError = widget.illustrations?.error;
         return SafeArea(
           child: Column(
             children: [
@@ -419,10 +561,17 @@ class _GroupChatPageState extends State<GroupChatPage> {
                             );
                           }
                           if (entry is ChatIllustrationIntent) {
-                            return _IllustrationPlaceholder(
-                              key: ValueKey('chat-illustration-${entry.id}'),
-                              intent: entry,
-                            );
+                            return widget.illustrations == null
+                                ? _IllustrationPlaceholder(
+                                  key: ValueKey('chat-illustration-${entry.id}'),
+                                  intent: entry,
+                                )
+                                : IllustrationSlot(
+                                  key: ValueKey('chat-illustration-${entry.id}'),
+                                  intent: entry,
+                                  controller: widget.illustrations!,
+                                  onGenerate: () => _generateImage(entry.id),
+                                );
                           }
                           final bubble = entry as ChatEntry;
                           return _ChatBubble(
@@ -454,6 +603,64 @@ class _GroupChatPageState extends State<GroupChatPage> {
                     ],
                   ),
                 ),
+              if (illustrationStatus != null)
+                Padding(
+                  key: const ValueKey('chatIllustratorIndicator'),
+                  padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.brush_rounded,
+                        color: DomoliaColors.goldLight, size: 22),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(illustrationStatus,
+                          style: const TextStyle(
+                            color: DomoliaColors.goldLight,
+                            fontStyle: FontStyle.italic,
+                          )),
+                      ),
+                      const SizedBox(width: 10),
+                      const SizedBox(width: 14, height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 1.5,
+                          color: DomoliaColors.goldDark)),
+                    ],
+                  ),
+                ),
+              if (illustrationError != null)
+                Container(
+                  key: const ValueKey('chatIllustrationErrorBanner'),
+                  padding: const EdgeInsets.fromLTRB(16, 9, 12, 9),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4B2525),
+                    border: Border.all(color: const Color(0xFFC87979)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline,
+                        size: 20, color: Color(0xFFFFC7C7)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text('Illustration : $illustrationError',
+                          style: const TextStyle(color: Color(0xFFFFE0E0))),
+                      ),
+                      if (widget.onOpenImageSettings != null)
+                        IconButton(
+                          key: const ValueKey('chatIllustrationOpenSettings'),
+                          tooltip: 'Paramètres de génération d’images',
+                          onPressed: widget.onOpenImageSettings,
+                          icon: const Icon(Icons.tune_rounded,
+                            color: Color(0xFFFFE0E0)),
+                        ),
+                      IconButton(
+                        key: const ValueKey('chatIllustrationDismissError'),
+                        tooltip: 'Masquer l’erreur d’illustration',
+                        onPressed: widget.illustrations!.dismissError,
+                        icon: const Icon(Icons.close,
+                          color: Color(0xFFFFE0E0)),
+                      ),
+                    ],
+                  ),
+                ),
               if (chat.error != null)
                 Container(
                   key: const ValueKey('chatErrorBanner'),
@@ -471,9 +678,22 @@ class _GroupChatPageState extends State<GroupChatPage> {
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text(
-                          chat.error!,
-                          style: const TextStyle(color: Color(0xFFFFE0E0)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              chat.errorKind?.label ?? 'Narration interrompue',
+                              key: const ValueKey('chatErrorCategory'),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFFFE0E0),
+                              ),
+                            ),
+                            Text(
+                              chat.error!,
+                              style: const TextStyle(color: Color(0xFFFFE0E0)),
+                            ),
+                          ],
                         ),
                       ),
                       if (!chat.busy)
@@ -515,6 +735,16 @@ class _GroupChatPageState extends State<GroupChatPage> {
                       ),
                     ),
                     const SizedBox(width: 9),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (widget.illustrations != null)
+                          IconButton(
+                            key: const ValueKey('chatIllustrateLastScene'),
+                            tooltip: 'Illustrer la dernière scène',
+                            icon: const Icon(Icons.brush_outlined),
+                            onPressed: _illustrateLatest,
+                          ),
                     SizedBox(
                       height: 49,
                       width: 49,
@@ -531,6 +761,8 @@ class _GroupChatPageState extends State<GroupChatPage> {
                               onPressed: _input.text.trim().isEmpty ? null : _send,
                               icon: const Icon(Icons.arrow_upward_rounded),
                             ),
+                    ),
+                      ],
                     ),
                   ],
                 ),

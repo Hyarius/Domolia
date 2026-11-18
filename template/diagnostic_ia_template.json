@@ -12,11 +12,11 @@
       "playerEventId": 1,
       "playerMessage": "Je regarde l'horloge.",
       "raw": {
-        "text": "{\"type\":\"message\",\"speaker\":\"narrator\",\"name\":\"Narrateur\",\"text\":\"L’aiguille est immobile.\"}",
+        "text": "[NARRATION]\\nL’aiguille est immobile.\\n\\n[IMAGE]\\nL’horloge du comptoir arrêtée à 21 h 17.",
         "compactText": "L’aiguille est immobile.",
         "status": "jsonified",
         "firstEventId": 2,
-        "lastEventId": 2
+        "lastEventId": 3
       },
       "phases": [],
       "usage": {

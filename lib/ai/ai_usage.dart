@@ -30,6 +30,8 @@ class AiUsageRecord {
     if (stage == 'jsonifier') return 'JSONificateur';
     if (stage == 'live_memory') return 'Live Memory';
     if (stage == 'context_optimizer') return 'Optimiseur';
+    if (stage == 'image_generation') return 'Illustrations';
+    if (stage == 'image_direction') return 'Mise en scène';
     return 'Autres';
   }
 
@@ -199,5 +201,5 @@ class AiUsageSummary {
   AiUsageTotals forTask(String task) =>
       AiUsageTotals(records.where((r) => r.task == task).toList());
   static const tasks = ['Narrateur', 'JSONificateur', 'Live Memory',
-      'Optimiseur'];
+      'Optimiseur', 'Mise en scène', 'Illustrations'];
 }

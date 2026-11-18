@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:domolia/ai/ai_provider.dart';
@@ -162,5 +163,83 @@ void main() {
           messages: const [AiMessage(role: 'intruder', content: 'hello')]),
       throwsA(isA<AiProviderException>()),
     );
+  });
+
+  test('HTTP 403 means access denied, not an inferred content refusal', () async {
+    final provider = OpenAiCompatibleChatProvider(client: MockClient(
+      (_) async => http.Response('{"error":{"message":"denied"}}', 403),
+    ));
+    await expectLater(provider.listModels(settings), throwsA(
+      isA<AiProviderException>()
+        .having((e) => e.kind, 'kind', AiProviderErrorKind.access)
+        .having((e) => e.userMessage, 'message', contains('HTTP 403')),
+    ));
+  });
+
+  test('Only explicit machine-readable refusal is classified as refused', () async {
+    for (final status in [400, 403, 422]) {
+      final provider = OpenAiCompatibleChatProvider(client: MockClient(
+        (_) async => http.Response(jsonEncode({
+          'error': {
+            'code': 'content_policy_violation',
+            'message': 'private key ou-private-test-key',
+          },
+        }), status),
+      ));
+      await expectLater(provider.listModels(settings), throwsA(
+        isA<AiProviderException>()
+          .having((e) => e.kind, 'kind', AiProviderErrorKind.refused)
+          .having((e) => e.userMessage, 'sanitized',
+            isNot(contains(settings.apiKey))),
+      ));
+    }
+  });
+
+  test('Streaming distinguishes a filtered response from a truncated one', () async {
+    for (final finish in ['content_filter', 'length']) {
+      final body = 'data: ${jsonEncode({
+        'choices': [{'finish_reason': finish, 'delta': {'content': ''}}],
+      })}\n\ndata: [DONE]\n\n';
+      final provider = OpenAiCompatibleChatProvider(
+        client: MockClient((_) async => http.Response(body, 200)),
+      );
+      await expectLater(provider.streamChat(settings, messages: const [
+        AiMessage(role: 'user', content: 'Bonjour'),
+      ]).toList(), throwsA(isA<AiProviderException>()
+          .having((e) => e.kind, 'kind', finish == 'content_filter'
+              ? AiProviderErrorKind.refused : AiProviderErrorKind.provider)));
+    }
+  });
+
+  test('Tool streams classify HTTP timeout and explicit refusal', () async {
+    for (final status in [504, 422]) {
+      final body = status == 422
+          ? '{"error":{"type":"content_filter"}}' : '{"error":"timeout"}';
+      final provider = OpenAiCompatibleChatProvider(
+        client: MockClient((_) async => http.Response(body, status)),
+      );
+      await expectLater(provider.streamToolChat(settings,
+        messages: const [AiToolMessage(role: 'user', content: 'Bonjour')],
+        tools: const [],
+      ).toList(), throwsA(isA<AiProviderException>()
+          .having((e) => e.kind, 'kind', status == 504
+              ? AiProviderErrorKind.timeout : AiProviderErrorKind.refused)));
+    }
+  });
+
+  test('Connection and 25-second header timeout have different kinds', () async {
+    for (final network in [true, false]) {
+      final provider = OpenAiCompatibleChatProvider(client: MockClient((_) async {
+        if (network) throw http.ClientException('private key ou-private-test-key');
+        throw TimeoutException('private key ou-private-test-key');
+      }));
+      await expectLater(provider.streamChat(settings, messages: const [
+        AiMessage(role: 'user', content: 'Bonjour'),
+      ]).toList(), throwsA(isA<AiProviderException>()
+          .having((e) => e.kind, 'kind', network
+              ? AiProviderErrorKind.network : AiProviderErrorKind.timeout)
+          .having((e) => e.userMessage, 'safe message',
+              isNot(contains(settings.apiKey)))));
+    }
   });
 }

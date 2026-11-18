@@ -19,6 +19,7 @@ class _Provider implements AiChatProvider {
   String? jsonOutput;
   Completer<String>? rawGate;
   Completer<String>? formatGate;
+  AiProviderException? narrativeError;
   int narrationCalls = 0;
   int formattingCalls = 0;
   @override
@@ -36,6 +37,7 @@ class _Provider implements AiChatProvider {
       ]});
     }
     narrationCalls++;
+    if (narrativeError != null) throw narrativeError!;
     return rawGate == null ? raw : rawGate!.future;
   }
 }
@@ -205,6 +207,38 @@ void main() {
     expect(chat.timeline.whereType<ChatSceneChange>(), hasLength(1));
     expect(chat.messages, hasLength(4));
     expect(find.byKey(const ValueKey('chatWritingIndicator')), findsNothing);
+  });
+
+
+  testWidgets('Network error is named and retry preserves the player turn',
+      (tester) async {
+    final provider = _Provider()
+      ..narrativeError = const AiProviderException(
+        'Connexion au fournisseur impossible.',
+        kind: AiProviderErrorKind.network,
+      );
+    final chat = NarrativeChatController(
+      provider: provider, configuration: () => config,
+    );
+    addTearDown(chat.dispose);
+    await showChat(tester, chat);
+    await enter(tester, 'Je parle à ma voisine.');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('chatErrorBanner')), findsOneWidget);
+    expect(find.text('Connexion réseau'), findsOneWidget);
+    expect(chat.errorKind, AiProviderErrorKind.network);
+    expect(chat.messages.single.text, 'Je parle à ma voisine.');
+
+    provider.narrativeError = null;
+    await tester.tap(find.byKey(const ValueKey('chatRetry')));
+    await tester.pumpAndSettle();
+    expect(provider.narrationCalls, 2);
+    expect(provider.formattingCalls, 1);
+    expect(chat.messages.map((message) => message.text),
+      ['Je parle à ma voisine.', provider.raw]);
+    expect(chat.error, isNull);
+    expect(chat.errorKind, isNull);
+    expect(find.byKey(const ValueKey('chatErrorBanner')), findsNothing);
   });
 
   testWidgets('Formatter error permits retry without writing story twice',

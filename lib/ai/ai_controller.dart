@@ -485,22 +485,37 @@ class AiConnectionController extends ChangeNotifier {
     }
   }
 
-  /// Managed OpenUncensored profiles have stable IDs so existing Books and
-  /// Parts can keep their references. Legacy profiles are never deleted.
+  /// Legacy IDs remain valid for Books that explicitly reference them.
+  /// New installations use one shared OpenUncensored profile; task choice
+  /// belongs to AiTaskRouting, not to duplicated connection profiles.
   static const ouNarratorProfileId = 'openuncensored-managed-narrator';
   static const ouJsonifierProfileId = 'openuncensored-managed-jsonifier';
   static const ouOptimizerProfileId = 'openuncensored-managed-optimizer';
 
+  String? openUncensoredProfileIdFor(String key) {
+    for (final profile in _profiles) {
+      if (profile.kind != AiProviderKind.customAi ||
+          profile.apiKey != key ||
+          profile.baseUrl.replaceFirst(RegExp(r'/+$'), '') != defaultAiBaseUrl) {
+        continue;
+      }
+      return profile.id;
+    }
+    return null;
+  }
+
+  /// Configures at most one OpenUncensored profile. Existing profiles
+  /// (including legacy task profiles) and their chosen names are preserved.
+  /// Reuse the initial empty "default" profile rather than adding a duplicate.
+  /// Never recreate a deleted profile on a background model refresh.
   Future<bool> configureOpenUncensored(
     String key, {
     required String narratorModel,
     required String jsonifierModel,
     required String optimizerModel,
     bool activateManagedProfile = true,
-    // Explicit OpenUncensored model-catalogue metadata, not an HTTP probe.
-    // Null means that no trustworthy capability information is available.
+    bool createProfileIfMissing = true,
     bool? narratorToolsSupported,
-    /// Explicit model or per-key probe result; overrides old boolean metadata.
     AiToolCallingCompatibility? narratorToolCompatibility,
   }) async {
     if (_closed || busy || !initialized ||
@@ -510,59 +525,67 @@ class AiConnectionController extends ChangeNotifier {
     busy = true;
     _notify();
     try {
-      final selectedModels = <String, String>{
-        ouNarratorProfileId: validatedAiModel(narratorModel),
-        ouJsonifierProfileId: validatedAiModel(jsonifierModel),
-        ouOptimizerProfileId: validatedAiModel(optimizerModel),
-      };
+      final model = validatedAiModel(narratorModel);
+      // Kept for backwards compatibility with the legacy payment controls:
+      // neither task model creates a profile anymore.
+      validatedAiModel(jsonifierModel);
+      validatedAiModel(optimizerModel);
       final next = List<AiProfile>.of(_profiles);
-      for (final entry in selectedModels.entries) {
-        final index = next.indexWhere((profile) => profile.id == entry.key);
-        final previous = index < 0 ? null : next[index];
-        final capability = entry.key == ouNarratorProfileId &&
-                narratorToolCompatibility != null
-            ? narratorToolCompatibility
-            : entry.key == ouNarratorProfileId &&
-                    narratorToolsSupported != null
-                ? narratorToolsSupported
-                    ? AiToolCallingCompatibility.supported
-                    : AiToolCallingCompatibility.unknown
-                : previous != null && previous.model == entry.value &&
-                        previous.apiKey == key
-                    ? previous.toolCallingCompatibility
-                    : AiToolCallingCompatibility.unknown;
-        final replacement = AiProfile(
-          id: entry.key,
-          name: switch (entry.key) {
-            ouNarratorProfileId => 'OpenUncensored · Narrateur',
-            ouJsonifierProfileId => 'OpenUncensored · JSONificateur',
-            _ => 'OpenUncensored · Optimiseur',
-          },
-          baseUrl: defaultAiBaseUrl,
-          model: entry.value,
-          apiKey: key,
-          nsfwCompatibility: AiNsfwCompatibility.supported,
-          toolCallingCompatibility: capability,
-        );
-        if (index < 0) {
-          next.add(replacement);
-        } else {
-          next[index] = replacement;
-        }
+      var index = next.indexWhere(
+          (p) => p.id == ouNarratorProfileId);
+      if (index < 0) {
+        index = next.indexWhere((p) =>
+            p.id == 'default' &&
+            p.kind == AiProviderKind.customAi &&
+            p.baseUrl.replaceFirst(RegExp(r'/+$'), '') == defaultAiBaseUrl &&
+            (p.apiKey == key ||
+                (createProfileIfMissing &&
+                    (p.apiKey.isEmpty || p.apiKey.startsWith('ou-')))));
       }
-      final nextSelectedId = activateManagedProfile
-          ? ouNarratorProfileId : _selectedId;
+      if (index < 0) {
+        index = next.indexWhere((p) =>
+            p.kind == AiProviderKind.customAi &&
+            p.baseUrl.replaceFirst(RegExp(r'/+$'), '') == defaultAiBaseUrl &&
+            p.apiKey == key);
+      }
+      if (index < 0 && !createProfileIfMissing) {
+        // The user removed the last shared profile deliberately.
+        return true;
+      }
+      final previous = index < 0 ? null : next[index];
+      final id = previous?.id ?? ouNarratorProfileId;
+      final capability = narratorToolCompatibility ??
+          (narratorToolsSupported == true
+              ? AiToolCallingCompatibility.supported
+              : previous != null &&
+                      previous.model == model &&
+                      previous.apiKey == key
+                  ? previous.toolCallingCompatibility
+                  : AiToolCallingCompatibility.unknown);
+      final profile = AiProfile(
+        id: id,
+        name: previous?.name ?? 'OpenUncensored',
+        baseUrl: defaultAiBaseUrl,
+        model: model,
+        apiKey: key,
+        nsfwCompatibility: AiNsfwCompatibility.supported,
+        toolCallingCompatibility: capability,
+      );
+      if (index < 0) {
+        next.add(profile);
+      } else {
+        next[index] = profile;
+      }
+      final selectedId = activateManagedProfile ? id : _selectedId;
       await store.write(AiProfilesState(
-        profiles: next, selectedId: nextSelectedId));
+        profiles: next, selectedId: selectedId));
       _profiles = next;
-      _selectedId = nextSelectedId;
-      for (final id in selectedModels.keys) {
-        _invalidate(id);
-      }
+      _selectedId = selectedId;
+      _invalidate(id);
       message = null;
       return true;
     } catch (_) {
-      message = 'Impossible d’enregistrer les modèles OpenUncensored.';
+      message = 'Impossible d’enregistrer le profil OpenUncensored.';
       return false;
     } finally {
       busy = false;

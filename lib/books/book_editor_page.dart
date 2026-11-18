@@ -10,7 +10,10 @@ import '../chat/narrative_tuning_editor.dart';
 import '../chat/narrator.dart';
 import '../chat/chat_protocol.dart';
 import '../logging/app_logger.dart';
+import '../illustration/image_preferences.dart';
 import 'book_cover_loader.dart';
+import 'book_cover_generation.dart';
+import '../illustration/image_providers.dart';
 import 'book_definition.dart';
 import 'book_lore.dart';
 import 'book_lore_tab.dart';
@@ -25,12 +28,16 @@ class BookEditorPage extends StatefulWidget {
     required this.library,
     required this.ai,
     required this.onPlay,
+    this.initialTab = 0,
+    this.imagePreferences,
   });
 
   final BookDefinition book;
   final BookLibraryController library;
   final AiConnectionController ai;
   final Future<void> Function(BookDefinition book, BookSession session) onPlay;
+  final int initialTab;
+  final ImagePreferences? imagePreferences;
 
   @override
   State<BookEditorPage> createState() => BookEditorPageState();
@@ -42,22 +49,30 @@ class BookEditorPageState extends State<BookEditorPage> {
   late final TextEditingController _style;
   late final TextEditingController _keywords;
   late final TextEditingController _openings;
+  late final TextEditingController _visualStyle;
+  late final TextEditingController _negativePrompt;
   Timer? _saveDelay;
   Future<void> _saveTail = Future<void>.value();
   int _editRevision = 0;
   int _savedRevision = 0;
   String? _profileId;
-  int _tab = 0;
+  bool _coverBusy = false;
+  bool _resettingSettings = false;
+  late int _tab;
 
   @override
   void initState() {
     super.initState();
     _book = widget.book;
+    _tab = widget.initialTab;
     _title = TextEditingController(text: _book.title);
     _style = TextEditingController(text: _book.narrativeStyle);
     _keywords = TextEditingController(
         text: _book.tuning.styleKeywords.join(', '));
     _openings = TextEditingController(text: _book.openingMessages.join('\n'));
+    _visualStyle = TextEditingController(text: _book.illustrationSettings.style);
+    _negativePrompt =
+        TextEditingController(text: _book.illustrationSettings.negativePrompt);
     _loadProfile();
   }
 
@@ -74,6 +89,8 @@ class BookEditorPageState extends State<BookEditorPage> {
     _style.dispose();
     _keywords.dispose();
     _openings.dispose();
+    _visualStyle.dispose();
+    _negativePrompt.dispose();
     super.dispose();
   }
 
@@ -100,6 +117,11 @@ class BookEditorPageState extends State<BookEditorPage> {
 
   /// The host asks before leaving. Pending edits are saved or explicitly discarded.
   Future<bool> prepareToLeave() async {
+    if (_coverBusy) {
+      _show('Une couverture est en cours de génération. '
+          'Attendez sa sauvegarde avant de quitter le Livre.');
+      return false;
+    }
     _saveDelay?.cancel();
     await _saveTail;
     if (_savedRevision == _editRevision) return true;
@@ -146,6 +168,9 @@ class BookEditorPageState extends State<BookEditorPage> {
         openingMessages: openings,
         tuning: current.tuning.copyWith(
           styleKeywords: NarrativeTuning.parseKeywords(_keywords.text)),
+        illustrationSettings: current.illustrationSettings.copyWith(
+          style: _visualStyle.text.trim(),
+          negativePrompt: _negativePrompt.text.trim()),
       ));
       return true;
     } on FormatException catch (error) {
@@ -156,6 +181,59 @@ class BookEditorPageState extends State<BookEditorPage> {
           error: failure, stackTrace: stackTrace);
       _show('Impossible de sauvegarder ce Livre.');
       return false;
+    }
+  }
+
+  Future<void> _resetBookSettings() async {
+    if (_resettingSettings || _coverBusy) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Rétablir les réglages du Livre ?'),
+        content: const Text(
+          'Le style et le rythme du narrateur, le niveau de détail, '
+          'les préférences d’illustration et les options graphiques '
+          'reviendront à leurs valeurs par défaut.\n\n'
+          'Le titre, la couverture, les premières scènes, le Lore, '
+          'le mode NSFW, les connexions API et toutes les Parties '
+          'existantes seront conservés.'),
+        actions: [
+          TextButton(
+            key: const ValueKey('bookResetCancel'),
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            key: const ValueKey('bookResetConfirm'),
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Rétablir'),
+          ),
+        ],
+      ),
+    ) ?? false;
+    if (!confirmed || !mounted || _coverBusy || _resettingSettings) return;
+    setState(() => _resettingSettings = true);
+    try {
+      // Flush unrelated text edits first so this operation cannot erase
+      // a pending title, opening scene or canonical Lore change.
+      if (!await _save() || !mounted) return;
+      await _persist((current) => current.copyWith(
+        narrativeStyle: defaultNarratorNarrativePrompt,
+        detailLevel: 3,
+        tuning: const NarrativeTuning(),
+        illustrationMode: IllustrationMode.suggestions,
+        illustrationSettings: const BookIllustrationSettings(),
+      ));
+      if (!mounted) return;
+      _style.text = _book.narrativeStyle;
+      _keywords.text = _book.tuning.styleKeywords.join(', ');
+      _visualStyle.text = _book.illustrationSettings.style;
+      _negativePrompt.text = _book.illustrationSettings.negativePrompt;
+      _show('Réglages par défaut du Livre restaurés.');
+    } catch (_) {
+      _show('Impossible de restaurer les réglages du Livre.');
+    } finally {
+      if (mounted) setState(() => _resettingSettings = false);
     }
   }
 
@@ -172,8 +250,84 @@ class BookEditorPageState extends State<BookEditorPage> {
       openingMessages: openings,
       tuning: current.tuning.copyWith(
         styleKeywords: NarrativeTuning.parseKeywords(_keywords.text)),
+      illustrationSettings: current.illustrationSettings.copyWith(
+        style: _visualStyle.text.trim(),
+        negativePrompt: _negativePrompt.text.trim()),
       lore: lore,
     ));
+  }
+
+  Future<void> _generateCover() async {
+    if (_coverBusy) return;
+    if (!await _save() || !mounted) return;
+
+    // The editor opens with the Book's portable JSON value, not an
+    // ephemeral global preference. Cancelling does not change the Book.
+    final description = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => _BookCoverPromptDialog(
+        initialPrompt: _book.illustrationSettings.coverPrompt,
+        replacingCover: _book.coverBase64 != null,
+      ),
+    );
+    if (description == null || !mounted) return;
+    try {
+      await _persist((current) => current.copyWith(
+        illustrationSettings: current.illustrationSettings.copyWith(
+          coverPrompt: description)));
+    } on FormatException catch (failure) {
+      _show(failure.message);
+      return;
+    } catch (failure, stackTrace) {
+      AppLogger.error('Sauvegarde de description de couverture échouée',
+          component: 'cover', error: failure, stackTrace: stackTrace);
+      _show('Impossible d’enregistrer la description de couverture.');
+      return;
+    }
+
+    // Save the text even if no image API is configured, so the author
+    // can return to it later without an unwanted network operation.
+    if (widget.imagePreferences == null) {
+      _show('Génération d’image non configurée. '
+          'Ouvrez les réglages des IA graphiques.');
+      return;
+    }
+
+    final snapshot = _book;
+    setState(() => _coverBusy = true);
+    try {
+      await widget.ai.initialize();
+      await widget.imagePreferences!.initialize();
+      final generator = BookCoverGenerator();
+      final generated = await generator.generate(
+        book: snapshot,
+        connection: widget.imagePreferences!.application,
+        profiles: widget.ai.profiles);
+      if (!mounted) return;
+      if (BookCoverGenerator.buildPrompt(_book) !=
+          BookCoverGenerator.buildPrompt(snapshot)) {
+        _show('Le Livre a été modifié pendant la génération. '
+            'La couverture n’a pas été remplacée.');
+        return;
+      }
+      await _persist((current) => current.copyWith(
+        coverMime: generated.cover.mime,
+        coverBase64: generated.cover.base64));
+      final price = generated.costUsd == null
+          ? 'inconnu' : '${generated.costUsd} USD';
+      _show('Couverture générée et enregistrée. Coût signalé : $price.');
+    } on ImageGenerationFailure catch (failure) {
+      _show(failure.message);
+    } on FormatException catch (failure) {
+      _show(failure.message);
+    } catch (failure, stackTrace) {
+      AppLogger.error('Génération de couverture échouée',
+        component: 'cover', error: failure, stackTrace: stackTrace);
+      _show('Impossible de générer la couverture. '
+          'Vérifiez les réglages graphiques et vos crédits.');
+    } finally {
+      if (mounted) setState(() => _coverBusy = false);
+    }
   }
 
   Future<void> _chooseCover() async {
@@ -231,6 +385,10 @@ class BookEditorPageState extends State<BookEditorPage> {
   }
 
   Future<void> _play() async {
+    if (_coverBusy) {
+      _show('Une couverture est en cours de génération.');
+      return;
+    }
     _saveDelay?.cancel();
     if (!await _save()) return;
     try {
@@ -368,13 +526,20 @@ class BookEditorPageState extends State<BookEditorPage> {
         onDestinationSelected: (tab) => setState(() => _tab = tab),
         destinations: const [
           NavigationDestination(
+            key: ValueKey('bookNav-0'),
             icon: Icon(Icons.menu_book_outlined), label: 'Livre'),
           NavigationDestination(
+            key: ValueKey('bookNav-1'),
             icon: Icon(Icons.auto_stories_outlined), label: 'Lore'),
           NavigationDestination(
+            key: ValueKey('bookNav-2'),
             icon: Icon(Icons.edit_note_rounded), label: 'Narrateur'),
           NavigationDestination(
+            key: ValueKey('bookNav-3'),
             icon: Icon(Icons.settings_outlined), label: 'Système'),
+          NavigationDestination(
+            key: ValueKey('bookNav-4'),
+            icon: Icon(Icons.palette_outlined), label: 'Images'),
         ],
       ),
       body: SafeArea(
@@ -404,7 +569,8 @@ class BookEditorPageState extends State<BookEditorPage> {
               key: const ValueKey('bookPlay'),
               onPressed: _play,
               icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text('Commencer ou reprendre une partie'),
+              label: const Text('Commencer ou reprendre une partie',
+                textAlign: TextAlign.center),
             ),
           ),
           const SizedBox(height: 10),
@@ -435,6 +601,11 @@ class BookEditorPageState extends State<BookEditorPage> {
                 padding: const EdgeInsets.fromLTRB(18, 10, 18, 26),
                 children: _systemTab(),
               ),
+              ListView(
+                key: const ValueKey('bookTab-4'),
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 26),
+                children: _illustrationTab(),
+              ),
             ],
           )),
         ]),
@@ -463,10 +634,29 @@ class BookEditorPageState extends State<BookEditorPage> {
     const SizedBox(height: 12),
     OutlinedButton.icon(
       key: const ValueKey('bookChooseCover'),
-      onPressed: _chooseCover,
+      onPressed: _coverBusy ? null : _chooseCover,
       icon: const Icon(Icons.photo_library_outlined),
       label: const Text('Choisir une image locale'),
     ),
+    const SizedBox(height: DomoliaSpacing.compact),
+    OutlinedButton.icon(
+      key: const ValueKey('bookGenerateCover'),
+      onPressed: _coverBusy ? null : _generateCover,
+      icon: const Icon(Icons.auto_awesome_outlined),
+      label: const Text('Générer une couverture avec l’IA',
+        textAlign: TextAlign.center),
+    ),
+    if (_coverBusy)
+      const Padding(
+        key: ValueKey('bookCoverGenerating'),
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Row(children: [
+          SizedBox(width: 18, height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2)),
+          SizedBox(width: 12),
+          Expanded(child: Text('Illustrateur dessine la couverture…')),
+        ]),
+      ),
     const SizedBox(height: DomoliaSpacing.compact),
     const SizedBox(height: DomoliaSpacing.section),
     SwitchListTile(
@@ -481,28 +671,6 @@ class BookEditorPageState extends State<BookEditorPage> {
   ];
 
   List<Widget> _narratorTab() => [
-    DropdownButtonFormField<IllustrationMode>(
-      key: ValueKey('bookIllustration-${_book.illustrationMode.name}'),
-      initialValue: _book.illustrationMode,
-      isExpanded: true,
-      decoration: const InputDecoration(labelText: 'Illustrations du Livre'),
-      items: const [
-        DropdownMenuItem(value: IllustrationMode.disabled,
-            child: Text('Désactivées')),
-        DropdownMenuItem(value: IllustrationMode.suggestions,
-            child: Text('Suggestions (sans génération)')),
-        DropdownMenuItem(value: IllustrationMode.automatic,
-            child: Text('Automatique (préparation uniquement)')),
-      ],
-      onChanged: (mode) {
-        if (mode == null || mode == _book.illustrationMode) return;
-        unawaited(_persist((current) =>
-            current.copyWith(illustrationMode: mode)).catchError((Object _) {
-          _show('Impossible de sauvegarder les illustrations.');
-        }));
-      },
-    ),
-    const SizedBox(height: DomoliaSpacing.section),
     TextField(
       key: const ValueKey('bookNarrativeStyle'),
       controller: _style,
@@ -551,6 +719,131 @@ class BookEditorPageState extends State<BookEditorPage> {
         _queueSave();
       },
     ),
+  ];
+
+  List<Widget> _illustrationTab() => [
+    const Text('Direction artistique du Livre',
+      style: TextStyle(fontSize: 19, color: DomoliaColors.goldLight,
+        fontWeight: FontWeight.bold)),
+    const SizedBox(height: 8),
+    const Text('Ces options appartiennent au Livre et sont incluses dans '
+      'son export. Le fournisseur, la clé API et le modèle restent '
+      'configurés dans les réglages des IA graphiques.'),
+    const SizedBox(height: DomoliaSpacing.section),
+    DropdownButtonFormField<IllustrationMode>(
+      key: ValueKey('bookIllustration-${_book.illustrationMode.name}'),
+      initialValue: _book.illustrationMode,
+      isExpanded: true,
+      decoration: const InputDecoration(labelText: 'Illustrations du Livre'),
+      items: const [
+        DropdownMenuItem(value: IllustrationMode.disabled,
+            child: Text('Désactivées')),
+        DropdownMenuItem(value: IllustrationMode.suggestions,
+            child: Text('Suggestions (sans génération)',
+              overflow: TextOverflow.ellipsis)),
+        DropdownMenuItem(value: IllustrationMode.automatic,
+            child: Text('Automatique (préparation uniquement)',
+              overflow: TextOverflow.ellipsis)),
+      ],
+      onChanged: (mode) {
+        if (mode == null || mode == _book.illustrationMode) return;
+        unawaited(_persist((current) =>
+            current.copyWith(illustrationMode: mode)).catchError((Object _) {
+          _show('Impossible de sauvegarder les illustrations.');
+        }));
+      },
+    ),
+    const SizedBox(height: DomoliaSpacing.section),
+    TextField(
+      key: const ValueKey('bookImageStyle'),
+      controller: _visualStyle, maxLength: 160,
+      minLines: 2, maxLines: 4,
+      decoration: const InputDecoration(
+        labelText: 'Style graphique',
+        helperText: 'Direction artistique commune aux illustrations du Livre',
+        helperMaxLines: 3),
+      onChanged: (_) => _queueSave(),
+    ),
+    const SizedBox(height: DomoliaSpacing.section),
+    TextField(
+      key: const ValueKey('bookImageNegativePrompt'),
+      controller: _negativePrompt, maxLength: 1500,
+      minLines: 3, maxLines: 7,
+      decoration: const InputDecoration(
+        labelText: 'Éléments à éviter (negative prompt)',
+        helperMaxLines: 4,
+        helperText: 'Par exemple : texte, sous-titres, bulles, '
+          'filigranes et signatures. Les modèles peuvent encore produire '
+          'des éléments indésirables.'),
+      onChanged: (_) => _queueSave(),
+    ),
+    const SizedBox(height: DomoliaSpacing.section),
+    KeyedSubtree(
+      key: ValueKey('bookSize-${_book.illustrationSettings.size}'),
+      child: DropdownButtonFormField<String>(
+      key: const ValueKey('bookImageSize'),
+      initialValue: _book.illustrationSettings.size,
+      isExpanded: true,
+      decoration: const InputDecoration(labelText: 'Taille / format'),
+      items: [
+        for (final size in BookIllustrationSettings.supportedSizes)
+          DropdownMenuItem(value: size, child: Text(size)),
+      ],
+      onChanged: (size) {
+        if (size == null || size == _book.illustrationSettings.size) return;
+        unawaited(_persist((book) => book.copyWith(
+          illustrationSettings:
+              book.illustrationSettings.copyWith(size: size))).catchError(
+          (Object _) => _show('Impossible de sauvegarder le format.')));
+      },
+    )),
+    const SizedBox(height: DomoliaSpacing.section),
+    KeyedSubtree(
+      key: ValueKey('bookQuality-${_book.illustrationSettings.quality ?? "auto"}'),
+      child: DropdownButtonFormField<String>(
+      key: const ValueKey('bookImageQuality'),
+      initialValue: _book.illustrationSettings.quality ?? 'auto',
+      isExpanded: true,
+      decoration: const InputDecoration(labelText: 'Qualité graphique'),
+      items: [
+        const DropdownMenuItem(value: 'auto',
+          child: Text('Défaut du fournisseur')),
+        for (final quality in BookIllustrationSettings.supportedQualities)
+          DropdownMenuItem(value: quality, child: Text(quality)),
+      ],
+      onChanged: (quality) {
+        if (quality == null) return;
+        unawaited(_persist((book) => book.copyWith(
+          illustrationSettings: book.illustrationSettings.copyWith(
+            quality: quality, clearQuality: quality == 'auto'))).catchError(
+          (Object _) => _show('Impossible de sauvegarder la qualité.')));
+      },
+    )),
+    const SizedBox(height: DomoliaSpacing.section),
+    KeyedSubtree(
+      key: ValueKey('bookCount-${_book.illustrationSettings.count}'),
+      child: DropdownButtonFormField<int>(
+      key: const ValueKey('bookImageCount'),
+      initialValue: _book.illustrationSettings.count,
+      isExpanded: true,
+      decoration: const InputDecoration(labelText: 'Images par demande'),
+      items: [
+        for (var count = 1; count <= 4; count++)
+          DropdownMenuItem(value: count, child: Text('$count')),
+      ],
+      onChanged: (count) {
+        if (count == null || count == _book.illustrationSettings.count) return;
+        unawaited(_persist((book) => book.copyWith(
+          illustrationSettings: book.illustrationSettings.copyWith(
+            count: count))).catchError(
+          (Object _) => _show('Impossible de sauvegarder le nombre d’images.')));
+      },
+    )),
+    const SizedBox(height: DomoliaSpacing.section),
+    const Text('Certaines combinaisons de format, qualité et quantité '
+      'peuvent ne pas être prises en charge par le modèle API sélectionné. '
+      'Domolia affiche alors une erreur avant de lancer une génération '
+      'facturable.'),
   ];
 
   List<Widget> _systemTab() => [
@@ -611,6 +904,20 @@ class BookEditorPageState extends State<BookEditorPage> {
         );
       },
     ),
+    const SizedBox(height: DomoliaSpacing.section),
+    const Divider(),
+    OutlinedButton.icon(
+      key: const ValueKey('bookResetSettings'),
+      onPressed: _coverBusy || _resettingSettings ? null : _resetBookSettings,
+      icon: const Icon(Icons.restart_alt_rounded),
+      label: const Text('Rétablir les réglages par défaut'),
+    ),
+    const SizedBox(height: DomoliaSpacing.compact),
+    const Text(
+      'Conserve le Lore, le titre, la couverture, les scènes de départ '
+      'et les Parties. Ne réinitialise pas les clés API.',
+      style: TextStyle(color: DomoliaColors.muted),
+    ),
   ];
 
   Widget _nsfwWarning(List<AiProfile> profiles) {
@@ -634,4 +941,84 @@ class BookEditorPageState extends State<BookEditorPage> {
       ),
     };
   }
+}
+
+class _BookCoverPromptDialog extends StatefulWidget {
+  const _BookCoverPromptDialog({
+    required this.initialPrompt,
+    required this.replacingCover,
+  });
+
+  final String initialPrompt;
+  final bool replacingCover;
+
+  @override
+  State<_BookCoverPromptDialog> createState() => _BookCoverPromptDialogState();
+}
+
+class _BookCoverPromptDialogState extends State<_BookCoverPromptDialog> {
+  late final TextEditingController _description;
+
+  @override
+  void initState() {
+    super.initState();
+    _description = TextEditingController(text: widget.initialPrompt);
+  }
+
+  @override
+  void dispose() {
+    _description.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Description de la couverture'),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('Décrivez ce que l’illustrateur doit dessiner. '
+            'Cette description vient du JSON du Livre et y sera '
+            'enregistrée si vous confirmez.'),
+          const SizedBox(height: 14),
+          TextField(
+            key: const ValueKey('bookCoverDescription'),
+            controller: _description,
+            minLines: 4,
+            maxLines: 8,
+            maxLength: 2000,
+            autofocus: false,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Image à générer',
+              hintText: 'Personnages visibles, décor, ambiance, cadrage…'),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 8),
+          const Text('Le style graphique et les éléments à exclure '
+            'proviennent aussi des paramètres du Livre.'),
+          const SizedBox(height: 8),
+          Text('Génération facturable : coût avant requête inconnu. '
+            'Une seule image sera demandée. '
+            '${widget.replacingCover ? "L’ancienne couverture sera remplacée uniquement après succès." : ""}'),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        key: const ValueKey('bookCoverCancel'),
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Annuler'),
+      ),
+      FilledButton(
+        key: const ValueKey('bookCoverConfirmGeneration'),
+        onPressed: _description.text.trim().isEmpty ||
+                _description.text.length > 2000
+            ? null : () => Navigator.pop(context, _description.text.trim()),
+        child: const Text('Générer la couverture'),
+      ),
+    ],
+  );
 }

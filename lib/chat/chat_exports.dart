@@ -158,7 +158,9 @@ Map<String, dynamic> exportAiPipelineTrace(
     var cached = 0, reasoning = 0, toolCalls = 0, duration = 0;
     var payloadCharacters = 0, payloadBytes = 0, reported = 0;
     var narratorRequests = 0, jsonifierRequests = 0, optimizerRequests = 0;
-    var memoryRequests = 0;
+    var memoryRequests = 0, imageDirectionRequests = 0;
+    var imageCatalogRequests = 0, imageGenerationRequests = 0;
+    var knownImageCostUsd = 0.0;
     for (final phase in phases) {
       final name = phase['stage']?.toString() ?? '';
       if (name.startsWith('narrator_')) {
@@ -169,8 +171,17 @@ Map<String, dynamic> exportAiPipelineTrace(
         optimizerRequests++;
       } else if (name == 'live_memory') {
         memoryRequests++;
+      } else if (name == 'image_direction') {
+        imageDirectionRequests++;
+      } else if (name == 'image_catalog') {
+        imageCatalogRequests++;
+      } else if (name == 'image_generation') {
+        imageGenerationRequests++;
       }
       final record = AiUsageRecord.fromDiagnosticJson('export', phase);
+      if (name == 'image_generation' && record.providerCostUsd != null) {
+        knownImageCostUsd += record.providerCostUsd!;
+      }
       toolCalls += record.toolCalls;
       duration += record.durationMs ?? 0;
       payloadCharacters += record.requestCharacters ?? 0;
@@ -181,7 +192,8 @@ Map<String, dynamic> exportAiPipelineTrace(
       if (record.inputTokens != null && record.outputTokens != null) {
         prompt += record.inputTokens!;
         completion += record.outputTokens!;
-      } else {
+      } else if (name != 'image_catalog' && name != 'image_generation') {
+        // Image HTTP calls do not necessarily return text token counts.
         missing++;
       }
     }
@@ -191,6 +203,10 @@ Map<String, dynamic> exportAiPipelineTrace(
       'jsonifierRequests': jsonifierRequests,
       'optimizerRequests': optimizerRequests,
       'memoryRequests': memoryRequests,
+      'imageDirectionRequests': imageDirectionRequests,
+      'imageCatalogRequests': imageCatalogRequests,
+      'imageGenerationRequests': imageGenerationRequests,
+      'knownImageCostUsd': knownImageCostUsd,
       'toolCalls': toolCalls,
       'durationMsKnown': duration,
       'requestCharactersKnown': payloadCharacters,

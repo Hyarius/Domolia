@@ -228,12 +228,104 @@ class AiToolsUnsupportedException extends AiProviderException {
       : super('Ce modèle refuse les paramètres de Tool Calling.');
 }
 
+enum AiProviderErrorKind { network, timeout, access, credits, rateLimit, refused, provider }
+
+extension AiProviderErrorDescription on AiProviderErrorKind {
+  String get label => switch (this) {
+    AiProviderErrorKind.network => 'Connexion réseau',
+    AiProviderErrorKind.timeout => 'Délai d’attente',
+    AiProviderErrorKind.access => 'Accès au fournisseur',
+    AiProviderErrorKind.credits => 'Crédits insuffisants',
+    AiProviderErrorKind.rateLimit => 'Limite de débit',
+    AiProviderErrorKind.refused => 'Demande refusée',
+    AiProviderErrorKind.provider => 'Erreur du fournisseur',
+  };
+}
+
 class AiProviderException implements Exception {
-  const AiProviderException(this.userMessage);
+  const AiProviderException(this.userMessage, {
+    this.kind = AiProviderErrorKind.provider,
+  });
+
   final String userMessage;
+  final AiProviderErrorKind kind;
 
   @override
   String toString() => userMessage;
+}
+
+/// A refusal is explicit only when the server sends a structured policy code.
+/// Neither HTTP 403, network timeouts, nor the user's words prove moderation.
+bool _isExplicitRefusal(Object? payload) {
+  if (payload is! Map || payload['error'] is! Map) return false;
+  final error = payload['error'] as Map;
+  const codes = {
+    'content_filter', 'content_policy_violation', 'policy_violation',
+    'safety_violation', 'content_blocked', 'moderation_block',
+  };
+  return codes.contains(error['code']?.toString().toLowerCase()) ||
+      codes.contains(error['type']?.toString().toLowerCase());
+}
+
+bool _isExplicitRefusalBody(List<int> bytes) {
+  try {
+    return bytes.isNotEmpty &&
+        _isExplicitRefusal(jsonDecode(utf8.decode(bytes)));
+  } catch (_) {
+    return false;
+  }
+}
+
+/// User-facing errors never contain upstream response bodies or credentials.
+AiProviderException _httpFailure(int status, List<int> body) {
+  if (_isExplicitRefusalBody(body)) {
+    return const AiProviderException(
+      'Le fournisseur a explicitement refusé la demande.',
+      kind: AiProviderErrorKind.refused,
+    );
+  }
+  switch (status) {
+    case 401:
+      return const AiProviderException(
+        'Clé API refusée (HTTP 401). Vérifiez votre clé.',
+        kind: AiProviderErrorKind.access,
+      );
+    case 403:
+      return const AiProviderException(
+        'Accès refusé (HTTP 403). Vérifiez les permissions du compte ou du modèle.',
+        kind: AiProviderErrorKind.access,
+      );
+    case 402:
+      return const AiProviderException(
+        'Crédits insuffisants chez le fournisseur.',
+        kind: AiProviderErrorKind.credits,
+      );
+    case 404:
+      return const AiProviderException(
+        'Modèle ou point d’accès introuvable (HTTP 404).',
+        kind: AiProviderErrorKind.access,
+      );
+    case 408:
+    case 504:
+      return const AiProviderException(
+        'Le fournisseur a signalé un délai dépassé (HTTP 408/504).',
+        kind: AiProviderErrorKind.timeout,
+      );
+    case 429:
+      return const AiProviderException(
+        'Limite de débit atteinte (HTTP 429). Réessayez plus tard.',
+        kind: AiProviderErrorKind.rateLimit,
+      );
+    case 451:
+      return const AiProviderException(
+        'Demande refusée par le fournisseur (HTTP 451).',
+        kind: AiProviderErrorKind.refused,
+      );
+    default:
+      return AiProviderException(
+        'Le fournisseur IA a retourné une erreur HTTP $status.',
+      );
+  }
 }
 
 /// Accept only TLS endpoints; never send a bearer token over HTTP.
@@ -304,33 +396,20 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
       exchange?.statusCode = response.statusCode;
       exchange?.addRawResponse(response.bodyBytes);
     } on TimeoutException {
-      throw const AiProviderException('Le fournisseur IA ne répond pas à temps.');
+      throw const AiProviderException(
+        'Aucune réponse du fournisseur sous 25 s. Vérifiez le réseau ou réessayez.',
+        kind: AiProviderErrorKind.timeout,
+      );
     } catch (_) {
       // Never surface HTTP exception bodies, URLs or Authorization headers.
       throw const AiProviderException(
-        'Connexion au fournisseur impossible. Vérifiez votre réseau et l’URL.',
+        'Connexion au fournisseur impossible. Vérifiez le réseau et l’URL.',
+        kind: AiProviderErrorKind.network,
       );
     }
 
     if (response.statusCode != 200) {
-      switch (response.statusCode) {
-        case 401:
-        case 403:
-          throw const AiProviderException('Clé API refusée. Vérifiez votre clé.');
-        case 402:
-          throw const AiProviderException('Crédits du fournisseur insuffisants.');
-        case 404:
-          throw const AiProviderException('Modèle ou point d’accès introuvable.');
-        case 408:
-        case 504:
-          throw const AiProviderException('Délai de réponse du fournisseur dépassé.');
-        case 429:
-          throw const AiProviderException('Limite de débit atteinte. Réessayez plus tard.');
-        default:
-          throw AiProviderException(
-            'Le fournisseur IA a retourné une erreur HTTP ${response.statusCode}.',
-          );
-      }
+      throw _httpFailure(response.statusCode, response.bodyBytes);
     }
     if (response.bodyBytes.length > 2 * 1024 * 1024) {
       throw const AiProviderException('Réponse du fournisseur trop volumineuse.');
@@ -456,45 +535,32 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
       );
       exchange?.statusCode = response.statusCode;
     } on TimeoutException {
-      throw const AiProviderException('Le fournisseur IA ne répond pas à temps.');
+      throw const AiProviderException(
+        'Aucune réponse du fournisseur sous 25 s. Vérifiez le réseau ou réessayez.',
+        kind: AiProviderErrorKind.timeout,
+      );
     } catch (_) {
       throw const AiProviderException(
         'Connexion au fournisseur impossible. Vérifiez le réseau et l’URL.',
+        kind: AiProviderErrorKind.network,
       );
     }
 
     if (response.statusCode != 200) {
-      // Preserve the actual upstream error body for offline diagnosis.
-      // Only a bounded amount is captured; user-visible errors stay sanitized.
-      if (exchange != null) {
-        try {
-          await for (final bytes in response.stream.timeout(
-              const Duration(seconds: 8))) {
-            exchange.addRawResponse(bytes);
-            if (exchange.truncated) break;
+      final body = <int>[];
+      try {
+        await for (final bytes in response.stream.timeout(
+            const Duration(seconds: 8))) {
+          exchange?.addRawResponse(bytes);
+          if (body.length < 16384) {
+            body.addAll(bytes.take(16384 - body.length));
           }
-        } catch (_) {
-          // A broken error stream must not replace the useful HTTP status.
+          if (body.length >= 16384) break;
         }
+      } catch (_) {
+        // The HTTP status remains authoritative.
       }
-      switch (response.statusCode) {
-        case 401:
-        case 403:
-          throw const AiProviderException('Clé API refusée. Vérifiez votre clé.');
-        case 402:
-          throw const AiProviderException('Crédits insuffisants chez le fournisseur.');
-        case 404:
-          throw const AiProviderException('Modèle ou point d’accès introuvable.');
-        case 429:
-          throw const AiProviderException('Limite de débit atteinte. Réessayez plus tard.');
-        case 408:
-        case 504:
-          throw const AiProviderException('Délai de réponse du fournisseur dépassé.');
-        default:
-          throw AiProviderException(
-            'Le fournisseur IA a retourné une erreur HTTP ${response.statusCode}.',
-          );
-      }
+      throw _httpFailure(response.statusCode, body);
     }
 
     var done = false;
@@ -529,8 +595,13 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
           throw const AiProviderException('Flux IA mal formé.');
         }
         if (parsed['error'] != null) {
-          // OpenUncensored may send an in-band upstream error *after* 200.
-          // Never display the raw body: it may contain private data.
+          // HTTP 200 may still contain a structured upstream error.
+          if (_isExplicitRefusal(parsed)) {
+            throw const AiProviderException(
+              'Le fournisseur a explicitement refusé la demande.',
+              kind: AiProviderErrorKind.refused,
+            );
+          }
           throw const AiProviderException(
             'Le fournisseur a interrompu la génération. Réessayez.',
           );
@@ -567,18 +638,28 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
           'Le flux IA s’est interrompu avant la fin de la réponse.',
         );
       }
-      if (finishReason == 'length' || finishReason == 'content_filter') {
+      if (finishReason == 'content_filter') {
         throw const AiProviderException(
-          'La réponse narrative est incomplète ou a été filtrée. Réessayez.',
+          'Le fournisseur a filtré la réponse (content_filter).',
+          kind: AiProviderErrorKind.refused,
+        );
+      }
+      if (finishReason == 'length') {
+        throw const AiProviderException(
+          'La réponse du modèle a été tronquée par sa limite de sortie.',
         );
       }
     } on AiProviderException {
       rethrow;
     } on TimeoutException {
-      throw const AiProviderException('Délai de réponse du fournisseur dépassé.');
+      throw const AiProviderException(
+        'Le flux IA ne répond plus depuis 75 s.',
+        kind: AiProviderErrorKind.timeout,
+      );
     } catch (_) {
       throw const AiProviderException(
         'Connexion interrompue pendant la génération. Réessayez.',
+        kind: AiProviderErrorKind.network,
       );
     }
   }
@@ -628,9 +709,15 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
       response = await _client.send(request).timeout(const Duration(seconds: 25));
       exchange?.statusCode = response.statusCode;
     } on TimeoutException {
-      throw const AiProviderException('Le fournisseur IA ne répond pas à temps.');
+      throw const AiProviderException(
+        'Aucune réponse du fournisseur sous 25 s. Vérifiez le réseau ou réessayez.',
+        kind: AiProviderErrorKind.timeout,
+      );
     } catch (_) {
-      throw const AiProviderException('Connexion au fournisseur impossible.');
+      throw const AiProviderException(
+        'Connexion au fournisseur impossible. Vérifiez le réseau et l’URL.',
+        kind: AiProviderErrorKind.network,
+      );
     }
     if (response.statusCode != 200) {
       // Inspect only the error classification. Never expose the upstream body.
@@ -666,26 +753,14 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
           rethrow;
         } catch (_) { /* Not an explicit incompatibility. */ }
       }
-      switch (response.statusCode) {
-        case 401: case 403:
-          throw const AiProviderException('Clé API refusée.');
-        case 402:
-          throw const AiProviderException('Crédits insuffisants.');
-        case 404:
-          throw const AiProviderException('Modèle introuvable.');
-        case 429:
-          throw const AiProviderException('Limite de débit atteinte.');
-        default:
-          throw AiProviderException(
-            'Le fournisseur IA a retourné HTTP ${response.statusCode}.',
-          );
-      }
+      throw _httpFailure(response.statusCode, body);
     }
 
     var done = false;
     String? finishReason;
     var totalBytes = 0;
-    await for (final line in response.stream
+    try {
+      await for (final line in response.stream
         .map((bytes) {
           exchange?.addRawResponse(bytes);
           totalBytes += bytes.length;
@@ -711,6 +786,12 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
         throw const AiProviderException('Flux IA mal formé.');
       }
       if (parsed['error'] != null) {
+        if (_isExplicitRefusal(parsed)) {
+          throw const AiProviderException(
+            'Le fournisseur a explicitement refusé la demande.',
+            kind: AiProviderErrorKind.refused,
+          );
+        }
         throw const AiProviderException('Le fournisseur a interrompu la génération.');
       }
       final usage = parsed['usage'];
@@ -752,12 +833,31 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
         );
       }
     }
-    if (!done) {
-      throw const AiProviderException('Flux IA incomplet : outils non exécutés.');
-    }
-    if (finishReason == 'length' || finishReason == 'content_filter') {
+      if (!done) {
+        throw const AiProviderException('Flux IA incomplet : outils non exécutés.');
+      }
+      if (finishReason == 'content_filter') {
+        throw const AiProviderException(
+          'Le fournisseur a filtré la réponse (content_filter).',
+          kind: AiProviderErrorKind.refused,
+        );
+      }
+      if (finishReason == 'length') {
+        throw const AiProviderException(
+          'La réponse du modèle a été tronquée par sa limite de sortie.',
+        );
+      }
+    } on AiProviderException {
+      rethrow;
+    } on TimeoutException {
       throw const AiProviderException(
-        'La réponse narrative est incomplète ou a été filtrée. Réessayez.',
+        'Le flux IA ne répond plus depuis 75 s.',
+        kind: AiProviderErrorKind.timeout,
+      );
+    } catch (_) {
+      throw const AiProviderException(
+        'Connexion interrompue pendant la génération. Réessayez.',
+        kind: AiProviderErrorKind.network,
       );
     }
   }
