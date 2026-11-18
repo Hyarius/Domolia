@@ -139,9 +139,11 @@ class _Image implements ImageGenerationProvider {
     calls++;
     lastRequest=request;
     expect(request.model,'test-image');
-    expect(request.prompt,contains('Sujet visible :'));
+    expect(request.prompt,contains('Sujet :'));
     expect(request.prompt,isNot(contains('Texte établi :')));
     expect(request.prompt,isNot(contains('Mémoire confirmée :')));
+    expect(request.prompt,isNot(contains('ACTION PRIORITAIRE')));
+    expect(request.prompt,isNot(contains('Personnage party:')));
     if (gate != null) return gate!.future;
     return _result();
   }
