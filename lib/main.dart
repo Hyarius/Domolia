@@ -552,6 +552,9 @@ class _HomePageState extends State<HomePage> {
           visualSettings: () => _books.byId(book.id)?.illustrationSettings ??
               book.illustrationSettings,
           memory: () => _liveMemory?.facts ?? const [],
+          onAcceptVisualFacts: (facts) async {
+            await _liveMemory?.acceptVisualFacts(facts);
+          },
           awaitNarrativeWrites: () => _awaitSessionWrites?.call()
               ?? Future<void>.value(),
           files: LocalIllustrationFiles(),
