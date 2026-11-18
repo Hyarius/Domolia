@@ -1,4 +1,5 @@
 // ignore_for_file: prefer_interpolation_to_compose_strings, curly_braces_in_flow_control_structures
+import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/illustration/image_preferences.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -24,6 +25,32 @@ void main() {
     expect((await restarted.forSession('s1')).model,'visual');
     prefs.dispose();
     restarted.dispose();
+  });
+
+  test('Default settings resolve a funded OpenUncensored profile automatically',
+      () {
+    const options = ImageGenerationOptions();
+    final resolved = options.resolveProfiles(const [
+      AiProfile(id:'default', name:'OpenUncensored',
+          baseUrl:defaultAiBaseUrl, model:defaultAiModel, apiKey:'ou-key'),
+      AiProfile(id:'external', name:'Other',
+          baseUrl:'https://api.openai.com/v1',
+          model:'gpt-image-2', apiKey:'openai-key'),
+    ]);
+    expect(resolved.profileId, 'default');
+    expect(resolved.directorProfileId, 'default');
+    expect(resolved.model, isEmpty);
+    expect(options.profileId, isEmpty); // No settings are silently persisted.
+    expect(options.toJson()['profileId'], isEmpty);
+    final override = options.copyWith(profileId:'external',
+        directorProfileId:'default', model:'gpt-image-2');
+    expect(override.resolveProfiles(const [
+      AiProfile(id:'default', name:'OpenUncensored',
+        baseUrl:defaultAiBaseUrl, model:defaultAiModel, apiKey:'ou-key'),
+      AiProfile(id:'external', name:'Other',
+        baseUrl:'https://api.openai.com/v1',
+        model:'gpt-image-2', apiKey:'openai-key'),
+    ]).profileId, 'external');
   });
 
   test('Only API configuration is persisted, legacy art keys ignored', () {
