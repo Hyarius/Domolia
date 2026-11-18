@@ -2,6 +2,9 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:domolia/ai/ai_diagnostics.dart';
+import 'package:domolia/chat/chat_exports.dart';
+import 'package:domolia/chat/chat_protocol.dart';
 import 'package:domolia/illustration/image_providers.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -161,5 +164,98 @@ void main() {
       apiKey:'key',
     ),throwsA(isA<ImageGenerationFailure>().having(
       (e)=>e.kind,'kind',ImageFailureKind.tooLarge)));
+  });
+
+  test('Image HTTP catalog and generation appear in redacted Party diagnostics',
+      () async {
+    const key = 'private-image-key';
+    const prompt = 'A sea cliff at dawn';
+    final encoded = base64Encode(_png);
+    final exchanges = <AiExchange>[];
+    final recorder = AiExchangeRecorder();
+    final provider = OpenUncensoredImageGenerationProvider(
+      diagnostics: recorder,
+      playerEventId: 4,
+      onExchangeCaptured: exchanges.add,
+      client: MockClient((request) async {
+        if (request.method == 'GET') {
+          return http.Response(jsonEncode({'data': [
+            {'id':'z-image-turbo', 'operations':['generate']},
+          ]}), 200);
+        }
+        return http.Response(jsonEncode({
+          'data': [
+            {'b64_json': encoded, 'revised_prompt': 'private-upstream-note'},
+          ],
+          'ou': {'cost_usd': 0.015},
+        }), 200);
+      }),
+    );
+    final result = await provider.generate(
+      const ImageGenerationRequest(model:'z-image-turbo', prompt:prompt),
+      apiKey:key,
+    );
+    expect(result.images, hasLength(1));
+    expect(exchanges.map((entry) => entry.stage),
+        ['image_catalog', 'image_generation']);
+    expect(exchanges.map((entry) => entry.playerEventId), [4, 4]);
+    expect(exchanges.map((entry) => entry.statusCode), [200, 200]);
+    expect(exchanges.every((entry) => entry.completedAtUtc != null), isTrue);
+    final generated = exchanges.last.toJson();
+    expect(generated['request']['body']['prompt'], prompt);
+    expect(generated['request']['body']['model'], 'z-image-turbo');
+    expect(generated['response']['truncated'], isTrue);
+    final metadata = jsonDecode(generated['response']['rawBody'] as String);
+    expect(metadata['imagePayloadRedacted'], true);
+    expect(metadata['imageCount'], 1);
+    expect(metadata['ou']['cost_usd'], 0.015);
+    expect(metadata['actualResponseBytes'], greaterThan(0));
+    final serialized = jsonEncode(exchanges.map((e) => e.toJson()).toList());
+    expect(serialized, isNot(contains(encoded)));
+    expect(serialized, isNot(contains('private-upstream-note')));
+    expect(serialized, isNot(contains(key)));
+
+    final trace = exportAiPipelineTrace(const [
+      ChatEntry(id:4, speaker:ChatSpeaker.player,
+        name:'Vous', text:'Je regarde la falaise.'),
+    ], const [], [
+      for (final entry in exchanges)
+        StoredAiDiagnostic(id:'image-${entry.createdAtUtc.microsecondsSinceEpoch}',
+          sessionId:'s', createdAtUtc:entry.createdAtUtc,
+          content:entry.exportJson()),
+    ]);
+    final turn = (trace['turns'] as List).single;
+    expect((turn['phases'] as List).map((e) => e['stage']),
+      ['image_catalog','image_generation']);
+    expect(turn['usage']['imageCatalogRequests'], 1);
+    expect(turn['usage']['imageGenerationRequests'], 1);
+    expect(turn['usage']['knownImageCostUsd'], 0.015);
+    expect(turn['usage']['requestsWithoutTokenUsage'], 0);
+  });
+
+  test('Image error HTTP status, duration and sanitized cause are persisted',
+      () async {
+    const key = 'secret-image-credential';
+    final exchanges = <AiExchange>[];
+    final provider = OpenAiImageGenerationProvider(
+      diagnostics: AiExchangeRecorder(),
+      playerEventId: 9,
+      onExchangeCaptured: exchanges.add,
+      client: MockClient((_) async => http.Response(
+        '{"error":{"message":"secret-image-credential sensitive text"}}', 403)),
+    );
+    await expectLater(provider.generate(
+      const ImageGenerationRequest(model:'gpt-image-2', prompt:'Harbor'),
+      apiKey:key,
+    ), throwsA(isA<ImageGenerationFailure>()));
+    expect(exchanges, hasLength(1));
+    final trace = exchanges.single.toJson();
+    expect(trace['stage'], 'image_generation');
+    expect(trace['playerEventId'], 9);
+    expect(trace['response']['statusCode'], 403);
+    expect(trace['interpretation']['error'], contains('Clé API'));
+    expect(jsonEncode(trace), isNot(contains(key)));
+    expect(jsonEncode(trace), isNot(contains('sensitive text')));
+    expect(trace['completedAtUtc'], isNotNull);
   });
 }
