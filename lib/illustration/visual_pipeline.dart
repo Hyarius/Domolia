@@ -379,54 +379,48 @@ class VisualDirector {
   }) async {
     final raw = await provider.complete(connection, maxTokens: 1500,
       messages: [
-        const AiMessage(role: 'system', content:
-          'Tu es le metteur en scène d’UNE image fixe. '
-          'Écris directement un prompt visuel fluide, autonome et précis '
-          'pour le générateur d’images, sans champs techniques dans ce texte. '
-          'PRIORITÉ ABSOLUE : fidélité à l’instant illustré, aux personnages, '
-          'aux actions, aux positions et aux faits établis du Livre, de '
-          'la scène et de la mémoire confirmée. '
-          'Décris d’abord les personnages réellement visibles et leur '
-          'apparence connue : âge apparent, silhouette, teint, visage, yeux, '
-          'cheveux (couleur, longueur, coupe, texture), vêtements, '
-          'expression et accessoires établis. '
-          'Puis détaille les gestes, mains, jambes, regards, orientations '
-          'et contacts physiques, ainsi que le cadrage et la lumière. '
-          'Complète uniquement les caractéristiques physiques nécessaires '
-          'pour représenter un personnage déjà présent, sans contredire le '
-          'canon ; ces détails proposés attendront la validation du joueur. '
-          'Ne crée pas de nouveaux personnages, objets narratifs, vêtements '
-          'ou gestes qui changeraient le sens de la scène. '
-          'DÉCOR : ne remplis JAMAIS un arrière-plan inconnu par des '
-          'inventions (mobilier, sol, murs, accessoires, fenêtres, '
-          'extérieur, météo, architecture ou couleurs non établis). '
-          'Par défaut, préfère un fond absent, blanc, neutre, abstrait '
-          'ou très épuré lorsque le lieu est secondaire ou non décrit. '
-          'En style manga, BD ou encre, un fond blanc, quelques trames '
-          'ou lignes de mouvement sont parfaitement appropriés. '
-          'En style réaliste, un arrière-plan neutre ou flou est également '
-          'valable : le réalisme n’oblige pas à inventer un décor. '
-          'Si un élément de lieu EST établi ou nécessaire à la compréhension '
-          'de l’action, garde uniquement ses repères indispensables : '
-          'par exemple une porte et son encadrement pour une personne sur '
-          'un seuil, ou une chaise pour une personne assise. '
-          'Un palier d’immeuble ne doit pas devenir un porche extérieur. '
-          'Ne crée jamais de détails de décor précis sous prétexte '
-          'de rendre la composition plus belle ou plus complète. '
-          'La composition et la lumière doivent servir les personnages '
-          'et l’action, sans modifier les faits ni ajouter de décor. '
-          'N’accumule pas les moments passés ou futurs, ne recopie aucun '
-          'dialogue et ne décris pas les pensées invisibles. '
-          'Fais une description aussi détaillée que la scène le justifie, '
-          'sans chercher à atteindre un nombre de mots en inventant. '
-          'Réponds UNIQUEMENT en JSON, sans Markdown ni commentaire : '
-          '"prompt" (description visuelle) et "negativePrompt" '
-          '(exclusions éventuelles, chaîne vide si aucune). '
-          'Optionnel : "appearances", propositions par personnage avec '
-          'id, identity (physique stable) et current (tenue et pose) ; '
-          'utilise seulement les IDs autorisés et reste cohérent '
-          'avec le prompt. Ces propositions ne deviennent des faits '
-          'qu’après approbation du joueur.'),
+        const AiMessage(role: 'system', content: '''
+RÔLE
+Tu es le metteur en scène d'UNE image fixe. Tu écris une consigne
+directement exploitable par un générateur d'images, pas un récit.
+
+SOURCE DE VÉRITÉ
+L'instant demandé est prioritaire. La chronologie sert uniquement à
+identifier les personnages, le lieu et leurs positions au moment choisi.
+Le Lore et la mémoire confirmée fixent les apparences et les faits.
+Une proposition, une hypothèse ou un souvenir incertain n'est pas un fait.
+N'illustre jamais plusieurs instants successifs dans la même image.
+
+PERSONNAGES ET ACTION
+Décris uniquement les personnages réellement présents et visibles.
+Précise l'âge apparent, la silhouette, le visage, les yeux, les cheveux,
+les vêtements et les accessoires connus, puis les expressions,
+les orientations, les gestes, les mains, les jambes et les contacts physiques.
+Pour les caractéristiques physiques nécessaires mais absentes du canon,
+propose des détails sobres et cohérents ; ils restent non confirmés jusqu'à
+la validation du joueur. N'invente pas de nouveaux personnages ni d'actions,
+de possessions ou de vêtements qui modifieraient la scène.
+
+CADRAGE ET DÉCOR
+Choisis un cadrage, un angle, une composition et une lumière au service
+du geste précis. Ne remplis JAMAIS un décor inconnu avec du mobilier,
+de l'architecture ou des accessoires inventés. Utilise un fond blanc,
+neutre ou épuré lorsqu'aucun lieu n'est décrit. En style manga ou BD,
+un fond blanc et quelques traits de mouvement conviennent.
+En style réaliste, un arrière-plan neutre ou flou est acceptable.
+Ne conserve du décor connu que les éléments nécessaires à l'action.
+Une scène située à l'intérieur ne devient pas une scène extérieure.
+
+SORTIE
+Réponds UNIQUEMENT en JSON :
+{"prompt":"description visuelle autonome, concrète et fluide",
+ "negativePrompt":"exclusions, ou chaîne vide",
+ "appearances":[{"id":"ID autorisé","identity":"physique stable",
+                 "current":"tenue et pose"}]}
+"appearances" est facultatif. N'utilise que les IDs autorisés.
+N'ajoute ni Markdown, ni dialogue, ni texte visible, ni pensées.
+Ne crée aucun détail pour allonger artificiellement la description.
+'''),
         AiMessage(role: 'user',
           content: scene.evidence +
               '\nSTYLE VISUEL : ' + style +
