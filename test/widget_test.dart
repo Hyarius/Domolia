@@ -89,6 +89,19 @@ class _FakeOuVault implements OuVaultStore {
   Future<void> write(OuVaultState value) async { state = value; }
 }
 
+Future<void> _openSettings(WidgetTester tester, {String tab = 'settingsTabApp'}) async {
+  await tester.tap(find.byKey(const ValueKey('navSettings')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(ValueKey(tab)));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _openUpdates(WidgetTester tester) async {
+  await _openSettings(tester);
+  await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   late _Release release;
   late _Downloader downloader;
@@ -117,23 +130,20 @@ void main() {
     final theme=Theme.of(tester.element(find.byType(Scaffold)));
     expect(theme.colorScheme.primary,DomoliaColors.gold);
   });
-  testWidgets('Menu permet navigation vers À propos et Paramètres',(tester) async {
+  testWidgets('Onglets permettent navigation vers À propos et Paramètres',
+      (tester) async {
     await tester.pumpWidget(DomoliaApp(updateController:updates));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.menu));
+    await _openSettings(tester);
+    expect(find.widgetWithText(ListTile, 'À propos'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ListTile, 'À propos'));
     await tester.pumpAndSettle();
-    expect(find.text('Paramètres'),findsOneWidget);
-    await tester.tap(find.text('À propos'));
+    expect(find.text('À propos de Domolia'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('appBack')));
     await tester.pumpAndSettle();
-    expect(find.text('À propos de Domolia'),findsOneWidget);
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Paramètres'));
-    await tester.pumpAndSettle();
-    expect(find.text('Mises à jour'),findsOneWidget);
     await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
     await tester.pumpAndSettle();
-    expect(find.text('Vérifier maintenant'),findsOneWidget);
+    expect(find.text('Vérifier maintenant'), findsOneWidget);
   });
   testWidgets('Progression visible et navigation non bloquée',(tester) async {
     release.candidate=UpdateCandidate(
@@ -147,21 +157,15 @@ void main() {
     await tester.pump(const Duration(milliseconds:100));
     expect(find.byType(UpdateProgressStrip),findsOneWidget);
     expect(find.byType(LinearProgressIndicator),findsOneWidget);
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    expect(find.text('À propos'),findsOneWidget);
+    await _openSettings(tester);
+    expect(find.widgetWithText(ListTile, 'À propos'), findsOneWidget);
     downloader.gate!.complete();
     await tester.pumpAndSettle();
   });
   testWidgets('Auto-check switch persists preference',(tester) async {
     await tester.pumpWidget(DomoliaApp(updateController:updates));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Paramètres'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
-    await tester.pumpAndSettle();
+    await _openUpdates(tester);
     await tester.tap(find.byType(SwitchListTile));
     await tester.pumpAndSettle();
     expect(prefs.enabled,false);
@@ -172,12 +176,7 @@ void main() {
     await tester.pumpWidget(DomoliaApp(updateController: updates));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('updateCheckDialog')), findsNothing);
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, 'Paramètres'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
-    await tester.pumpAndSettle();
+    await _openUpdates(tester);
     await tester.tap(find.text('Vérifier maintenant'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('updateCheckDialog')), findsOneWidget);
@@ -203,12 +202,7 @@ void main() {
     downloader.gate = Completer<void>();
     await tester.pumpWidget(DomoliaApp(updateController: updates));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, 'Paramètres'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
-    await tester.pumpAndSettle();
+    await _openUpdates(tester);
     await tester.tap(find.text('Vérifier maintenant'));
     await tester.pump();
     expect(find.textContaining('Recherche de mises à jour'), findsOneWidget);
@@ -229,12 +223,7 @@ void main() {
     release.failure = const FormatException('Réseau indisponible');
     await tester.pumpWidget(DomoliaApp(updateController: updates));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Paramètres'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
-    await tester.pumpAndSettle();
+    await _openUpdates(tester);
     await tester.tap(find.text('Vérifier maintenant'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('updateCheckDialog')), findsOneWidget);
@@ -250,12 +239,7 @@ void main() {
     prefs.enabled = false;
     await tester.pumpWidget(DomoliaApp(updateController: updates));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, 'Paramètres'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
-    await tester.pumpAndSettle();
+    await _openUpdates(tester);
     await tester.tap(find.text('Vérifier maintenant'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('updateCheckDialog')), findsOneWidget);
@@ -286,18 +270,15 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
+    await _openSettings(tester, tab: 'settingsTabAi');
     expect(find.widgetWithText(ListTile, 'Fournisseur IA'), findsNothing);
     expect(find.widgetWithText(ListTile, 'Mise à jour'), findsNothing);
     expect(find.widgetWithText(ListTile, 'Toutes les versions'), findsNothing);
-
-    await tester.tap(find.widgetWithText(ListTile, 'Paramètres'));
-    await tester.pumpAndSettle();
     expect(find.widgetWithText(ListTile, 'Crédits IA'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Mises à jour'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('settingsTabApp')));
+    await tester.pumpAndSettle();
     expect(find.widgetWithText(ListTile, 'Mises à jour'), findsOneWidget);
-    expect(find.text('Toutes les versions'), findsNothing);
-
     await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
     await tester.pumpAndSettle();
     expect(find.text('Vérifier maintenant'), findsOneWidget);
@@ -313,12 +294,14 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('appBack')));
     await tester.pumpAndSettle();
 
+    await tester.tap(find.byKey(const ValueKey('settingsTabAi')));
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ListTile, 'Crédits IA'));
     await tester.pumpAndSettle();
     expect(find.byType(OpenUncensoredCreditsPage), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('appBack')));
     await tester.pumpAndSettle();
-    expect(find.widgetWithText(ListTile, 'Mises à jour'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Crédits IA'), findsOneWidget);
   });
 
 }
