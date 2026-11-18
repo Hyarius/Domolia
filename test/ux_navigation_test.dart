@@ -372,8 +372,11 @@ void main() {
     var count = 0;
     await _showApp(tester, onResetApp: () async => count++);
     await _drawerItem(tester, 'Paramètres');
-    await tester.ensureVisible(
-        find.byKey(const ValueKey('settingsFactoryReset')));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('settingsFactoryReset')),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.byKey(const ValueKey('settingsFactoryReset')));
     await tester.pumpAndSettle();
     expect(find.text('Réinitialiser Domolia ?'), findsOneWidget);
