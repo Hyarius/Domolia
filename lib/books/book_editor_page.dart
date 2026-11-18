@@ -57,6 +57,7 @@ class BookEditorPageState extends State<BookEditorPage> {
   int _savedRevision = 0;
   String? _profileId;
   bool _coverBusy = false;
+  bool _resettingSettings = false;
   late int _tab;
 
   @override
@@ -180,6 +181,59 @@ class BookEditorPageState extends State<BookEditorPage> {
           error: failure, stackTrace: stackTrace);
       _show('Impossible de sauvegarder ce Livre.');
       return false;
+    }
+  }
+
+  Future<void> _resetBookSettings() async {
+    if (_resettingSettings || _coverBusy) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Rétablir les réglages du Livre ?'),
+        content: const Text(
+          'Le style et le rythme du narrateur, le niveau de détail, '
+          'les préférences d’illustration et les options graphiques '
+          'reviendront à leurs valeurs par défaut.\\n\\n'
+          'Le titre, la couverture, les premières scènes, le Lore, '
+          'le mode NSFW, les connexions API et toutes les Parties '
+          'existantes seront conservés.'),
+        actions: [
+          TextButton(
+            key: const ValueKey('bookResetCancel'),
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            key: const ValueKey('bookResetConfirm'),
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Rétablir'),
+          ),
+        ],
+      ),
+    ) ?? false;
+    if (!confirmed || !mounted || _coverBusy || _resettingSettings) return;
+    setState(() => _resettingSettings = true);
+    try {
+      // Flush unrelated text edits first so this operation cannot erase
+      // a pending title, opening scene or canonical Lore change.
+      if (!await _save() || !mounted) return;
+      await _persist((current) => current.copyWith(
+        narrativeStyle: defaultNarratorNarrativePrompt,
+        detailLevel: 3,
+        tuning: const NarrativeTuning(),
+        illustrationMode: IllustrationMode.suggestions,
+        illustrationSettings: const BookIllustrationSettings(),
+      ));
+      if (!mounted) return;
+      _style.text = _book.narrativeStyle;
+      _keywords.text = _book.tuning.styleKeywords.join(', ');
+      _visualStyle.text = _book.illustrationSettings.style;
+      _negativePrompt.text = _book.illustrationSettings.negativePrompt;
+      _show('Réglages par défaut du Livre restaurés.');
+    } catch (_) {
+      _show('Impossible de restaurer les réglages du Livre.');
+    } finally {
+      if (mounted) setState(() => _resettingSettings = false);
     }
   }
 
@@ -724,7 +778,9 @@ class BookEditorPageState extends State<BookEditorPage> {
       onChanged: (_) => _queueSave(),
     ),
     const SizedBox(height: DomoliaSpacing.section),
-    DropdownButtonFormField<String>(
+    KeyedSubtree(
+      key: ValueKey('bookSize-${_book.illustrationSettings.size}'),
+      child: DropdownButtonFormField<String>(
       key: const ValueKey('bookImageSize'),
       initialValue: _book.illustrationSettings.size,
       isExpanded: true,
@@ -740,9 +796,11 @@ class BookEditorPageState extends State<BookEditorPage> {
               book.illustrationSettings.copyWith(size: size))).catchError(
           (Object _) => _show('Impossible de sauvegarder le format.')));
       },
-    ),
+    )),
     const SizedBox(height: DomoliaSpacing.section),
-    DropdownButtonFormField<String>(
+    KeyedSubtree(
+      key: ValueKey('bookQuality-${_book.illustrationSettings.quality ?? "auto"}'),
+      child: DropdownButtonFormField<String>(
       key: const ValueKey('bookImageQuality'),
       initialValue: _book.illustrationSettings.quality ?? 'auto',
       isExpanded: true,
@@ -760,9 +818,11 @@ class BookEditorPageState extends State<BookEditorPage> {
             quality: quality, clearQuality: quality == 'auto'))).catchError(
           (Object _) => _show('Impossible de sauvegarder la qualité.')));
       },
-    ),
+    )),
     const SizedBox(height: DomoliaSpacing.section),
-    DropdownButtonFormField<int>(
+    KeyedSubtree(
+      key: ValueKey('bookCount-${_book.illustrationSettings.count}'),
+      child: DropdownButtonFormField<int>(
       key: const ValueKey('bookImageCount'),
       initialValue: _book.illustrationSettings.count,
       isExpanded: true,
@@ -778,7 +838,7 @@ class BookEditorPageState extends State<BookEditorPage> {
             count: count))).catchError(
           (Object _) => _show('Impossible de sauvegarder le nombre d’images.')));
       },
-    ),
+    )),
     const SizedBox(height: DomoliaSpacing.section),
     const Text('Certaines combinaisons de format, qualité et quantité '
       'peuvent ne pas être prises en charge par le modèle API sélectionné. '
@@ -843,6 +903,20 @@ class BookEditorPageState extends State<BookEditorPage> {
           ],
         );
       },
+    ),
+    const SizedBox(height: DomoliaSpacing.section),
+    const Divider(),
+    OutlinedButton.icon(
+      key: const ValueKey('bookResetSettings'),
+      onPressed: _coverBusy || _resettingSettings ? null : _resetBookSettings,
+      icon: const Icon(Icons.restart_alt_rounded),
+      label: const Text('Rétablir les réglages par défaut'),
+    ),
+    const SizedBox(height: DomoliaSpacing.compact),
+    const Text(
+      'Conserve le Lore, le titre, la couverture, les scènes de départ '
+      'et les Parties. Ne réinitialise pas les clés API.',
+      style: TextStyle(color: DomoliaColors.muted),
     ),
   ];
 
