@@ -1,18 +1,24 @@
 import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/ai/openuncensored_api.dart';
 import 'package:domolia/ai/openuncensored_vault.dart';
+import 'package:domolia/illustration/image_preferences.dart';
 import 'package:domolia/settings/app_reset.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _Profiles implements AiProfileStore {
-  _Profiles(this.state, this.events);
+  _Profiles(this.state, this.events, {this.failWrite = false});
   AiProfilesState? state;
   final List<String> events;
+  final bool failWrite;
+
   @override
   Future<AiProfilesState?> read() async => state;
+
   @override
   Future<void> write(AiProfilesState next) async {
     events.add('profiles');
+    if (failWrite) throw StateError('Storage unavailable');
     state = next;
   }
 }
@@ -21,8 +27,10 @@ class _Vault implements OuVaultStore {
   _Vault(this.state, this.events);
   OuVaultState state;
   final List<String> events;
+
   @override
   Future<OuVaultState> read() async => state;
+
   @override
   Future<void> write(OuVaultState next) async {
     events.add('vault');
@@ -31,25 +39,45 @@ class _Vault implements OuVaultStore {
 }
 
 void main() {
-  test('Reset retains all API keys but removes customization and local data',
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues({
+      'domolia.narrator.settings.v1': 'old narrator',
+      'domolia.image.settings.v1': 'old image connection',
+      'domolia.image.party.partie-1': 'old image override',
+      'aiTaskNarratorProfileId': 'external',
+      'aiTaskGeneration-narrator': 'old budget',
+      'aiTaskMemoryProfileId': '#disabled',
+      'aiDiagnosticsRetentionPerSession': 50,
+      'updateChannel': 'dev-latest',
+      'automaticUpdates': false,
+      // Unknown future preferences and persistent user data are never erased.
+      'unrelatedPersistentData': 'keep this',
+      'libraryBookDraft': 'keep this too',
+    });
+  });
+
+  test('Reset touches only settings and preserves keys, balances and history',
       () async {
-    final order = <String>[];
+    final events = <String>[];
     const ouKey = 'ou-cus_KEEP_THIS_KEY_123456';
     const otherKey = 'sk-another-api-key';
+    final id = ouKeyId(ouKey);
     final vault = _Vault(OuVaultState(
       keys: [
         StoredOuKey(
-          id: ouKeyId(ouKey), secret: ouKey,
+          id: id, secret: ouKey,
           addedAt: DateTime.utc(2026, 11, 1), name: 'Ma clé',
           lastBalance: const OuBalance(
             remainingUsd: 9, balanceUsd: 9, pendingUsd: 0),
         ),
       ],
-      activeKeyId: ouKeyId(ouKey),
+      activeKeyId: id,
       mode: 'advanced',
       models: const {'narrator': 'old-model'},
       toolChecks: const {'abc': 'supported'},
-    ), order);
+    ), events);
     final profiles = _Profiles(const AiProfilesState(
       profiles: [
         AiProfile(
@@ -70,68 +98,128 @@ void main() {
         ),
       ],
       selectedId: 'external',
-    ), order);
-    final reset = AppResetService(
-      profiles: profiles, vault: vault,
-      clearOtherSecureEntries: () async => order.add('secure'),
-      closeDatabase: () async => order.add('close'),
-      clearLocalData: () async => order.add('local'),
-      clearPreferences: () async => order.add('preferences'),
-    );
-    await reset.reset();
-    expect(order, [
-      'vault', 'profiles', 'secure', 'close', 'local', 'preferences',
-    ]);
+    ), events);
+
+    await AppResetService(profiles: profiles, vault: vault).reset();
+
+    expect(events, ['profiles', 'vault']);
     expect(vault.state.keys.single.secret, ouKey);
-    expect(vault.state.keys.single.lastBalance, isNull);
-    expect(vault.state.activeKeyId, ouKeyId(ouKey));
+    expect(vault.state.keys.single.name, 'Ma clé');
+    expect(vault.state.keys.single.lastBalance!.balanceUsd, 9);
+    expect(vault.state.activeKeyId, id);
     expect(vault.state.pending, isNull);
     expect(vault.state.mode, 'balanced');
     expect(vault.state.models, isEmpty);
     expect(vault.state.toolChecks, isEmpty);
+
     expect(profiles.state!.selectedId, 'default');
     final saved = profiles.state!.profiles;
     expect(saved.first.apiKey, ouKey);
     expect(saved.first.model, defaultAiModel);
-    expect(saved.map((p) => p.id), ['default', 'external']);
-    expect(saved.last.apiKey, otherKey);
+    expect(saved.map((p) => p.id), ['default', 'external', 'chatgpt']);
+    expect(saved[1].apiKey, otherKey);
+    final auto = const ImageGenerationOptions()
+        .resolveProfiles(saved);
+    expect(auto.profileId, 'default');
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('domolia.narrator.settings.v1'), isNull);
+    expect(prefs.getString('domolia.image.settings.v1'), isNull);
+    expect(prefs.getString('domolia.image.party.partie-1'), isNull);
+    expect(prefs.getString('aiTaskNarratorProfileId'), isNull);
+    expect(prefs.getString('aiTaskGeneration-narrator'), isNull);
+    expect(prefs.getString('aiTaskMemoryProfileId'), isNull);
+    expect(prefs.getInt('aiDiagnosticsRetentionPerSession'), isNull);
+    expect(prefs.getString('updateChannel'), isNull);
+    expect(prefs.getBool('automaticUpdates'), isNull);
+    expect(prefs.getString('unrelatedPersistentData'), 'keep this');
+    expect(prefs.getString('libraryBookDraft'), 'keep this too');
   });
 
-  test('Pending checkout blocks reset without modifying any storage',
+  test('A different key in the default profile survives a profile collision',
       () async {
-    final order = <String>[];
+    final events = <String>[];
+    const ouKey = 'ou-cus_ACTIVE_KEY_123456';
+    const externalKey = 'sk-special-default-key';
+    final vault = _Vault(OuVaultState(keys: [
+      StoredOuKey(
+        id: ouKeyId(ouKey), secret: ouKey,
+        addedAt: DateTime.utc(2026, 11, 1),
+      ),
+    ], activeKeyId: ouKeyId(ouKey)), events);
+    final profiles = _Profiles(const AiProfilesState(
+      selectedId: 'default',
+      profiles: [
+        AiProfile(
+          id: 'default', name: 'Autre fournisseur',
+          baseUrl: 'https://api.example.org/v1',
+          model: 'custom', apiKey: externalKey,
+        ),
+        AiProfile(
+          id: 'retained-default-0', name: 'Profil déjà présent',
+          baseUrl: defaultAiBaseUrl,
+          model: 'another', apiKey: ouKey,
+        ),
+      ],
+    ), events);
+    final reset = AppResetService(profiles: profiles, vault: vault);
+    await reset.reset();
+    expect(profiles.state!.selectedId, 'default');
+    expect(profiles.state!.profiles.first.apiKey, ouKey);
+    expect(profiles.state!.profiles.map((p) => p.apiKey),
+        contains(externalKey));
+    expect(profiles.state!.profiles.map((p) => p.id).toSet().length,
+        profiles.state!.profiles.length);
+    await reset.reset();
+    expect(profiles.state!.profiles.where(
+        (profile) => profile.apiKey == externalKey), hasLength(1));
+  });
+
+  test('Pending OpenUncensored checkout blocks all writes', () async {
+    final events = <String>[];
     final vault = _Vault(OuVaultState(
       pending: PendingOuCheckout(
         sessionId: 'checkout', claimToken: 'claim',
         paymentUrl: Uri.parse('https://example.org/checkout'),
         cents: 1000, startedAt: DateTime.utc(2026, 11, 18),
       ),
-    ), order);
-    final reset = AppResetService(
-      vault: vault, profiles: _Profiles(null, order),
-      clearOtherSecureEntries: () async => order.add('secure'),
-      closeDatabase: () async => order.add('close'),
-      clearLocalData: () async => order.add('local'),
-      clearPreferences: () async => order.add('preferences'),
+    ), events);
+    final profiles = _Profiles(null, events);
+    await expectLater(
+      AppResetService(vault: vault, profiles: profiles).reset(),
+      throwsA(isA<StateError>()),
     );
-    await expectLater(reset.reset(), throwsA(isA<StateError>()));
-    expect(order, isEmpty);
+    expect(events, isEmpty);
+    expect((await SharedPreferences.getInstance())
+        .getString('domolia.image.settings.v1'), 'old image connection');
   });
 
-  test('No credentials yields a clean default OpenUncensored profile',
-      () async {
-    final order = <String>[];
-    final profiles = _Profiles(null, order);
-    final reset = AppResetService(
-      vault: _Vault(const OuVaultState(), order),
-      profiles: profiles,
-      clearOtherSecureEntries: () async => order.add('secure'),
-      closeDatabase: () async => order.add('close'),
-      clearLocalData: () async => order.add('local'),
-      clearPreferences: () async => order.add('preferences'),
+  test('Secure profile write failure cannot erase local settings', () async {
+    final events = <String>[];
+    final profiles = _Profiles(null, events, failWrite: true);
+    await expectLater(
+      AppResetService(
+        vault: _Vault(const OuVaultState(), events),
+        profiles: profiles,
+      ).reset(),
+      throwsA(isA<StateError>()),
     );
-    await reset.reset();
-    expect(profiles.state!.profiles.single.id, 'default');
+    expect(events, ['profiles']);
+    expect((await SharedPreferences.getInstance())
+        .getString('domolia.narrator.settings.v1'), 'old narrator');
+  });
+
+  test('Without credentials, reset produces the standard OpenUncensored setup',
+      () async {
+    final events = <String>[];
+    final profiles = _Profiles(null, events);
+    await AppResetService(
+      vault: _Vault(const OuVaultState(), events),
+      profiles: profiles,
+    ).reset();
+    expect(profiles.state!.selectedId, 'default');
+    expect(profiles.state!.profiles.single.baseUrl, defaultAiBaseUrl);
     expect(profiles.state!.profiles.single.apiKey, isEmpty);
+    expect(profiles.state!.profiles.single.model, defaultAiModel);
   });
 }
