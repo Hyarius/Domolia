@@ -128,25 +128,28 @@ flutter pub get, flutter analyze (aucun problème), flutter test,
 compilation Android, signature et release de préversion.
 La PR reste en brouillon et n'est pas fusionnée sans autorisation.
 
-## Réinitialisation locale — conservation des clés API
+## Réinitialisation des réglages — conservation des données et des clés API
 
-Dans Paramètres > Application > **Réinitialiser l’application** :
+Dans Paramètres > Application > **Réinitialiser les réglages** :
 
-1. Ouvrir la confirmation, puis choisir Annuler : les données restent intactes.
-2. Créer un Livre, une Partie, de la Live Memory et une illustration locale.
-   Relancer la réinitialisation puis confirmer « Effacer les données ».
-3. Au redémarrage automatique, vérifier que les Livres, Parties, illustrations,
-   diagnostics, préférences et mises à jour téléchargées ont disparu.
-4. Dans Crédits IA, vérifier que toutes les clés OpenUncensored et leurs
-   identifiants persistent, que les modèles avancés et soldes mis en cache
-   ont été remis à zéro, et que la clé précédemment active est réutilisable.
-5. Vérifier les clés des autres profils API. La connexion ChatGPT OAuth n'est
-   **pas** conservée : seule une véritable clé API l'est.
-6. Lorsqu'un paiement OpenUncensored attend une confirmation, la remise à zéro
-   doit être refusée sans suppression ni perte du jeton de récupération.
-7. Provoquer un échec du stockage sécurisé et vérifier qu'aucune donnée locale
-   n'est supprimée. Les exports déjà enregistrés hors de Domolia ne sont
-   jamais effacés.
+1. Ouvrir la confirmation, puis choisir Annuler : rien ne change.
+2. Créer un Livre, une Partie, de la Live Memory et une illustration, puis
+   personnaliser le narrateur, le modèle graphique et le canal de mise à jour.
+3. Confirmer « Réinitialiser les réglages ». L’application redémarre avec
+   OpenUncensored et ses choix automatiques. Les Livres, Parties, illustrations,
+   mémoires, diagnostics, fichiers et clés API sont conservés.
+4. Dans Crédits IA, vérifier que l’historique et les soldes connus des clés
+   OpenUncensored restent présents, et que les modèles avancés sont remis
+   à leurs valeurs par défaut.
+5. Vérifier que tous les profils API et leurs clés restent disponibles,
+   même si une autre clé était associée à l’ancien profil par défaut.
+6. En présence d’un paiement OpenUncensored en attente, la réinitialisation
+   est refusée sans perdre les informations de suivi.
+7. Simuler un échec de sauvegarde des profils chiffrés : les préférences
+   restent intactes et aucune donnée utilisateur n’est supprimée.
+
+Cette commande remet les **préférences** à zéro ; elle ne remplace pas
+la suppression volontaire des Livres ou Parties.
 
 ## Réglages d’images automatiques
 
