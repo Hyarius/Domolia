@@ -80,7 +80,7 @@ class VisualSceneSelector {
     final chronology = <String>[];
     final restrictions = <String>[];
     for (final message in messages) {
-      final value = _short(message.text.trim());
+      final value = _recentExcerpt(message.text.trim());
       if (value.isEmpty) continue;
       if (_uncertain(value)) {
         restrictions.add(value);
@@ -208,6 +208,14 @@ class VisualSceneSelector {
       r'dossier scellé|enveloppe scellée|secret|'
       r'n.a pas encore|ne possède pas)',
       caseSensitive: false).hasMatch(value);
+
+  // Long narrative messages often establish a place at the beginning and
+  // finish with the precise physical action that an image must capture.
+  // Preserve both instead of chopping off the latest movement.
+  static String _recentExcerpt(String value) =>
+      value.length <= 600 ? value
+          : value.substring(0, 160) + ' […] ' +
+              value.substring(value.length - 420);
 
   static String _short(String value) =>
       value.length <= 600 ? value : value.substring(0, 600);
