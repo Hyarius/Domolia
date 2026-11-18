@@ -23,6 +23,7 @@ class StoredIllustration {
     required this.createdAtUtc,
     this.prompt = '',
     this.negativePrompt = '',
+    this.visualStyle = '',
     this.appearanceProposals = const [],
     this.fileNames = const [],
     this.mimeType,
@@ -30,7 +31,7 @@ class StoredIllustration {
     this.costUsd,
   });
   final String requestId, sessionId, sourceHash, provider, model, prompt,
-      negativePrompt;
+      negativePrompt, visualStyle;
   /// Approved visual identity proposals are persisted separately from the
   /// natural-language image prompt. Never embed technical IDs in that prompt.
   final List<Map<String, String>> appearanceProposals;
@@ -56,7 +57,7 @@ class StoredIllustration {
       'provider': provider,
       'model': model,
       'costUsd': costUsd,
-      'style': styleLine?.group(1),
+      'style': visualStyle.isNotEmpty ? visualStyle : styleLine?.group(1),
       'negativePrompt': negativePrompt,
       'prompt': prompt,
     };
@@ -68,7 +69,7 @@ class StoredIllustration {
 
   StoredIllustration copyWith({
     IllustrationJobState? state,
-    String? prompt, String? negativePrompt,
+    String? prompt, String? negativePrompt, String? visualStyle,
     List<Map<String, String>>? appearanceProposals,
     bool clearAppearanceProposals = false,
     List<String>? fileNames, String? mimeType, String? error,
@@ -79,6 +80,7 @@ class StoredIllustration {
     provider: provider, model: model,
     createdAtUtc: createdAtUtc, prompt: prompt ?? this.prompt,
     negativePrompt: negativePrompt ?? this.negativePrompt,
+    visualStyle: visualStyle ?? this.visualStyle,
     appearanceProposals: clearAppearanceProposals
         ? const [] : (appearanceProposals ?? this.appearanceProposals),
     fileNames: fileNames ?? this.fileNames,
