@@ -165,6 +165,7 @@ Le joueur garde la maîtrise de son personnage.
 
 const defaultNarratorNarrativePrompt = '''
 NARRATION
+Ce jeu de rôle en français doit rester interactif.
 Suis les faits du Livre et de la Partie sans changer leur statut.
 Fais avancer la scène au rythme demandé, puis rends la main au joueur.
 Écris une prose naturelle, cohérente et immersive, sans JSON ni
