@@ -1,11 +1,45 @@
 // ignore_for_file: prefer_interpolation_to_compose_strings, curly_braces_in_flow_control_structures
 import 'dart:convert';
 
+import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/books/book_lore.dart';
 import 'package:domolia/chat/chat_protocol.dart';
 import 'package:domolia/illustration/visual_pipeline.dart';
 import 'package:domolia/memory/live_memory.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+class _RecordingDirectorProvider implements AiChatProvider {
+  List<AiMessage> messages = const [];
+
+  @override
+  Future<List<AiModel>> listModels(AiConfiguration config) async => const [];
+
+  @override
+  Future<String> complete(AiConfiguration config, {
+    required List<AiMessage> messages, int maxTokens = 1200,
+  }) async {
+    this.messages = messages;
+    return jsonEncode({
+      'shot': 'medium_full',
+      'angle': 'three_quarter',
+      'focusIds': ['naelle'],
+      'composition': 'leading_lines',
+      'lighting': 'dramatic',
+      'palette': 'muted',
+      'mood': 'tense',
+      'visualSubject': 'Naëlle près du sol',
+      'visualAction': 'Naëlle saisit un tissu près de sa cuisse',
+      'visualSetting': 'Parquet sombre de l’atelier',
+      'bodyPose': 'Main droite au sol, genoux pliés, main gauche au tissu',
+      'mustShow': ['Main droite appuyée au sol', 'Main gauche au tissu'],
+      'appearances': [{
+        'id': 'naelle',
+        'identity': 'Cheveux noirs longs',
+        'current': 'Jupe sombre et collants noirs',
+      }],
+    });
+  }
+}
 
 void main() {
   const intent = ChatIllustrationIntent(
@@ -231,6 +265,140 @@ void main() {
     expect(selected.memoryFacts.join(' '),
         contains('Cheveux bruns et yeux verts'));
     expect(selected.evidence, contains('Boulangère (visual_identity)'));
+  });
+
+
+  test('Longer scene context includes Book visuals and prior confirmed memory',
+      () {
+    const bookLore = BookLore(
+      global: LoreGlobal(universe: 'Une ville actuelle alternative',
+        era: 'Présent alternatif', secrets: 'NE PAS RÉVÉLER'),
+      characters: [
+        LoreCharacter(id: 'naelle', name: 'Naëlle',
+          appearance: 'Cheveux noirs très longs, teint clair',
+          role: 'Visiteuse', secrets: 'Information jamais révélée'),
+      ],
+      places: [
+        LorePlace(id: 'atelier', name: 'Pièce au parquet sombre',
+          description: 'Pièce avec parquet, placard et fenêtre haute',
+          features: 'Lattes de parquet sombres et placard fermé',
+          secrets: 'Local secret'),
+      ],
+    );
+    final events = <ChatTimelineEvent>[
+      const ChatEntry(id: 1, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Naëlle entre dans la pièce au parquet sombre.'),
+      const ChatEntry(id: 2, speaker: ChatSpeaker.player,
+          name: 'Vous', text: 'Je reste près de la porte.'),
+      const ChatEntry(id: 3, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Elle s’accroupit sur le parquet.'),
+      const ChatEntry(id: 4, speaker: ChatSpeaker.character,
+          name: 'Naëlle', text: 'Ce parquet est très froid.'),
+      const ChatEntry(id: 5, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Sa main droite rejoint le sol.'),
+      const ChatEntry(id: 6, speaker: ChatSpeaker.player,
+          name: 'Vous', text: 'Je ne bouge pas.'),
+      const ChatEntry(id: 7, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Son genou gauche reste plié.'),
+      const ChatEntry(id: 8, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Un pli se forme dans le tissu.'),
+      const ChatEntry(id: 9, speaker: ChatSpeaker.player,
+          name: 'Vous', text: 'Je regarde ses gestes.'),
+      const ChatEntry(id: 10, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Sa main gauche approche du tissu.'),
+      const ChatEntry(id: 11, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Elle saisit délicatement le pli.'),
+      const ChatIllustrationIntent(
+          id: 12, playerEventId: 9,
+          description: 'Naëlle saisit le pli du tissu de la main gauche.'),
+      const ChatEntry(id: 13, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Elle se redresse plus tard.'),
+    ];
+    final memory = <LiveMemoryFact>[
+      const LiveMemoryFact(
+        id: 'mem-naelle', category: 'character', entityId: 'naelle',
+        label: 'Naëlle', field: 'visual_current',
+        text: 'Collants noirs et jupe sombre',
+        kind: 'dynamic', certainty: 'confirmed', visibility: 'player',
+        importance: 4, sourceTurnId: 7,
+        sourceSide: 'manual', sourceQuote: 'Tenue confirmée',
+      ),
+      const LiveMemoryFact(
+        id: 'future', category: 'character', entityId: 'naelle',
+        label: 'Naëlle', field: 'visual_current',
+        text: 'Manteau rouge aperçu seulement plus tard',
+        kind: 'dynamic', certainty: 'confirmed', visibility: 'player',
+        importance: 4, sourceTurnId: 20,
+        sourceSide: 'manual', sourceQuote: 'Fait futur',
+      ),
+    ];
+    final selected = const VisualSceneSelector().select(
+      intent: events[11] as ChatIllustrationIntent,
+      timeline: events, lore: bookLore, memory: memory,
+    );
+    expect(selected.excerpts, hasLength(10));
+    expect(selected.chronology.join(' '), contains('Joueur'));
+    expect(selected.chronology.join(' '), contains('Sa main droite rejoint'));
+    expect(selected.characters.single.id, 'naelle');
+    expect(selected.places.single.id, 'atelier');
+    expect(selected.evidence, contains('Cheveux noirs très longs'));
+    expect(selected.evidence, contains('Collants noirs et jupe sombre'));
+    expect(selected.evidence, contains('parquet sombre'));
+    expect(selected.evidence, isNot(contains('Manteau rouge')));
+    expect(selected.evidence, isNot(contains('Elle se redresse plus tard')));
+    expect(selected.evidence, isNot(contains('NE PAS RÉVÉLER')));
+    expect(selected.evidence, isNot(contains('Local secret')));
+  });
+
+  test('Director uses the exact action, body geometry and must-show details',
+      () async {
+    final provider = _RecordingDirectorProvider();
+    const bookLore = BookLore(characters: [
+      LoreCharacter(id: 'naelle', name: 'Naëlle',
+        appearance: 'Cheveux noirs très longs'),
+    ]);
+    const event = ChatIllustrationIntent(
+      id: 4, playerEventId: 1,
+      description: 'Naëlle attrape le tissu de sa main gauche.');
+    final selected = const VisualSceneSelector().select(
+      intent: event,
+      timeline: const [
+        ChatEntry(id: 1, speaker: ChatSpeaker.player, name: 'Vous',
+          text: 'Je regarde Naëlle s’accroupir.'),
+        ChatEntry(id: 2, speaker: ChatSpeaker.narrator, name: 'Narrateur',
+          text: 'Naëlle pose la main droite au sol.'),
+        event,
+      ],
+      lore: bookLore,
+    );
+    final direction = await const VisualDirector().direct(
+      scene: selected, provider: provider,
+      connection: const AiConfiguration(
+        baseUrl: 'https://example.org/v1', model: 'fake', apiKey: 'fake'),
+    );
+    expect(provider.messages, hasLength(2));
+    expect(provider.messages.last.content,
+      contains('INSTANT À ILLUSTRER (prioritaire)'));
+    expect(provider.messages.last.content, contains('Tour : Narrateur'));
+    expect(direction.shot, 'medium_full');
+    expect(direction.angle, 'three_quarter');
+    expect(direction.mustShow, hasLength(2));
+    final prompt = validatedImagePrompt(selected, direction);
+    expect(prompt, contains('POSITION DES CORPS ET CONTACTS'));
+    expect(prompt, contains('ÉLÉMENTS IMPÉRATIFS À MONTRER'));
+    expect(prompt.indexOf('ACTION PRIORITAIRE'),
+        lessThan(prompt.indexOf('Style graphique')));
+    expect(prompt, isNot(contains('Je regarde Naëlle s’accroupir.')));
+    expect(() => VisualDirection.parse(jsonEncode({
+      'shot': 'medium_full', 'angle': 'three_quarter',
+      'focusIds': ['naelle'],
+      'composition': 'centered', 'lighting': 'soft',
+      'palette': 'muted', 'mood': 'calm',
+      'visualSubject': 'Naëlle', 'visualAction': 'Elle saisit le tissu',
+      'visualSetting': 'Une pièce',
+      'bodyPose': 'Position stable',
+      'mustShow': ['x' * 181],
+    }), selected), throwsFormatException);
   });
 
   test('Rewind removes source and changes hash of same ID', () {
