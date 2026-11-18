@@ -516,5 +516,5 @@ String validatedImagePrompt(VisualScene scene, VisualDirection direction,
         '${style.trim()}.',
     if (negativePrompt.trim().isNotEmpty)
       'À exclure : ${negativePrompt.trim()}.',
-  ].join('\\n');
+  ].join('\n');
 }
