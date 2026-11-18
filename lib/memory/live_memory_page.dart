@@ -178,9 +178,11 @@ class _LiveMemoryPageState extends State<LiveMemoryPage> {
   };
 
   Widget _characterTile(List<LiveMemoryFact> facts, String entityId) {
-    final records = facts.where(
-      (fact) => fact.category == 'character' && fact.entityId == entityId,
-    ).toList();
+    final records = facts
+        .where(
+          (fact) => fact.category == 'character' && fact.entityId == entityId,
+        )
+        .toList();
     return Card(
       child: ExpansionTile(
         key: ValueKey('memoryCharacter-$entityId'),
