@@ -193,14 +193,18 @@ Future<void> _showApp(WidgetTester tester, {
 }
 
 Future<void> _drawerItem(WidgetTester tester, String label) async {
-  final menu = find.byKey(const ValueKey('appMenu'));
-  if (menu.evaluate().isNotEmpty) {
-    await tester.tap(menu);
-  } else {
-    await tester.tap(find.byIcon(Icons.menu));
-  }
+  final destination = switch (label) {
+    'Accueil' => 'navHome',
+    'Livres' => 'navBooks',
+    'Paramètres' => 'navSettings',
+    _ => throw ArgumentError.value(label, 'label'),
+  };
+  await tester.tap(find.byKey(ValueKey(destination)));
   await tester.pumpAndSettle();
-  await tester.tap(find.widgetWithText(ListTile, label));
+}
+
+Future<void> _settingsTab(WidgetTester tester, String key) async {
+  await tester.tap(find.byKey(ValueKey(key)));
   await tester.pumpAndSettle();
 }
 
@@ -350,6 +354,7 @@ void main() {
       (tester) async {
     await _showApp(tester);
     await _drawerItem(tester, 'Paramètres');
+    await _settingsTab(tester, 'settingsTabApp');
     await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
     await tester.pumpAndSettle();
     tester.view.viewInsets = const FakeViewPadding(bottom: 320);
@@ -364,7 +369,7 @@ void main() {
     tester.view.resetViewInsets();
     await tester.pump();
     await _systemBack(tester);
-    expect(find.widgetWithText(ListTile, 'Crédits IA'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Mises à jour'), findsOneWidget);
   });
 
   testWidgets('Réinitialisation demande confirmation et peut être annulée',
@@ -372,6 +377,7 @@ void main() {
     var count = 0;
     await _showApp(tester, onResetApp: () async => count++);
     await _drawerItem(tester, 'Paramètres');
+    await _settingsTab(tester, 'settingsTabAdvanced');
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('settingsFactoryReset')),
       180,
@@ -403,8 +409,11 @@ void main() {
 
     await _drawerItem(tester, 'Paramètres');
     expect(find.widgetWithText(ListTile, 'Crédits IA'), findsOneWidget);
-    expect(find.widgetWithText(ListTile, 'Fournisseurs IA'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Profils IA'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Mises à jour'), findsNothing);
+    await _settingsTab(tester, 'settingsTabApp');
     expect(find.widgetWithText(ListTile, 'Mises à jour'), findsOneWidget);
+    await _settingsTab(tester, 'settingsTabAi');
 
     await tester.tap(find.byKey(const ValueKey('settingsAiProviders')));
     await tester.pumpAndSettle();
@@ -413,6 +422,7 @@ void main() {
     await _systemBack(tester);
     expect(find.widgetWithText(ListTile, 'Crédits IA'), findsOneWidget);
 
+    await _settingsTab(tester, 'settingsTabApp');
     await tester.tap(find.widgetWithText(ListTile, 'Mises à jour'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Vérifier maintenant'));
@@ -423,12 +433,13 @@ void main() {
     expect(find.text('Mises à jour'), findsWidgets);
 
     await _systemBack(tester);
+    await _settingsTab(tester, 'settingsTabAi');
     expect(find.widgetWithText(ListTile, 'Crédits IA'), findsOneWidget);
     await tester.tap(find.widgetWithText(ListTile, 'Crédits IA'));
     await tester.pumpAndSettle();
     expect(find.byType(OpenUncensoredCreditsPage), findsOneWidget);
     await _systemBack(tester);
-    expect(find.widgetWithText(ListTile, 'Mises à jour'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Crédits IA'), findsOneWidget);
     await _systemBack(tester);
     expect(find.text('Mes Livres'), findsOneWidget);
     await _systemBack(tester); // Root route has no prior in-app page.
