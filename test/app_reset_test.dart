@@ -1,3 +1,9 @@
+import 'dart:io';
+
+import 'package:domolia/books/book_definition.dart';
+import 'package:domolia/books/book_session.dart';
+import 'package:domolia/books/book_store.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:domolia/ai/ai_provider.dart';
 import 'package:domolia/ai/openuncensored_api.dart';
 import 'package:domolia/ai/openuncensored_vault.dart';
@@ -207,6 +213,50 @@ void main() {
     expect(events, ['profiles']);
     expect((await SharedPreferences.getInstance())
         .getString('domolia.narrator.settings.v1'), 'old narrator');
+  });
+
+  test('A real SQLite Book, Party and local image survive the reset',
+      () async {
+    sqfliteFfiInit();
+    final directory = await Directory.systemTemp
+        .createTemp('domolia-settings-reset-');
+    final dbPath = '${directory.path}/domolia.sqlite';
+    final image = File('${directory.path}/existing-illustration.png');
+    await image.writeAsBytes([137, 80, 78, 71]);
+    final original = SqliteBookStore(
+      factory: databaseFactoryFfi, databasePath: dbPath,
+    );
+    addTearDown(() async {
+      await original.close();
+      if (await directory.exists()) await directory.delete(recursive: true);
+    });
+    const book = BookDefinition(id: 'book-keep', title: 'Mon Livre');
+    const session = BookSession(
+      id: 'party-keep', bookId: 'book-keep', title: 'Ma Partie',
+    );
+    await original.putBook(book);
+    await original.putSession(session);
+
+    final order = <String>[];
+    await AppResetService(
+      profiles: _Profiles(null, order),
+      vault: _Vault(const OuVaultState(), order),
+    ).reset();
+
+    expect((await original.findBook(book.id))?.title, 'Mon Livre');
+    expect((await original.findSession(session.id))?.title, 'Ma Partie');
+    expect(await image.exists(), isTrue);
+    await original.close();
+    final reopened = SqliteBookStore(
+      factory: databaseFactoryFfi, databasePath: dbPath,
+    );
+    try {
+      expect((await reopened.findBook(book.id))?.title, 'Mon Livre');
+      expect((await reopened.findSession(session.id))?.bookId, book.id);
+      expect(await image.readAsBytes(), [137, 80, 78, 71]);
+    } finally {
+      await reopened.close();
+    }
   });
 
   test('Without credentials, reset produces the standard OpenUncensored setup',
