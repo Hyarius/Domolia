@@ -452,6 +452,44 @@ String validatedImagePrompt(VisualScene scene, VisualDirection direction,
       negativePrompt.length > 1500) {
     throw const FormatException('Style invalide.');
   }
+  const shots = {
+    'wide': 'plan large',
+    'medium': 'plan moyen',
+    'medium_full': 'plan moyen en pied',
+    'full_body': 'personnage en pied',
+    'closeup': 'gros plan',
+  };
+  const angles = {
+    'eye_level': 'à hauteur des yeux',
+    'high': 'en plongée',
+    'low': 'en contre-plongée',
+    'over_shoulder': 'par-dessus l’épaule',
+    'three_quarter': 'de trois-quarts',
+    'side': 'de profil',
+  };
+  const compositions = {
+    'rule_of_thirds': 'règle des tiers',
+    'centered': 'composition centrée',
+    'leading_lines': 'lignes directrices',
+  };
+  const lights = {
+    'natural': 'naturelle',
+    'soft': 'douce',
+    'dramatic': 'dramatique',
+  };
+  const palettes = {
+    'warm': 'chaude',
+    'cool': 'froide',
+    'neutral': 'neutre',
+    'muted': 'atténuée',
+  };
+  const moods = {
+    'calm': 'calme',
+    'tense': 'tendue',
+    'mysterious': 'mystérieuse',
+    'joyful': 'joyeuse',
+    'melancholic': 'mélancolique',
+  };
   return [
     'Style : ' + style.trim() + '.',
     'Sujet : ' + VisualDirection._visualField(
@@ -474,10 +512,12 @@ String validatedImagePrompt(VisualScene scene, VisualDirection direction,
           .join(' ; ') + '.',
     'Décor : ' + VisualDirection._visualField(
         direction.visualSetting, scene) + '.',
-    'Cadrage : ' + direction.shot + ', angle ' + direction.angle +
-        ', composition ' + direction.composition + '.',
-    'Atmosphère : lumière ' + direction.lighting +
-        ', palette ' + direction.palette + ', ambiance ' + direction.mood + '.',
+    'Cadrage : ' + shots[direction.shot]! + ', angle ' +
+        angles[direction.angle]! + ', ' +
+        compositions[direction.composition]! + '.',
+    'Atmosphère : lumière ' + lights[direction.lighting]! +
+        ', palette ' + palettes[direction.palette]! +
+        ', ambiance ' + moods[direction.mood]! + '.',
     if (negativePrompt.trim().isNotEmpty)
       'À exclure : ' + negativePrompt.trim() + '.',
   ].join('\n');
