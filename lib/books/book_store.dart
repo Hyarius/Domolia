@@ -151,6 +151,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
       'created_at INTEGER NOT NULL, prompt TEXT NOT NULL, '
       'negative_prompt TEXT NOT NULL DEFAULT \'\', '
       'appearance_proposals_json TEXT NOT NULL DEFAULT \'[]\', '
+      'visual_style TEXT NOT NULL DEFAULT \'\', '
       'files_json TEXT NOT NULL, mime_type TEXT, error TEXT, cost_usd REAL, '
       'FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE)',
     );
@@ -207,6 +208,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
             row['created_at'] as int, isUtc: true),
           prompt: row['prompt'] as String,
           negativePrompt: row['negative_prompt'] as String? ?? '',
+          visualStyle: row['visual_style'] as String? ?? '',
           appearanceProposals: [
             for (final value in (jsonDecode(
                 row['appearance_proposals_json'] as String? ?? '[]') as List))
@@ -268,6 +270,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
         'created_at': record.createdAtUtc.microsecondsSinceEpoch,
         'prompt': record.prompt,
         'negative_prompt': record.negativePrompt,
+        'visual_style': record.visualStyle,
         'appearance_proposals_json': jsonEncode(record.appearanceProposals),
         'files_json': jsonEncode(record.fileNames),
         'mime_type': record.mimeType,
@@ -505,6 +508,8 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
         if (oldVersion >= 13 && oldVersion < 15) {
           await db.execute('ALTER TABLE illustration_generations '
               "ADD COLUMN appearance_proposals_json TEXT NOT NULL DEFAULT '[]'");
+          await db.execute('ALTER TABLE illustration_generations '
+              "ADD COLUMN visual_style TEXT NOT NULL DEFAULT ''");
         }
         if (oldVersion < 12) {
           final sessions = await db.rawQuery(
