@@ -502,6 +502,97 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
     }
   }
 
+  /// Inspect redacted HTTP exchanges locally without a manual JSON export.
+  /// The general app log contains only metadata; the body is deliberately
+  /// displayed here, within the owning Party.
+  Future<void> _viewAiTrace() async {
+    try {
+      final diagnostics = widget.onLoadAiDiagnostics == null
+          ? await widget.library.diagnostics(widget.sessionId)
+          : await widget.onLoadAiDiagnostics!();
+      if (!mounted) return;
+      final sorted = diagnostics.toList()
+        ..sort((a, b) => b.createdAtUtc.compareTo(a.createdAtUtc));
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(
+          child: FractionallySizedBox(
+            heightFactor: 0.88,
+            child: Column(children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 6, 12, 12),
+                child: Row(children: [
+                  const Expanded(child: Text('Appels IA de la Partie',
+                      style: TextStyle(fontSize: 20,
+                          fontWeight: FontWeight.bold))),
+                  IconButton(
+                    tooltip: 'Fermer',
+                    onPressed: () => Navigator.pop(sheetContext),
+                    icon: const Icon(Icons.close),
+                  ),
+                ]),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 18),
+                child: Text('Requêtes et réponses expurgées des clés API. '
+                    'Les passages narratifs restent privés et peuvent '
+                    'être sensibles.'),
+              ),
+              const SizedBox(height: 10),
+              Expanded(child: sorted.isEmpty
+                  ? const Center(child: Text('Aucun appel IA conservé '
+                      'pour cette Partie.'))
+                  : ListView.builder(
+                      key: const ValueKey('conversationAiTraceList'),
+                      itemCount: sorted.length,
+                      itemBuilder: (context, index) {
+                        final record = sorted[index];
+                        Map<String, dynamic> data;
+                        try {
+                          data = record.data;
+                        } catch (_) {
+                          return const ListTile(
+                            title: Text('Échange illisible'),
+                          );
+                        }
+                        final stage = data['stage'] as String? ?? 'non classé';
+                        final provider = data['provider'] as String? ??
+                            'fournisseur inconnu';
+                        final request = data['request'];
+                        final response = data['response'];
+                        final interpretation = data['interpretation'];
+                        final json = const JsonEncoder.withIndent('  ').convert({
+                          'request': request,
+                          'response': response,
+                          'interpretation': interpretation,
+                        });
+                        return ExpansionTile(
+                          key: ValueKey('conversationAiTrace-${record.id}'),
+                          title: Text('$stage · $provider'),
+                          subtitle: Text(
+                            '${record.createdAtUtc.toLocal().toIso8601String()} '
+                            '· ${record.model} · HTTP ${record.statusCode ?? "—"}',
+                            maxLines: 2,
+                          ),
+                          childrenPadding: const EdgeInsets.all(16),
+                          children: [
+                            SelectableText(json,
+                              key: ValueKey('conversationAiTraceBody-${record.id}')),
+                          ],
+                        );
+                      },
+                    )),
+            ]),
+          ),
+        ),
+      );
+    } catch (_) {
+      _notify('Impossible de consulter les échanges IA.');
+    }
+  }
+
   Future<void> _exportAiTrace() async {
     try {
       final diagnostics = widget.onLoadAiDiagnostics == null
@@ -892,6 +983,12 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
             onPressed: _exportBook,
             icon: const Icon(Icons.menu_book_outlined),
             label: const Text('Exporter le Livre (JSON)'),
+          ),
+          OutlinedButton.icon(
+            key: const ValueKey('conversationViewAiTrace'),
+            onPressed: _viewAiTrace,
+            icon: const Icon(Icons.list_alt_outlined),
+            label: const Text('Consulter les appels IA'),
           ),
           OutlinedButton.icon(
             key: const ValueKey('aiPipelineExport'),
