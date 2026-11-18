@@ -7,6 +7,10 @@ import 'package:domolia/chat/chat_controller.dart';
 
 import 'package:domolia/ai/ai_diagnostics.dart';
 import 'package:domolia/books/book_definition.dart';
+import 'package:domolia/books/book_library_controller.dart';
+import 'package:domolia/books/book_lore.dart';
+import 'package:domolia/illustration/illustration_records.dart';
+import 'package:domolia/illustration/visual_pipeline.dart';
 import 'package:domolia/books/book_session.dart';
 import 'package:domolia/books/book_store.dart';
 import 'package:domolia/chat/chat_protocol.dart';
@@ -71,6 +75,72 @@ void main() {
     await second.deleteBook(book.id);
     expect(await second.findSession(session.id), isNull);
     expect(await second.profileIdForBook(book.id), isNull);
+  });
+
+  test('Party settings reset preserves SQLite diagnostics, timeline and images',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('domolia-party-reset-');
+    final db = SqliteBookStore(
+      factory: databaseFactoryFfi,
+      databasePath: '${dir.path}/parties.sqlite',
+    );
+    addTearDown(() async {
+      await db.close();
+      await dir.delete(recursive: true);
+    });
+    final library = BookLibraryController(store: db);
+    addTearDown(library.dispose);
+    await library.initialize();
+    const book = BookDefinition(id: 'book', title: 'Livre original');
+    await library.save(book);
+    const intent = ChatIllustrationIntent(
+      id: 3, playerEventId: 1, description: 'La porte s’ouvre.',
+    );
+    const timeline = <ChatTimelineEvent>[
+      ChatEntry(id: 1, speaker: ChatSpeaker.player, name: 'Vous',
+          text: 'Je regarde la porte.'),
+      ChatEntry(id: 2, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'La porte s’ouvre.'),
+      intent,
+    ];
+    const session = BookSession(
+      id: 'session', bookId: 'book', title: 'Ma Partie',
+      timeline: timeline,
+      aiProfileId: 'custom-profile',
+      illustrationModeOverride: IllustrationMode.disabled,
+      generationOverrides: {
+        AiNarrativeTask.narrator:
+            AiTaskGenerationOverride(maxOutputTokens: 4096),
+      },
+    );
+    await db.putSession(session);
+    await db.putDiagnostic(StoredAiDiagnostic(
+      id: 'trace', sessionId: session.id, createdAtUtc: DateTime.utc(2026),
+      content: '{"format":"test"}',
+    ), 5);
+    final scene = const VisualSceneSelector().select(
+      intent: intent, timeline: timeline, lore: const BookLore(),
+    );
+    expect(await db.saveIllustrationIfCurrent(StoredIllustration(
+      requestId: 'existing-image', sessionId: session.id, intentId: intent.id,
+      sourceHash: scene.sourceHash, state: IllustrationJobState.available,
+      provider: 'test', model: 'image-model',
+      createdAtUtc: DateTime.utc(2026),
+      prompt: 'La porte s’ouvre.', fileNames: const ['img-existing.png'],
+      mimeType: 'image/png',
+    )), isTrue);
+
+    await library.resetSessionSettings(session.id);
+    final stored = (await db.findSession(session.id))!;
+    expect(stored.aiProfileId, isNull);
+    expect(stored.generationOverrides, isEmpty);
+    expect(stored.illustrationModeOverride, isNull);
+    expect(stored.timeline, hasLength(3));
+    expect((await db.listDiagnostics(session.id)).single.id, 'trace');
+    expect((await db.listIllustrations(session.id)).single.fileName,
+        'img-existing.png');
+    expect(await db.retainedIllustrationFiles(), contains('img-existing.png'));
+    expect((await db.findBook(book.id))!.title, book.title);
   });
 
   test('AI traces are capped per conversation, purge one part and cascade on deletion',
