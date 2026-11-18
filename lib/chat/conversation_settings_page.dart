@@ -655,20 +655,34 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   }
 
   @override
-  Widget build(BuildContext context) => SafeArea(
-    child: ListView(
-      key: const ValueKey('conversationSettings'),
-      padding: const EdgeInsets.all(22),
-      children: [
-        Row(children: [
-          if (widget.showBackButton)
-             IconButton(tooltip: 'Retour à la conversation',
-              onPressed: widget.onBack, icon: const Icon(Icons.arrow_back)),
-          const Expanded(child: Text('Paramètres de la conversation',
-            style: TextStyle(color: DomoliaColors.goldLight,
-                fontSize: 21, fontWeight: FontWeight.bold))),
-        ]),
-        const SizedBox(height: 24),
+  Widget build(BuildContext context) => DefaultTabController(
+    length: 2,
+    child: SafeArea(
+      child: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Row(children: [
+            if (widget.showBackButton)
+              IconButton(tooltip: 'Retour à la conversation',
+                onPressed: widget.onBack, icon: const Icon(Icons.arrow_back)),
+            const Expanded(child: Text('Paramètres de la conversation',
+              style: TextStyle(color: DomoliaColors.goldLight,
+                  fontSize: 21, fontWeight: FontWeight.bold))),
+          ]),
+        ),
+        const TabBar(
+          key: ValueKey('conversationSettingsTabs'),
+          tabs: [
+            Tab(key: ValueKey('conversationSettingsGeneralTab'), text: 'Partie'),
+            Tab(key: ValueKey('conversationSettingsLogsTab'),
+                text: 'Historique et traces'),
+          ],
+        ),
+        Expanded(child: TabBarView(children: [
+          ListView(
+            key: const ValueKey('conversationSettings'),
+            padding: const EdgeInsets.all(22),
+            children: [
         const Text('Narration et illustrations', style: TextStyle(
             color: DomoliaColors.goldLight, fontSize: 18)),
         if (!_loaded)
@@ -853,10 +867,12 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
             );
           },
         ),
- 
-        const SizedBox(height: DomoliaSpacing.section),
-        const Divider(),
-        const SizedBox(height: DomoliaSpacing.compact),
+            ],
+          ),
+          ListView(
+            key: const ValueKey('conversationSettingsDiagnostics'),
+            padding: const EdgeInsets.all(22),
+            children: [
         _usageSection(),
         const SizedBox(height: DomoliaSpacing.section),
         const Divider(),
@@ -901,7 +917,10 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           'les traces supprimées ne sont pas récupérables.',
           style: TextStyle(color: DomoliaColors.muted),
         ),
-      ],
+            ],
+          ),
+        ])),
+      ]),
     ),
   );
 }
