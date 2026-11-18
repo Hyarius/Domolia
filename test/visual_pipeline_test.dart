@@ -117,6 +117,37 @@ void main() {
        isNot(contains('Cheveux noirs')));
   });
 
+
+  test('Director JSON fences are accepted without admitting extra text', () {
+    final selected = const VisualSceneSelector().select(
+      intent:intent, timeline:scene(), lore:lore,
+    );
+    final values = <String,dynamic>{
+      'shot':'medium_full', 'angle':'three_quarter',
+      'focusIds':['lea-monel'], 'composition':'leading_lines',
+      'lighting':'soft', 'palette':'warm', 'mood':'calm',
+      'visualSubject':'Léa devant le meuble',
+      'visualAction':'Elle touche le tiroir',
+      'visualSetting':'Un intérieur avec un meuble',
+      'bodyPose':'Sa main repose sur la poignée',
+    };
+    final raw = jsonEncode(values);
+    final fenced = '```json\n$raw\n```';
+    expect(VisualDirection.parse(raw, selected).shot, 'medium_full');
+    expect(VisualDirection.parse(fenced, selected).shot, 'medium_full');
+    expect(VisualDirection.parse(' ```JSON\r\n$raw\r\n``` ', selected)
+        .angle, 'three_quarter');
+    expect(() => VisualDirection.parse(
+      'Explication :\n$fenced', selected), throwsFormatException);
+    expect(() => VisualDirection.parse(
+      '$fenced\nTexte supplémentaire', selected), throwsFormatException);
+    expect(() => VisualDirection.parse(
+      '```json\n{}\n```', selected), throwsFormatException);
+    expect(() => VisualDirection.parse(
+      '```json\n$raw\n```\n```json\n{}\n```',
+      selected), throwsFormatException);
+  });
+
   test('Book exclusions are added without treating scene dialogue as overlay', () {
     final selected=const VisualSceneSelector().select(
         intent:intent,timeline:scene(),lore:lore);
