@@ -409,7 +409,144 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
     }
 
     if (response.statusCode != 200) {
-      // Inspect at most 16 KB of structured upstream error data.
+      throw _httpFailure(response.statusCode, response.bodyBytes);
+    }
+    if (response.bodyBytes.length > 2 * 1024 * 1024) {
+      throw const AiProviderException('Réponse du fournisseur trop volumineuse.');
+    }
+    try {
+      return jsonDecode(utf8.decode(response.bodyBytes));
+    } catch (_) {
+      throw const AiProviderException('Réponse JSON invalide du fournisseur IA.');
+    }
+  }
+
+  @override
+  Future<List<AiModel>> listModels(AiConfiguration configuration) async {
+    final result = await _request(configuration, 'models');
+    if (result is! Map<String, dynamic> || result['data'] is! List) {
+      throw const AiProviderException('Catalogue de modèles invalide.');
+    }
+    final ids = <String>{};
+    for (final item in result['data'] as List) {
+      if (item is Map<String, dynamic> &&
+          item['id'] is String &&
+          item['available'] != false &&
+          (item['modality'] == null || item['modality'] == 'text')) {
+        final id = item['id'] as String;
+        if (id.isNotEmpty) ids.add(id);
+      }
+    }
+    return (ids.toList()..sort()).map(AiModel.new).toList();
+  }
+
+  @override
+  Future<String> complete(
+    AiConfiguration configuration, {
+    required List<AiMessage> messages,
+    int maxTokens = 64,
+  }) async {
+    validatedAiModel(configuration.model);
+    if (messages.isEmpty ||
+        messages.any((message) =>
+            !{'system', 'user', 'assistant'}.contains(message.role) ||
+            message.content.trim().isEmpty)) {
+      throw const AiProviderException('Messages de chat invalides.');
+    }
+    if (maxTokens < 1 || maxTokens > 32768) {
+      throw const AiProviderException('Limite de tokens invalide.');
+    }
+    final response = await _request(configuration, 'chat/completions', payload: {
+      'model': configuration.model.trim(),
+      'stream': false,
+      'max_tokens': maxTokens,
+      'messages': [
+        for (final message in messages)
+          {'role': message.role, 'content': message.content},
+      ],
+    });
+    if (response is! Map<String, dynamic> ||
+        response['choices'] is! List ||
+        (response['choices'] as List).isEmpty) {
+      throw const AiProviderException('Réponse de chat vide ou invalide.');
+    }
+    final choice = (response['choices'] as List).first;
+    if (choice is! Map<String, dynamic> ||
+        choice['message'] is! Map<String, dynamic> ||
+        (choice['message'] as Map<String, dynamic>)['content'] is! String) {
+      throw const AiProviderException('Réponse de chat invalide.');
+    }
+    final content = ((choice['message'] as Map<String, dynamic>)['content'] as String).trim();
+    if (content.isEmpty) {
+      throw const AiProviderException('Le modèle a retourné une réponse vide.');
+    }
+    return content;
+  }
+  /// OpenUncensored/OpenAI-compatible chat streaming over SSE. Cancelling
+  /// a Dart subscription cancels this request, not the shared HTTP client.
+  @override
+  Stream<AiStreamChunk> streamChat(
+    AiConfiguration configuration, {
+    required List<AiMessage> messages,
+    int maxTokens = 1200,
+  }) async* {
+    if (configuration.apiKey.trim().isEmpty) {
+      throw const AiProviderException('Enregistrez une clé API avant de discuter.');
+    }
+    validatedAiModel(configuration.model);
+    if (messages.isEmpty ||
+        messages.any((entry) =>
+            !{'system', 'user', 'assistant'}.contains(entry.role) ||
+            entry.content.trim().isEmpty) ||
+        maxTokens < 1 ||
+        maxTokens > 32768) {
+      throw const AiProviderException('Requête de discussion invalide.');
+    }
+
+    final base = validatedAiBaseUrl(configuration.baseUrl);
+    final request = http.Request('POST', Uri.parse('$base/chat/completions'))
+      ..followRedirects = false
+      ..headers['Authorization'] = 'Bearer ${configuration.apiKey.trim()}'
+      ..headers['Accept'] = 'text/event-stream'
+      ..headers['Content-Type'] = 'application/json'
+      ..body = jsonEncode({
+        'model': configuration.model.trim(),
+        'stream': true,
+        'stream_options': {'include_usage': true},
+        'max_tokens': maxTokens,
+        'messages': [
+          for (final item in messages)
+            {'role': item.role, 'content': item.content},
+        ],
+      });
+
+    final exchange = diagnostics?.begin(
+      provider: 'openai-compatible',
+      method: request.method,
+      url: request.url.toString(),
+      requestBody: request.body,
+      secret: configuration.apiKey.trim(),
+      accept: request.headers['Accept'] ?? 'text/event-stream',
+    );
+    http.StreamedResponse response;
+    try {
+      response = await _client.send(request).timeout(
+        const Duration(seconds: 25),
+      );
+      exchange?.statusCode = response.statusCode;
+    } on TimeoutException {
+      throw const AiProviderException(
+        'Aucune réponse du fournisseur sous 25 s. Vérifiez le réseau ou réessayez.',
+        kind: AiProviderErrorKind.timeout,
+      );
+    } catch (_) {
+      throw const AiProviderException(
+        'Connexion au fournisseur impossible. Vérifiez le réseau et l’URL.',
+        kind: AiProviderErrorKind.network,
+      );
+    }
+
+    if (response.statusCode != 200) {
       final body = <int>[];
       try {
         await for (final bytes in response.stream.timeout(
