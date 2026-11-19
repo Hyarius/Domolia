@@ -83,7 +83,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
       _selectedModel ?? widget.controller.model,
       _key.text,
     );
-    if (saved && mounted) _key.clear();
+    if (saved && mounted) _reloadFields();
     return saved;
   }
 
@@ -711,9 +711,21 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
         final isChatGpt = c.selectedKind == AiProviderKind.chatGpt;
         final selectedModel = isChatGpt ? c.model : _selectedModel ?? c.model;
         final modelIds = <String>{
-          if (!isChatGpt && selectedModel.isNotEmpty) selectedModel,
-          for (final entry in c.models) entry.id,
+          if (!isChatGpt) '',
+          if (!isChatGpt && selectedModel.isNotEmpty &&
+              !AiConnectionController.isImageModel(selectedModel))
+            selectedModel,
+          for (final entry in c.models)
+            if (isChatGpt ||
+                !AiConnectionController.isImageModel(entry.id))
+              entry.id,
         }.toList();
+        final effectiveModel = !isChatGpt &&
+                AiConnectionController.isImageModel(selectedModel)
+            ? '' : selectedModel;
+        final imageOnlySelected = !isChatGpt &&
+            effectiveModel.isEmpty &&
+            Uri.tryParse(_base.text.trim())?.host == 'api.openai.com';
 
         return SafeArea(
           child: ListView(
@@ -778,13 +790,15 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               const SizedBox(height: DomoliaSpacing.field),
               InputDecorator(
                 decoration: const InputDecoration(
-                  labelText: 'Modèle de chat',
-                  helperText: 'Charger les modèles actualise cette liste.',
+                  labelText: 'Modèle de chat (facultatif pour les images)',
+                  helperText: 'Pour un profil OpenAI réservé aux images, '
+                      'choisissez « Images uniquement ». Le modèle graphique '
+                      'se règle séparément dans Paramètres → Images.',
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     key: const ValueKey('aiModelSelector'),
-                    value: modelIds.contains(selectedModel) ? selectedModel : null,
+                    value: modelIds.contains(effectiveModel) ? effectiveModel : null,
                     isExpanded: true,
                     itemHeight: 72,
                     menuMaxHeight: 360,
@@ -794,11 +808,11 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                     selectedItemBuilder: (context) => [
                       for (final id in modelIds)
                         Tooltip(
-                          message: id,
+                          message: id.isEmpty ? 'Images uniquement' : id,
                           child: Align(
                             alignment: Alignment.centerLeft,
                             child: Text(
-                              id,
+                              id.isEmpty ? 'Images uniquement (sans chat)' : id,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -810,7 +824,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                         DropdownMenuItem(
                           value: id,
                           child: Text(
-                            id,
+                            id.isEmpty ? 'Images uniquement (sans chat)' : id,
                             maxLines: 2,
                             softWrap: true,
                             overflow: TextOverflow.ellipsis,
@@ -847,12 +861,19 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               OutlinedButton.icon(
                 onPressed: c.busy ? null : _saveAndTest,
                 icon: const Icon(Icons.wifi_tethering),
-                label: const Text('Tester la connexion'),
+                label: Text(imageOnlySelected
+                    ? 'Vérifier la clé API (sans génération)'
+                    : 'Tester la connexion de chat'),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Le test peut consommer des crédits du fournisseur IA.',
-                style: TextStyle(color: DomoliaColors.muted, fontSize: 12),
+              Text(
+                imageOnlySelected
+                    ? 'Ce test interroge le catalogue des modèles, sans '
+                      'générer d’image ni de texte. Il ne garantit pas '
+                      'l’accès au modèle d’image ni le solde de crédits.'
+                    : 'Le test de chat peut consommer des crédits.',
+                style: const TextStyle(
+                    color: DomoliaColors.muted, fontSize: 12),
               ),
               if (c.hasKey) ...[
                 const SizedBox(height: 14),
