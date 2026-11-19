@@ -94,7 +94,9 @@ void main() {
     expect(find.text('Catalogue graphique : OpenUncensored'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('imageProviderProfile-')));
-    await tester.pumpAndSettle();
+    // The catalogue is still loading while this dropdown is open.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
     await tester.tap(find.text('ChatGPT - Image').last);
     await tester.pumpAndSettle();
 
