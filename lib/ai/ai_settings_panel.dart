@@ -266,8 +266,12 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
     final (label, indicatorColor) = switch (status) {
       AiConnectionStatus.untested => ('Non testé', DomoliaColors.muted),
       AiConnectionStatus.testing => ('En cours', DomoliaColors.muted),
-      AiConnectionStatus.connected => ('Connecté', const Color(0xFF59D78F)),
-      AiConnectionStatus.invalid => ('Invalide', const Color(0xFFFF7777)),
+      AiConnectionStatus.connected => (
+          controller.imageOnlyProfile ? 'Clé API vérifiée' : 'Connecté',
+          const Color(0xFF59D78F)),
+      AiConnectionStatus.invalid => (
+          controller.imageOnlyProfile ? 'Vérification échouée' : 'Invalide',
+          const Color(0xFFFF7777)),
     };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1028,7 +1032,9 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               if (c.testReply != null) ...[
                 const SizedBox(height: 12),
                 Text(
-                  'Réponse du modèle : ${c.testReply!}',
+                  c.imageOnlyProfile
+                      ? 'Résultat du contrôle : ${c.testReply!}'
+                      : 'Réponse du modèle : ${c.testReply!}',
                   key: const ValueKey('aiTestReply'),
                 ),
               ],
