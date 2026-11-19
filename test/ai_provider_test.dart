@@ -83,6 +83,38 @@ void main() {
     });
   }
 
+  test('OpenAI quota error 429 is distinguished from rate limiting',
+      () async {
+    final provider = OpenAiCompatibleChatProvider(
+      client: MockClient((_) async => http.Response(jsonEncode({
+        'error': {
+          'code': 'insufficient_quota',
+          'message': 'private billing details ou-private-test-key',
+        },
+      }), 429)),
+    );
+    await expectLater(provider.listModels(settings),
+        throwsA(isA<AiProviderException>()
+            .having((e) => e.kind, 'kind', AiProviderErrorKind.credits)
+            .having((e) => e.userMessage, 'safe explanation', allOf(
+              contains('facturation'),
+              isNot(contains('private')),
+              isNot(contains(settings.apiKey)),
+            ))));
+  });
+
+  test('Organization verification error has a specific safe explanation',
+      () async {
+    final provider = OpenAiCompatibleChatProvider(
+      client: MockClient((_) async => http.Response(
+        '{"error":{"code":"organization_verification_required"}}', 403)),
+    );
+    await expectLater(provider.listModels(settings),
+        throwsA(isA<AiProviderException>()
+            .having((e) => e.userMessage, 'message',
+                contains('vérification de votre organisation'))));
+  });
+
   test('No key never makes a network call', () async {
     var called = false;
     final provider = OpenAiCompatibleChatProvider(client: MockClient((_) async {
