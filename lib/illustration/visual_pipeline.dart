@@ -413,7 +413,7 @@ N'ajoute ni personnage ni meuble gratuit. Ne garde du décor que les
 lieu est inconnu en style manga ; En style réaliste, fond neutre ou flou.
 En style manga, le fond blanc et quelques traits suffisent.
 Tu ne remplis JAMAIS le décor inconnu avec du mobilier inventé.
-Une porte et son encadrement suffisent souvent à situer un seuil.
+Pour situer un seuil, une porte et son encadrement suffisent.
 Un palier d’immeuble ne doit pas devenir un porche extérieur.
 
 STYLE ET LONGUEUR
