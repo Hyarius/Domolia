@@ -36,6 +36,37 @@ Les capacités et vérifications techniques d'un profil IA sont repliées dans
 n'est pas encore une passe de modèle IA distincte. Une extraction IA dédiée
 nécessitera une évolution séparée du pipeline et de ses tests de fidélité.
 
+## Consignes du générateur et exclusions
+
+Le metteur en scène fournit une **légende visuelle courte** plutôt qu'un long
+récit ou une liste brute de tags : en priorité les positions relatives, les
+appuis et les contacts ; ensuite les apparences, quelques objets de décor,
+puis le style. Cible habituelle : **300–700 caractères** ; jusqu'à **1 100**
+pour une scène exigeante. Le Lore/les dialogues ne sont pas envoyés
+directement au moteur graphique.
+
+Le JSON du metteur en scène conserve deux champs indépendants :
+- `prompt` : description **positive**, sans répétition de « À exclure ».
+- `negativePrompt` : éléments indésirables, fusionnés sans doublons avec
+  les exclusions du Livre et conservés dans les diagnostics de Partie.
+
+Selon [la documentation de l'API OpenUncensored](https://openuncensored.com/docs) :
+- `POST /v1/images/generations` avec `negative_prompt` est effectif
+  uniquement pour les **checkpoints Civitai**. Domolia renseigne ce champ
+  pour les modèles Civitai documentés.
+- Les modèles **Venice** (dont Chroma et Z-Image Turbo) **ignorent** ce champ.
+  Pour les exclusions de texte et de signature, Domolia ajoute au plus
+  une courte consigne au prompt positif, sans recopier la liste complète.
+- Les modèles Venice limitent le prompt positif à **1 500 caractères**.
+  Domolia vérifie cette longueur avant tout POST facturé, sans tronquer
+  silencieusement la pose. Une ancienne description trop longue doit être
+  raccourcie ou préparée de nouveau.
+- L'API Images OpenAI ne documente pas `negative_prompt` : Domolia n'y
+  envoie pas de champ inconnu.
+
+Ces règles sont spécifiques aux fournisseurs et ne garantissent pas que
+chaque exclusion ou relation spatiale sera respectée par le modèle.
+
 ## Traces d'appels
 
 - Chaque échange enregistré au niveau des transports IA ajoute un
