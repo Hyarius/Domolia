@@ -4,7 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
+import '../storage/domolia_storage_paths.dart';
 
 /// Job metadata; pixel payloads must never be placed in conversation JSON.
 enum IllustrationJobState {
@@ -105,7 +105,7 @@ class LocalIllustrationFiles {
   final Future<Directory> Function() _root;
 
   static Future<Directory> _defaultRoot() async {
-    final support = await getApplicationSupportDirectory();
+    final support = await DomoliaStoragePaths.getSupportDirectory();
     return Directory(path.join(support.path, 'illustrations'));
   }
 
