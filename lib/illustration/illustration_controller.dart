@@ -204,11 +204,24 @@ class IllustrationController extends ChangeNotifier {
   }
 
   String _combinedNegativePrompt(
-      VisualDirection direction, String bookNegativePrompt) =>
-      [direction.negativePrompt, bookNegativePrompt]
-          .map((value) => value.trim())
-          .where((value) => value.isNotEmpty)
-          .join(', ');
+      VisualDirection direction, String bookNegativePrompt) {
+    // The director often repeats the Book's exclusions. Preserve order and
+    // distinct instructions without inflating the payload or positive prompt.
+    final seen = <String>{};
+    final parts = <String>[];
+    for (final value in [direction.negativePrompt, bookNegativePrompt]) {
+      for (final item in value.split(',')) {
+        final part = item.trim();
+        if (part.isEmpty || !seen.add(part.toLowerCase())) continue;
+        parts.add(part);
+      }
+    }
+    final combined = parts.join(', ');
+    if (combined.length > 1500) {
+      throw const FormatException('Exclusions visuelles trop longues.');
+    }
+    return combined;
+  }
 
   List<Map<String, String>> _appearanceProposals(
       VisualDirection direction) => [
@@ -557,7 +570,8 @@ class IllustrationController extends ChangeNotifier {
       providerInvoked = true;
       final result = await imageProvider.generate(
         ImageGenerationRequest(
-          model: capability.id, prompt: prompt, size: art.size,
+          model: capability.id, prompt: prompt,
+          negativePrompt: current.negativePrompt, size: art.size,
           quality: effectiveQuality, count: art.count,
         ),
         apiKey: profile.apiKey,
