@@ -706,9 +706,12 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
         if (!c.initialized || c.profiles.isEmpty) {
           return const Center(child: CircularProgressIndicator());
         }
-        final selectedModel = _selectedModel ?? c.model;
+        // ChatGPT is an account-backed catalogue, not a free-form model
+        // field. Never display a stale CustomAI model as a valid choice.
+        final isChatGpt = c.selectedKind == AiProviderKind.chatGpt;
+        final selectedModel = isChatGpt ? c.model : _selectedModel ?? c.model;
         final modelIds = <String>{
-          if (selectedModel.isNotEmpty) selectedModel,
+          if (!isChatGpt && selectedModel.isNotEmpty) selectedModel,
           for (final entry in c.models) entry.id,
         }.toList();
 
@@ -817,11 +820,12 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                     onChanged: c.busy
                         ? null
                         : (value) {
-                            if (value != null) {
+                            if (value == null) return;
+                            if (c.selectedKind == AiProviderKind.chatGpt) {
+                              // Only catalogued models can be persisted.
+                              c.selectChatGptModel(value);
+                            } else {
                               setState(() => _selectedModel = value);
-                              if (c.selectedKind == AiProviderKind.chatGpt) {
-                                c.selectChatGptModel(value);
-                              }
                             }
                           },
                   ),
@@ -958,11 +962,12 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                     onChanged: c.busy
                         ? null
                         : (value) {
-                            if (value != null) {
+                            if (value == null) return;
+                            if (c.selectedKind == AiProviderKind.chatGpt) {
+                              // Only catalogued models can be persisted.
+                              c.selectChatGptModel(value);
+                            } else {
                               setState(() => _selectedModel = value);
-                              if (c.selectedKind == AiProviderKind.chatGpt) {
-                                c.selectChatGptModel(value);
-                              }
                             }
                           },
                   ),
