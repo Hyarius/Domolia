@@ -7,7 +7,7 @@ import '../memory/live_memory.dart';
 import 'dart:convert';
 import '../ai/ai_task_generation.dart';
 import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
+import '../storage/domolia_storage_paths.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../ai/ai_diagnostics.dart';
@@ -459,7 +459,7 @@ class SqliteBookStore implements BookStore, NarrativeSnapshotStore, LiveMemorySt
   Future<Database> get database async {
     if (_db != null) return _db!;
     final location = databasePath ?? path.join(
-      (await getApplicationSupportDirectory()).path, 'domolia_books.sqlite',
+      (await DomoliaStoragePaths.getSupportDirectory()).path, 'domolia_books.sqlite',
     );
     AppLogger.debug('Ouverture du stockage SQLite', component: 'books');
     return _db ??= await (_factoryOverride ?? databaseFactory).openDatabase(
