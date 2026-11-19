@@ -225,14 +225,18 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           DropdownButtonFormField<String>(
             key: const ValueKey('imageDirectorProfile'),
             initialValue: widget.ai.profiles.any(
-                (p) => p.id == _options.directorProfileId)
+                (p) => p.id == _options.directorProfileId &&
+                    canDirectImages(p))
                 ? _options.directorProfileId : '',
-            decoration: const InputDecoration(labelText: 'Metteur en scène IA'),
+            decoration: const InputDecoration(labelText: 'Metteur en scène IA',
+              helperText: 'Une IA de chat (ChatGPT ou CustomAI), '
+                  'distincte du générateur d’images.'),
             items: [
               const DropdownMenuItem(value: '',
-                  child: Text('Automatique (OpenUncensored)')),
+                  child: Text('Automatique (IA conversationnelle)')),
               for (final p in widget.ai.profiles)
-                DropdownMenuItem(value: p.id, child: Text(p.name)),
+                if (canDirectImages(p))
+                  DropdownMenuItem(value: p.id, child: Text(p.name)),
             ],
             onChanged: !_canEdit ? null : (id) {
               if (id != null) setState(() => _options =
