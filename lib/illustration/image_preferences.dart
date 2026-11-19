@@ -51,11 +51,12 @@ class ImageGenerationOptions {
           }.contains(uri?.host);
     }
     final ready = all.where(imageCapable).toList();
-    AiProfile? imageProfile;
-    for (final profile in ready) {
-      if (profile.id == profileId) imageProfile = profile;
-    }
-    if (imageProfile == null) {
+    // An explicit image profile must never silently fall back to another
+    // provider when its API key is missing or its connection fails.
+    final selected = profileId.isEmpty ? null :
+        all.where((profile) => profile.id == profileId).firstOrNull;
+    AiProfile? imageProfile = selected;
+    if (profileId.isEmpty) {
       const priorities = ['openuncensored-managed-narrator', 'default'];
       for (final id in priorities) {
         for (final profile in ready) {
@@ -88,7 +89,7 @@ class ImageGenerationOptions {
           sameImageProvider ?? candidates.firstOrNull)?.id ?? '';
     }
     return ImageGenerationOptions(
-      profileId: imageProfile?.id ?? '',
+      profileId: profileId.isNotEmpty ? profileId : imageProfile?.id ?? '',
       directorProfileId: director,
       model: model,
     );
