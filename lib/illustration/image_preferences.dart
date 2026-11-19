@@ -5,6 +5,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../ai/ai_provider.dart';
 
+/// A scene director must support text generation. A dedicated image-only
+/// OpenAI API profile cannot be used for scene interpretation.
+bool canDirectImages(AiProfile profile) {
+  if (profile.kind == AiProviderKind.chatGpt) {
+    return profile.model.trim().isNotEmpty;
+  }
+  return profile.kind == AiProviderKind.customAi &&
+      profile.apiKey.trim().isNotEmpty &&
+      profile.model.trim().isNotEmpty &&
+      !profile.model.startsWith('gpt-image-') &&
+      profile.model != 'chatgpt-image-latest';
+}
+
 /// API-only image configuration. Art direction and output format live in a
 /// portable BookDefinition instead of global or per-Party preferences.
 class ImageGenerationOptions {
@@ -60,11 +73,19 @@ class ImageGenerationOptions {
         ready.firstOrNull;
 
     var director = directorProfileId;
-    if (!all.any((profile) => profile.id == director)) {
-      final textProfile = all.where((profile) =>
-          profile.id == 'openuncensored-managed-narrator' &&
-          profile.apiKey.isNotEmpty).firstOrNull;
-      director = textProfile?.id ?? imageProfile?.id ?? '';
+    if (!all.any((profile) =>
+        profile.id == director && canDirectImages(profile))) {
+      final candidates = all.where(canDirectImages).toList();
+      final preferred = candidates.where((profile) =>
+          profile.id == 'openuncensored-managed-narrator').firstOrNull;
+      // A ChatGPT conversation profile is a valid art director and is
+      // preferable to sending a text completion through an image-only key.
+      final chatGpt = candidates.where((profile) =>
+          profile.kind == AiProviderKind.chatGpt).firstOrNull;
+      final sameImageProvider = candidates.where((profile) =>
+          profile.id == imageProfile?.id).firstOrNull;
+      director = (preferred ?? chatGpt ??
+          sameImageProvider ?? candidates.firstOrNull)?.id ?? '';
     }
     return ImageGenerationOptions(
       profileId: imageProfile?.id ?? '',
