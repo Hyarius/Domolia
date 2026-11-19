@@ -15,6 +15,9 @@ dependencies:
   crypto: ^3.0.6
   jose: ^0.3.5+2
   path_provider: ^2.1.6
+  # Android 2.3.x JNI lookup fails in release on some devices.
+  # Keep the known working platform-channel variant until release-tested.
+  path_provider_android: 2.2.23
   path: ^1.9.1
   sqflite: ^2.4.2
   file_picker: ^10.3.3
