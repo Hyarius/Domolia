@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
+import '../storage/domolia_storage_paths.dart';
 
 enum AppLogLevel { trace, debug, info, warning, error }
 
@@ -118,7 +118,7 @@ class AppLogger {
   static AppLogger get current => _current;
   static Future<void> initialize() async {
     try {
-      final support = await getApplicationSupportDirectory();
+      final support = await DomoliaStoragePaths.getSupportDirectory();
       _current = AppLogger(
         storage: FileAppLogStorage(Directory(path.join(support.path, 'logs'))),
       );
