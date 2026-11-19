@@ -381,47 +381,61 @@ class VisualDirector {
       messages: [
         const AiMessage(role: 'system', content: '''
 RÔLE
-Tu es le metteur en scène d'UNE image fixe. Tu écris une consigne
-directement exploitable par un générateur d'images, pas un récit.
+Tu es le metteur en scène d'UNE image fixe, pas un narrateur.
+Écris un prompt visuel COURT, directement lisible par un modèle d'image.
 
 SOURCE DE VÉRITÉ
-L'instant demandé est prioritaire. La chronologie sert uniquement à
-identifier les personnages, le lieu et leurs positions au moment choisi.
-Le Lore et la mémoire confirmée fixent les apparences et les faits.
-Une proposition, une hypothèse ou un souvenir incertain n'est pas un fait.
-N'illustre jamais plusieurs instants successifs dans la même image.
+L'INSTANT À ILLUSTRER est prioritaire. La chronologie ne sert qu'à
+reconstituer le lieu, les personnes et la continuité avant cet instant.
+Le Lore fixe les identités et les faits. Une proposition ou un souvenir
+incertain n'est pas un fait. N'illustre jamais plusieurs instants à la fois.
+En cas de contradiction sur la pose, suis l'instant demandé plutôt qu'une
+ancienne mémoire visual_current. Une pose ancienne n'est pas permanente.
 
-PERSONNAGES ET ACTION
-Décris uniquement les personnages réellement présents et visibles.
-Précise l'âge apparent, la silhouette, le visage, les yeux, les cheveux,
-les vêtements et les accessoires connus, puis les expressions,
-les orientations, les gestes, les mains, les jambes et les contacts physiques.
-Pour les caractéristiques physiques nécessaires mais absentes du canon,
-propose des détails sobres et cohérents ; ils restent non confirmés jusqu'à
-la validation du joueur. N'invente pas de nouveaux personnages ni d'actions,
-de possessions ou de vêtements qui modifieraient la scène.
+COMPOSITION ET GÉOMÉTRIE (priorité absolue)
+Décris d'abord, en UNE ou DEUX phrases simples, les positions et
+orientations des personnages : qui est assis, debout, au sol, derrière,
+devant, à côté ou ENTRE qui. Situe explicitement les mains et les jambes,
+les appuis et contacts physiques : QUI touche QUOI et avec QUELLE main.
+Les relations spatiales doivent être non ambiguës, sans enchaînement
+de mouvements. Ne déduis pas d'autre contact que celui montré.
+Choisis un cadrage et un angle réellement compatibles avec la visibilité
+des acteurs ; une vue subjective ne montre pas le dos du spectateur.
+Décris un seul instant figé, pas des actions successives.
 
-CADRAGE ET DÉCOR
-Choisis un cadrage, un angle, une composition et une lumière au service
-du geste précis. Tu ne remplis JAMAIS un décor inconnu avec du mobilier,
-de l'architecture ou des accessoires inventés. Utilise un fond blanc,
-neutre ou épuré lorsqu'aucun lieu n'est décrit. En style manga ou BD,
-un fond blanc et quelques traits de mouvement conviennent.
-En style réaliste, un arrière-plan neutre ou flou est acceptable.
-Ne conserve du décor connu que les éléments nécessaires à l'action,
-par exemple une porte et son encadrement lorsqu'une personne franchit un seuil.
-Une scène située à l'intérieur ne devient pas une scène extérieure.
+PERSONNAGES ET DÉCOR
+Ajoute ensuite les seuls détails d'apparence utiles : âge apparent,
+silhouette, visage, yeux, cheveux, tenue et accessoires établis.
+Les caractéristiques physiques nécessaires mais inconnues peuvent être
+proposées sobrement, jamais présentées comme faits confirmés.
+N'ajoute ni personnage ni meuble gratuit. Ne garde du décor que les
+éléments narrativement importants. Un fond blanc est préférable si le
+lieu est inconnu en style manga ; En style réaliste, fond neutre ou flou.
+En style manga, le fond blanc et quelques traits suffisent.
+Tu ne remplis JAMAIS le décor inconnu avec du mobilier inventé.
+Une porte et son encadrement suffisent souvent à situer un seuil.
 Un palier d’immeuble ne doit pas devenir un porche extérieur.
+
+STYLE ET LONGUEUR
+Termine par un éclairage, une palette et un style brefs.
+Écris de courtes phrases descriptives, PAS une liste de tags isolés :
+les relations entre éléments doivent rester explicites.
+Vise 300 à 700 caractères pour la description positive habituelle,
+avec au plus 1100 caractères si la scène l'exige. Place les détails
+ESSENTIELS en premier ; supprime les détails décoratifs en dernier.
+N'évoque pas des bulles de dialogue, planches de BD, signatures ou texte
+dans la description POSITIVE : mets ces exclusions dans negativePrompt.
+L'image ne contient aucun dialogue ni typographie superposée.
 
 SORTIE
 Réponds UNIQUEMENT en JSON :
-{"prompt":"description visuelle autonome, concrète et fluide",
- "negativePrompt":"exclusions, ou chaîne vide",
+{"prompt":"description visuelle compacte, spatiale et concrète",
+ "negativePrompt":"liste dédoublonnée de quelques exclusions, ou chaîne vide",
  "appearances":[{"id":"ID autorisé","identity":"physique stable",
                  "current":"tenue et pose"}]}
 "appearances" est facultatif. N'utilise que les IDs autorisés.
-N'ajoute ni Markdown, ni dialogue, ni texte visible, ni pensées.
-Ne crée aucun détail pour allonger artificiellement la description.
+N'ajoute ni Markdown, ni dialogue, ni texte visible ni pensées.
+Pas de titre, pas de longues listes, pas d'instructions techniques.
 '''),
         AiMessage(role: 'user',
           content: scene.evidence +
@@ -451,20 +465,13 @@ String validatedImagePrompt(VisualScene scene, VisualDirection direction,
   if (description.length < 30) {
     throw const FormatException('Description visuelle trop courte.');
   }
-  final exclusions = [
-    direction.negativePrompt,
-    negativePrompt,
-  ].map((value) => value.trim()).where((value) => value.isNotEmpty).toList();
-  if (exclusions.join(', ').length > 1500) {
-    throw const FormatException('Exclusions visuelles trop longues.');
-  }
+  // Exclusions are retained separately in StoredIllustration. Some image
+  // backends (Civitai) support negative_prompt; others (Venice) ignore it.
+  // Never repeat negative words in the positive prompt.
   // The Book's requested visual style remains effective even if the
   // director omits the exact expression in its natural-language prompt.
   final visualStyle = style.trim();
   final styled = description.toLowerCase().contains(visualStyle.toLowerCase())
       ? description : description + ' ' + visualStyle + '.';
-  return [
-    styled,
-    if (exclusions.isNotEmpty) 'À exclure : ' + exclusions.join(', ') + '.',
-  ].join('\n');
+  return styled;
 }
