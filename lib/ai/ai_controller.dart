@@ -187,6 +187,20 @@ class AiConnectionController extends ChangeNotifier {
     if (chatGpt == null || chatGptProvider == null) {
       throw const AiProviderException('Connexion ChatGPT indisponible.');
     }
+    if (profile.model.isEmpty) {
+      throw const AiProviderException(
+          'Chargez et choisissez un modèle ChatGPT avant de continuer.');
+    }
+    // A legacy profile may still contain a model from its former CustomAI
+    // connection. Verify the catalogue once per session before sending a
+    // potentially paid request through the ChatGPT account.
+    final catalogue = _catalogues[id] ?? await chatGpt!.listModels(id);
+    _catalogues[id] = catalogue;
+    if (!catalogue.any((model) => model.id == profile.model)) {
+      throw const AiProviderException(
+          'Modèle incompatible avec ce compte ChatGPT. '
+          'Chargez les modèles puis sélectionnez un modèle disponible.');
+    }
     final token = await chatGpt!.accessToken(id);
     return AiConnectionBinding(
       provider: chatGptProvider!,
@@ -259,6 +273,8 @@ class AiConnectionController extends ChangeNotifier {
         for (final item in _profiles)
           item.id == _selectedId
               ? item.copyWith(kind: kind,
+                  // Never carry a CustomAI model into the ChatGPT selector.
+                  model: kind == AiProviderKind.chatGpt ? '' : defaultAiModel,
                   toolCallingCompatibility: AiToolCallingCompatibility.unknown)
               : item,
       ];
@@ -349,6 +365,13 @@ class AiConnectionController extends ChangeNotifier {
     if (_closed || busy || selectedKind != AiProviderKind.chatGpt) return false;
     try {
       final value = validatedAiModel(id);
+      if (!_catalogues.containsKey(_selectedId) ||
+          !_catalogues[_selectedId]!.any((entry) => entry.id == value)) {
+        message = 'Chargez les modèles ChatGPT, puis choisissez un modèle '
+            'présent dans la liste de votre compte.';
+        _notify();
+        return false;
+      }
       final next = [
         for (final profile in _profiles)
           profile.id == _selectedId
@@ -625,6 +648,20 @@ class AiConnectionController extends ChangeNotifier {
           throw const AiProviderException('Connexion ChatGPT indisponible.');
         }
         final list = await chatGpt!.listModels(_selectedId);
+        if (list.isNotEmpty &&
+            !list.any((entry) => entry.id == selectedProfile.model)) {
+          final next = [
+            for (final profile in _profiles)
+              profile.id == _selectedId
+                  ? profile.copyWith(model: list.first.id,
+                      toolCallingCompatibility:
+                          AiToolCallingCompatibility.unknown)
+                  : profile,
+          ];
+          await store.write(AiProfilesState(
+              profiles: next, selectedId: _selectedId));
+          _profiles = next;
+        }
         _catalogues[_selectedId] = list;
         message = list.isEmpty ? 'Aucun modèle ChatGPT disponible.'
             : 'Catalogue ChatGPT chargé.';
