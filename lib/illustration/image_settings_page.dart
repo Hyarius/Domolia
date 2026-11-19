@@ -28,6 +28,7 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
   List<ImageModelCapability> _models = const [];
   bool _loading = true;
   bool _loadingModels = false;
+  int _modelLoadVersion = 0;
   bool _override = false;
   bool _saving = false;
   String? _error;
@@ -84,33 +85,54 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           ? 'openai' : 'openuncensored';
 
   Future<void> _loadModels() async {
+    final version = ++_modelLoadVersion;
     final profile = _imageProfile;
     if (profile == null || profile.apiKey.isEmpty) {
       if (mounted) setState(() {
         _models = const [];
-        if (profile != null) _error = 'Clé API manquante pour ce profil.';
+        _loadingModels = false;
+        _error = profile == null
+            ? 'Profil graphique indisponible. Vérifiez la configuration.'
+            : 'Clé API manquante pour ce profil graphique.';
       });
       return;
     }
-    setState(() { _loadingModels = true; _error = null; });
+
+    // Clear results immediately: never display a previous provider's models
+    // while the newly selected provider's catalogue is being loaded.
+    setState(() {
+      _loadingModels = true;
+      _models = const [];
+      _error = null;
+    });
     try {
       final provider = _kind(profile) == 'openai'
           ? OpenAiImageGenerationProvider()
           : OpenUncensoredImageGenerationProvider();
       final models = await provider.listModels(profile.apiKey);
-      if (mounted) setState(() => _models = models);
+      if (!mounted || version != _modelLoadVersion ||
+          _imageProfile?.id != profile.id) return;
+      setState(() => _models = models);
     } on ImageGenerationFailure catch (failure) {
-      if (mounted) setState(() {
-        _models = const [];
-        _error = failure.message;
-      });
+      if (mounted && version == _modelLoadVersion &&
+          _imageProfile?.id == profile.id) {
+        setState(() {
+          _models = const [];
+          _error = failure.message;
+        });
+      }
     } catch (_) {
-      if (mounted) setState(() {
-        _models = const [];
-        _error = 'Impossible de récupérer les modèles graphiques.';
-      });
+      if (mounted && version == _modelLoadVersion &&
+          _imageProfile?.id == profile.id) {
+        setState(() {
+          _models = const [];
+          _error = 'Impossible de récupérer les modèles graphiques.';
+        });
+      }
     } finally {
-      if (mounted) setState(() => _loadingModels = false);
+      if (mounted && version == _modelLoadVersion) {
+        setState(() => _loadingModels = false);
+      }
     }
   }
 
@@ -201,7 +223,7 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           const Center(child: CircularProgressIndicator())
         else ...[
           DropdownButtonFormField<String>(
-            key: const ValueKey('imageProviderProfile'),
+            key: ValueKey('imageProviderProfile-' + _options.profileId),
             initialValue: _options.profileId.isEmpty ? '' : _imageProfile?.id,
             decoration: const InputDecoration(labelText: 'Profil graphique'),
             items: [
@@ -223,7 +245,7 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            key: const ValueKey('imageDirectorProfile'),
+            key: ValueKey('imageDirectorProfile-' + _options.directorProfileId),
             initialValue: widget.ai.profiles.any(
                 (p) => p.id == _options.directorProfileId &&
                     canDirectImages(p))
@@ -244,9 +266,17 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
             },
           ),
           const SizedBox(height: 12),
+          if (_imageProfile != null) ...[
+            const SizedBox(height: 8),
+            Text('Catalogue graphique : ' +
+                (_kind(_imageProfile!) == 'openai'
+                    ? 'OpenAI' : 'OpenUncensored'),
+                style: const TextStyle(color: DomoliaColors.muted)),
+          ],
           if (_loadingModels) const LinearProgressIndicator(),
           DropdownButtonFormField<String>(
-            key: const ValueKey('imageModel'),
+            key: ValueKey('imageModel-' + _options.profileId + ':' +
+                _options.model + ':' + _models.length.toString()),
             initialValue: model?.id ?? '',
             decoration: const InputDecoration(labelText: 'Modèle graphique'),
             items: [
