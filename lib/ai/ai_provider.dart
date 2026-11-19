@@ -294,8 +294,12 @@ AiProviderException _httpFailure(int status, List<int> body) {
     // HTTP status remains authoritative.
   }
   if (code == 'insufficient_quota' ||
+      code == 'credit_balance_exhausted' ||
       code == 'billing_hard_limit_reached' ||
-      code == 'account_quota_exceeded') {
+      code == 'account_quota_exceeded' ||
+      code == 'organization_spend_limit_exceeded' ||
+      code == 'project_spend_limit_exceeded' ||
+      code == 'organization_usage_limit_exceeded') {
     return const AiProviderException(
       'Crédits ou quota API insuffisants. Vérifiez la facturation '
       'de votre projet sur platform.openai.com.',
