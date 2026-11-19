@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
+import '../storage/domolia_storage_paths.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'update_service.dart';
 
@@ -79,7 +79,7 @@ class HttpApkDownloader implements ApkDownloader {
   @override
   Future<String> download(UpdateCandidate candidate,DownloadCancellation cancel,
       void Function(double?) onProgress) async {
-    final root=await getApplicationSupportDirectory();
+    final root=await DomoliaStoragePaths.getSupportDirectory();
     final folder=Directory('${root.path}/updates');
     await folder.create(recursive:true);
     final temp=File('${folder.path}/candidate.apk.part');
