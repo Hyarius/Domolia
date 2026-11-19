@@ -450,9 +450,8 @@ Pas de titre, pas de longues listes, pas d'instructions techniques.
   }
 }
 
-/// Validate and preserve the director's authored text as-is. The only
-/// addition is the optional exclusion sentence when the backend has no
-/// separate negative-prompt parameter.
+/// Preserve the director's positive description, adding the Book style
+/// only when missing. Exclusions stay separate for provider-specific handling.
 String validatedImagePrompt(VisualScene scene, VisualDirection direction,
     {String style = 'illustration cinématographique',
      String negativePrompt = ''}) {
