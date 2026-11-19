@@ -226,7 +226,7 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           const Center(child: CircularProgressIndicator())
         else ...[
           DropdownButtonFormField<String>(
-            key: ValueKey('imageProviderProfile-' + _options.profileId),
+            key: ValueKey('imageProviderProfile-${_options.profileId}'),
             initialValue: _options.profileId.isEmpty ? '' : _imageProfile?.id,
             decoration: const InputDecoration(labelText: 'Profil graphique'),
             items: [
@@ -248,7 +248,7 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            key: ValueKey('imageDirectorProfile-' + _options.directorProfileId),
+            key: ValueKey('imageDirectorProfile-${_options.directorProfileId}'),
             initialValue: widget.ai.profiles.any(
                 (p) => p.id == _options.directorProfileId &&
                     canDirectImages(p))
@@ -271,15 +271,12 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           const SizedBox(height: 12),
           if (_imageProfile != null) ...[
             const SizedBox(height: 8),
-            Text('Catalogue graphique : ' +
-                (_kind(_imageProfile!) == 'openai'
-                    ? 'OpenAI' : 'OpenUncensored'),
+            Text('Catalogue graphique : ${_kind(_imageProfile!) == 'openai' ? 'OpenAI' : 'OpenUncensored'}',
                 style: const TextStyle(color: DomoliaColors.muted)),
           ],
           if (_loadingModels) const LinearProgressIndicator(),
           DropdownButtonFormField<String>(
-            key: ValueKey('imageModel-' + _options.profileId + ':' +
-                _options.model + ':' + _models.length.toString()),
+            key: ValueKey('imageModel-${_options.profileId}:${_options.model}:${_models.length}'),
             initialValue: model?.id ?? '',
             decoration: const InputDecoration(labelText: 'Modèle graphique'),
             items: [
