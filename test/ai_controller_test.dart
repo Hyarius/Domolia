@@ -102,6 +102,40 @@ void main() {
   });
   tearDown(() => controller.dispose());
 
+
+  test('OpenAI image-only profile validates API key without a chat request',
+      () async {
+    await controller.initialize();
+    expect(await controller.save(
+        'https://api.openai.com/v1', '', 'sk-test'), true);
+    expect(controller.imageOnlyProfile, true);
+    expect(controller.model, isEmpty);
+    await controller.testConnection();
+    expect(controller.status, AiConnectionStatus.connected);
+    expect(controller.testReply, contains('Génération d’image non testée'));
+    expect(provider.calls, 0, reason: 'No billed chat completion');
+    expect(provider.lastConfiguration!.model, isEmpty);
+
+    // An old image model stored as a chat model is also migrated safely.
+    expect(await controller.save(
+        'https://api.openai.com/v1', 'gpt-image-2.6-flare', ''), true);
+    expect(controller.model, isEmpty);
+
+    final restart = AiConnectionController(store: store, provider: provider);
+    addTearDown(restart.dispose);
+    await restart.initialize();
+    expect(restart.imageOnlyProfile, true);
+    expect(restart.hasKey, true);
+    expect(restart.model, isEmpty);
+  });
+
+  test('Image-only setting is rejected on unrelated chat providers', () async {
+    await controller.initialize();
+    expect(await controller.save(defaultAiBaseUrl, '', 'ou-key'), false);
+    expect(controller.message, contains('identifiant de modèle'));
+    expect(controller.model, defaultAiModel);
+  });
+
   test('Legacy single-profile behavior persists through restart', () async {
     await controller.initialize();
     expect(controller.profiles, hasLength(1));
