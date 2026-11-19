@@ -87,7 +87,10 @@ void main() {
                   ])),
       )),
     ));
-    await tester.pumpAndSettle();
+    // The first catalogue deliberately never completes until the profile
+    // has switched. A loading spinner makes pumpAndSettle inappropriate.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     expect(find.text('Catalogue graphique : OpenUncensored'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('imageProviderProfile-')));
