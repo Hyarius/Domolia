@@ -48,6 +48,14 @@ class AiConnectionController extends ChangeNotifier {
   String get baseUrl => selectedProfile.baseUrl;
   String get model => selectedProfile.model;
   bool get hasKey => selectedProfile.apiKey.isNotEmpty;
+  static bool isImageModel(String id) =>
+      id.startsWith('gpt-image-') || id == 'chatgpt-image-latest';
+
+  /// Image API credentials do not need a text model or a paid chat probe.
+  bool get imageOnlyProfile =>
+      selectedKind == AiProviderKind.customAi &&
+      Uri.tryParse(baseUrl)?.host == 'api.openai.com' &&
+      (model.isEmpty || isImageModel(model));
   List<AiModel> get models => List.unmodifiable(_catalogues[_selectedId] ?? const <AiModel>[]);
   AiConnectionStatus get status =>
       _statuses[_selectedId] ?? AiConnectionStatus.untested;
@@ -474,7 +482,11 @@ class AiConnectionController extends ChangeNotifier {
         );
       }
       final normalizedUrl = validatedAiBaseUrl(url);
-      final normalizedModel = validatedAiModel(selectedModel);
+      final imageApi = Uri.parse(normalizedUrl).host == 'api.openai.com';
+      final rawModel = selectedModel.trim();
+      final normalizedModel = imageApi &&
+              (rawModel.isEmpty || isImageModel(rawModel))
+          ? '' : validatedAiModel(selectedModel);
       final current = selectedProfile;
       final key = newKey.trim().isNotEmpty ? newKey.trim() : current.apiKey;
       final nextProfile = current.copyWith(
@@ -706,20 +718,30 @@ class AiConnectionController extends ChangeNotifier {
       if (binding.configuration.apiKey.isEmpty) {
         throw const AiProviderException('Enregistrez une clé API avant de tester.');
       }
-      final reply = await binding.provider.complete(
-        binding.configuration,
-        messages: const [
-          AiMessage(
-            role: 'user',
-            content:
-                'Réponds en français, en une phrase très courte, pour confirmer la connexion.',
-          ),
-        ],
-        maxTokens: 64,
-      );
-      _statuses[id] = AiConnectionStatus.connected;
-      _replies[id] =
-          reply.length > 320 ? '${reply.substring(0, 320)}…' : reply;
+      if (imageOnlyProfile) {
+        // Authentication-only GET /models: no chat request and no image cost.
+        // This does NOT confirm image-generation authorization or billing.
+        await binding.provider.listModels(binding.configuration);
+        _statuses[id] = AiConnectionStatus.connected;
+        _replies[id] = 'Clé API reconnue par le catalogue. '
+            'Génération d’image non testée ; les droits et crédits '
+            'seront vérifiés par le fournisseur lors de la génération.';
+      } else {
+        final reply = await binding.provider.complete(
+          binding.configuration,
+          messages: const [
+            AiMessage(
+              role: 'user',
+              content:
+                  'Réponds en français, en une phrase très courte, pour confirmer la connexion.',
+            ),
+          ],
+          maxTokens: 64,
+        );
+        _statuses[id] = AiConnectionStatus.connected;
+        _replies[id] =
+            reply.length > 320 ? '${reply.substring(0, 320)}…' : reply;
+      }
     } on AiProviderException catch (error) {
       _statuses[id] = AiConnectionStatus.invalid;
       _errors[id] = error.userMessage;
