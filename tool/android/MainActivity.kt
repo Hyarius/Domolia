@@ -21,6 +21,13 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 try {
                     when (call.method) {
+                        // Native Context.getFilesDir, same location used by
+                        // path_provider's application support directory.
+                        // Avoids the JNI class lookup used by recent versions
+                        // of path_provider_android on release builds.
+                        "applicationSupportPath" -> {
+                            result.success(applicationContext.filesDir.absolutePath)
+                        }
                         "installedApp" -> {
                             val info = packageInfo(packageName, 0)
                             result.success(
