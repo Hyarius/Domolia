@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:domolia/ai/ai_controller.dart';
 import 'package:domolia/ai/ai_provider.dart';
+import 'package:domolia/ai/chatgpt_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class InMemoryEncryptedStore implements AiProfileStore {
@@ -49,6 +50,44 @@ class FakeChatProvider implements AiChatProvider {
     if (gate != null) return gate!.future;
     return 'Connexion établie, bonjour !';
   }
+}
+
+class FakeChatGptAccount implements ChatGptAccountService {
+  int catalogueCalls = 0;
+  List<AiModel> catalogue = [
+    const AiModel('gpt-test'),
+    const AiModel('gpt-secondary'),
+  ];
+
+  @override
+  Future<ChatGptSession?> session(String id) async => signIn(id);
+
+  @override
+  Future<ChatGptSession> signIn(String id) async => ChatGptSession(
+    clientId: 'test-client',
+    subject: 'test-user',
+    email: 'test@example.org',
+    idToken: 'test-id',
+    accessToken: 'test-access',
+    refreshToken: 'test-refresh',
+    scopes: {'chatgpt.tokens.use.direct', 'resource.invoke'},
+    expiresAt: DateTime.now().toUtc().add(const Duration(hours: 1)),
+  );
+
+  @override
+  Future<String> accessToken(String id) async => 'test-access';
+
+  @override
+  Future<List<AiModel>> listModels(String id) async {
+    catalogueCalls++;
+    return catalogue;
+  }
+
+  @override
+  Future<void> disconnect(String id) async {}
+
+  @override
+  Future<void> delete(String id) async {}
 }
 
 void main() {
@@ -221,4 +260,67 @@ void main() {
     expect(await controller.createProfile('x' * 61), false);
     expect(controller.profiles, hasLength(1));
   });
+
+  test('Switching to ChatGPT never retains the CustomAI model', () async {
+    final account = FakeChatGptAccount();
+    final chat = AiConnectionController(
+      store: store, provider: provider,
+      chatGpt: account, chatGptProvider: provider,
+    );
+    addTearDown(chat.dispose);
+    await chat.initialize();
+    expect(await chat.save(defaultAiBaseUrl,
+        'deepseek-v4.1-flash-1017-uncensored', 'test-key'), true);
+    expect(await chat.setProviderKind(AiProviderKind.chatGpt), true);
+    expect(chat.model, isEmpty);
+    expect(store.stored!.profiles.single.model, isEmpty);
+    await chat.connectChatGpt();
+    expect(chat.model, 'gpt-test');
+    expect(chat.models.map((item) => item.id),
+        ['gpt-test', 'gpt-secondary']);
+    expect(await chat.selectChatGptModel(
+        'deepseek-v4.1-flash-1017-uncensored'), false);
+    expect(chat.model, 'gpt-test');
+    expect(await chat.selectChatGptModel('gpt-secondary'), true);
+    expect(chat.model, 'gpt-secondary');
+    expect(chat.models, hasLength(2),
+        reason: 'Selecting a model must not clear the catalogue.');
+    final connection = await chat.connectionForProfile(chat.selectedProfileId);
+    expect(connection.configuration.model, 'gpt-secondary');
+    expect(connection.configuration.apiKey, 'test-access');
+  });
+
+  test('Legacy ChatGPT profile with a foreign model is repaired on catalogue load',
+      () async {
+    final account = FakeChatGptAccount();
+    store.stored = const AiProfilesState(
+      selectedId: 'legacy',
+      profiles: [
+        AiProfile(
+          id: 'legacy', name: 'ChatGPT', baseUrl: defaultAiBaseUrl,
+          model: 'deepseek-v4.1-flash-1017-uncensored', apiKey: '',
+          kind: AiProviderKind.chatGpt,
+        ),
+      ],
+    );
+    final chat = AiConnectionController(
+      store: store, provider: provider,
+      chatGpt: account, chatGptProvider: provider,
+    );
+    addTearDown(chat.dispose);
+    await chat.initialize();
+    await expectLater(
+      chat.connectionForProfile('legacy'),
+      throwsA(isA<AiProviderException>().having(
+        (error) => error.userMessage, 'message',
+        contains('incompatible'),
+      )),
+    );
+    await chat.loadModels();
+    expect(chat.model, 'gpt-test');
+    expect(store.stored!.profiles.single.model, 'gpt-test');
+    expect(await chat.selectChatGptModel('not-in-account'), false);
+    expect(chat.model, 'gpt-test');
+  });
+
 }
