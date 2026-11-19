@@ -383,7 +383,11 @@ class AiConnectionController extends ChangeNotifier {
       ];
       await store.write(AiProfilesState(profiles: next, selectedId: _selectedId));
       _profiles = next;
-      _invalidate(_selectedId);
+      // A model change invalidates connection probes, but NOT the ChatGPT
+      // catalogue used to validate future selections.
+      _statuses.remove(_selectedId);
+      _errors.remove(_selectedId);
+      _replies.remove(_selectedId);
       return true;
     } catch (_) {
       message = 'Impossible de sélectionner le modèle ChatGPT.';
