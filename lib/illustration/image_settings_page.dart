@@ -11,6 +11,7 @@ class ImageSettingsPage extends StatefulWidget {
   const ImageSettingsPage({
     super.key, required this.ai, required this.preferences,
     required this.onBack, this.sessionId, this.showBackButton = true,
+    this.imageProviderFactory,
   });
 
   final AiConnectionController ai;
@@ -18,6 +19,7 @@ class ImageSettingsPage extends StatefulWidget {
   final String? sessionId;
   final VoidCallback onBack;
   final bool showBackButton;
+  final ImageGenerationProvider Function(AiProfile)? imageProviderFactory;
 
   @override
   State<ImageSettingsPage> createState() => _ImageSettingsPageState();
@@ -106,9 +108,10 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
       _error = null;
     });
     try {
-      final provider = _kind(profile) == 'openai'
-          ? OpenAiImageGenerationProvider()
-          : OpenUncensoredImageGenerationProvider();
+      final provider = widget.imageProviderFactory?.call(profile) ??
+          (_kind(profile) == 'openai'
+              ? OpenAiImageGenerationProvider()
+              : OpenUncensoredImageGenerationProvider());
       final models = await provider.listModels(profile.apiKey);
       if (!mounted || version != _modelLoadVersion ||
           _imageProfile?.id != profile.id) return;
