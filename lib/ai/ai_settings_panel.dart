@@ -863,7 +863,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                 icon: const Icon(Icons.wifi_tethering),
                 label: Text(imageOnlySelected
                     ? 'Vérifier la clé API (sans génération)'
-                    : 'Tester la connexion de chat'),
+                    : 'Tester la connexion'),
               ),
               const SizedBox(height: 8),
               Text(
