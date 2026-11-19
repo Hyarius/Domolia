@@ -226,15 +226,18 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           const Center(child: CircularProgressIndicator())
         else ...[
           DropdownButtonFormField<String>(
+            isExpanded: true,
             key: ValueKey('imageProviderProfile-${_options.profileId}'),
             initialValue: _options.profileId.isEmpty ? '' : _imageProfile?.id,
             decoration: const InputDecoration(labelText: 'Profil graphique'),
             items: [
               const DropdownMenuItem(value: '',
-                  child: Text('Automatique (OpenUncensored)')),
+                  child: Text('Automatique (OpenUncensored)',
+                      maxLines: 1, overflow: TextOverflow.ellipsis)),
               for (final p in widget.ai.profiles)
                 if (_supportsImages(p))
-                  DropdownMenuItem(value: p.id, child: Text(p.name)),
+                  DropdownMenuItem(value: p.id, child: Text(p.name,
+                      maxLines: 1, overflow: TextOverflow.ellipsis)),
             ],
             onChanged: !_canEdit ? null : (id) {
               if (id == null) return;
@@ -248,6 +251,7 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
+            isExpanded: true,
             key: ValueKey('imageDirectorProfile-${_options.directorProfileId}'),
             initialValue: widget.ai.profiles.any(
                 (p) => p.id == _options.directorProfileId &&
@@ -258,10 +262,12 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
                   'distincte du générateur d’images.'),
             items: [
               const DropdownMenuItem(value: '',
-                  child: Text('Automatique (IA conversationnelle)')),
+                  child: Text('Automatique (IA conversationnelle)',
+                      maxLines: 1, overflow: TextOverflow.ellipsis)),
               for (final p in widget.ai.profiles)
                 if (canDirectImages(p))
-                  DropdownMenuItem(value: p.id, child: Text(p.name)),
+                  DropdownMenuItem(value: p.id, child: Text(p.name,
+                      maxLines: 1, overflow: TextOverflow.ellipsis)),
             ],
             onChanged: !_canEdit ? null : (id) {
               if (id != null) setState(() => _options =
@@ -276,14 +282,17 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           ],
           if (_loadingModels) const LinearProgressIndicator(),
           DropdownButtonFormField<String>(
+            isExpanded: true,
             key: ValueKey('imageModel-${_options.profileId}:${_options.model}:${_models.length}'),
             initialValue: model?.id ?? '',
             decoration: const InputDecoration(labelText: 'Modèle graphique'),
             items: [
               const DropdownMenuItem(value: '',
-                  child: Text('Automatique (recommandé)')),
+                  child: Text('Automatique (recommandé)',
+                      maxLines: 1, overflow: TextOverflow.ellipsis)),
               for (final m in _models)
-                DropdownMenuItem(value: m.id, child: Text(m.id)),
+                DropdownMenuItem(value: m.id, child: Text(m.id,
+                    maxLines: 1, overflow: TextOverflow.ellipsis)),
             ],
             onChanged: !_canEdit ? null : (id) {
               if (id == null) return;
