@@ -57,11 +57,12 @@ class ImageGenerationRequest {
   const ImageGenerationRequest({
     required this.model,
     required this.prompt,
+    this.negativePrompt = '',
     this.size = '1024x1024',
     this.quality,
     this.count = 1,
   });
-  final String model, prompt, size;
+  final String model, prompt, negativePrompt, size;
   final String? quality;
   final int count;
 }
@@ -360,7 +361,8 @@ abstract class _HttpImageProvider implements ImageGenerationProvider {
         request.count < 1 || request.count > model.maximumImages ||
         (request.quality != null &&
          !model.qualities.contains(request.quality)) ||
-        request.prompt.trim().isEmpty || request.prompt.length > 8000) {
+        request.prompt.trim().isEmpty || request.prompt.length > 8000 ||
+        request.negativePrompt.length > 1500) {
       throw const ImageGenerationFailure(
           ImageFailureKind.unsupported, 'Options graphiques incompatibles.');
     }
@@ -417,6 +419,45 @@ class OpenAiImageGenerationProvider extends _HttpImageProvider {
 }
 
 class OpenUncensoredImageGenerationProvider extends _HttpImageProvider {
+  // /v1/images/generations uses negative_prompt for Civitai checkpoints;
+  // it is ignored for Venice-backed models (OpenUncensored API docs).
+  static const _civitaiModels = <String>{
+    'juggernaut-xl', 'cyberrealistic-xl', 'pornmaster',
+    'pony-diffusion-v6', 'cyberrealistic-pony', 'pony-realism',
+    'wai-illustrious', 'hassaku-xl', 'noobai-xl',
+  };
+  static const _veniceModels = <String>{
+    'z-image-turbo', 'chroma',
+    'lustify-v8', 'lustify-v7', 'lustify-sdxl',
+    'qwen-image', 'qwen-image-3-uncensored', 'hidream-o1-dev',
+  };
+
+  // Venice's compatible endpoint caps positive prompts at 1500 chars.
+  // Keep the main description clean: add at most one short no-overlay
+  // instruction instead of repeating all book and director exclusions.
+  static String _positivePrompt(ImageGenerationRequest request) {
+    if (!_veniceModels.contains(request.model)) return request.prompt;
+    const noOverlay = 'Image sans texte, bulles de dialogue ni signature.';
+    final mentionsOverlay = RegExp(
+      r'(texte|lettre|text|subtitle|sous-titre|bulle|dialogue|'
+      r'filigrane|watermark|signature|légende)',
+      caseSensitive: false,
+    ).hasMatch(request.negativePrompt);
+    final alreadyCovered = RegExp(
+      r'(sans texte|sans inscription|sans typographie|without text)',
+      caseSensitive: false,
+    ).hasMatch(request.prompt);
+    final prompt = mentionsOverlay && !alreadyCovered
+        ? request.prompt.trim() + ' ' + noOverlay
+        : request.prompt.trim();
+    if (prompt.length > 1500) {
+      throw const ImageGenerationFailure(
+          ImageFailureKind.unsupported,
+          'Description trop longue pour ce modèle (1500 caractères). '
+          'Raccourcissez le prompt ou régénérez la mise en scène.');
+    }
+    return prompt;
+  }
   OpenUncensoredImageGenerationProvider({
     http.Client? client,
     super.diagnostics,
@@ -463,9 +504,13 @@ class OpenUncensoredImageGenerationProvider extends _HttpImageProvider {
           ImageFailureKind.unsupported, 'Modèle graphique indisponible.');
     }
     _validate(request, models.first);
+    final prompt = _positivePrompt(request);
     final data = await _json('POST', 'images/generations', apiKey, {
       'model': request.model,
-      'prompt': request.prompt,
+      'prompt': prompt,
+      if (_civitaiModels.contains(request.model) &&
+          request.negativePrompt.trim().isNotEmpty)
+        'negative_prompt': request.negativePrompt.trim(),
       'size': request.size,
       'n': request.count,
       'response_format': 'b64_json',
