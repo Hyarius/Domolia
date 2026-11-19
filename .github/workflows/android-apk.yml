@@ -50,6 +50,14 @@ jobs:
       - name: Installer les dépendances
         run: flutter pub get
 
+      # Freeze the plugin affected by release-only JNI class lookups.
+      # Until an emulator smoke test covers the newer native implementation,
+      # do not silently upgrade the transitive Android platform package.
+      - name: Vérifier la version Android du stockage
+        shell: bash
+        run: |
+          flutter pub deps --style=compact | grep -F 'path_provider_android 2.2.23'
+
       - name: Analyse statique
         run: flutter analyze
 
