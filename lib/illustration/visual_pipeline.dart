@@ -414,8 +414,9 @@ ancienne mémoire visual_current. Une pose ancienne n'est pas permanente.
 COMPOSITION ET GÉOMÉTRIE (priorité absolue)
 Décris d'abord, en UNE ou DEUX phrases simples, les positions et
 orientations des personnages : qui est assis, debout, au sol, derrière,
-devant, à côté ou ENTRE qui. Situe explicitement les mains et les jambes,
-les appuis et contacts physiques : QUI touche QUOI et avec QUELLE main.
+devant, à côté ou ENTRE qui. Précise les mains, les appuis et les contacts physiques lorsqu'ils
+comptent pour comprendre la pose : QUI touche QUOI et avec QUELLE main.
+N'invente pas de contact ou de position de jambes non décrits.
 Les relations spatiales doivent être non ambiguës, sans enchaînement
 de mouvements. Ne déduis pas d'autre contact que celui montré.
 Choisis un cadrage et un angle réellement compatibles avec la visibilité
@@ -440,8 +441,10 @@ Un palier d’immeuble ne doit pas devenir un porche extérieur.
 
 STYLE ET LONGUEUR
 Termine par un éclairage, une palette et un style brefs.
-Écris de courtes phrases descriptives, PAS une liste de tags isolés :
-les relations entre éléments doivent rester explicites.
+Écris des phrases naturelles et visuelles, PAS un inventaire de tags.
+Privilégie le geste central et les rapports de position aux longues
+énumérations d'anatomie, de vêtements ou de couleurs. N'énonce un détail
+que s'il est établi ou indispensable à la compréhension de l'image.
 Vise 300 à 700 caractères pour la description positive habituelle,
 avec au plus 1100 caractères si la scène l'exige. Place les détails
 ESSENTIELS en premier ; supprime les détails décoratifs en dernier.
