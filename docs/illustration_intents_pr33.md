@@ -47,7 +47,7 @@ transforme pas une intention en fait ni en événement narratif supplémentaire.
 Un appui long sur une bulle IA ouvre « Copier » et « Illustrer ».
 Le message est surligné pendant l'ouverture du menu. « Illustrer »
 insère un `ChatIllustrationIntent` immédiatement après la bulle, avec
-son texte (500 caractères max) comme description initiale. Cette intention
+l'intégralité du texte sélectionné comme description initiale, sans troncature à 500 caractères. Cette intention
 est sauvegardée avec la timeline, sans appel IA, sans modifier le RAW
 original et sans doublons si une intention suit déjà directement le texte.
 La réplique d'ouverture sans tour joueur ne peut pas être illustrée par

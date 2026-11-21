@@ -45,7 +45,7 @@ class VisualScene {
         (e.description.trim().isEmpty ? '' :
           ' ; description : ' + VisualSceneSelector._short(e.description)) +
         ' ; rôle : ' + e.role),
-    ...partyCharacters.entries.map((e) => 'Personnage de Partie ' + e.key + ' (' + e.value + ')'),
+    ...partyCharacters.entries.map((e) => 'Identité de Partie connue (présence à vérifier) ' + e.key + ' (' + e.value + ')'),
     ...places.map((e) => 'Lieu canonique ' + e.id + ' (' + e.name + ') : ' +
         VisualSceneSelector._short(e.description) + ' ; éléments : ' +
         VisualSceneSelector._short(e.features)),
@@ -103,15 +103,29 @@ class VisualSceneSelector {
     // scene, even if the final short instruction only uses a pronoun.
     final sceneNames = sceneMessages.reversed.take(24)
         .map((e) => e.text).join('\n');
-    final relevantText = visible + '\n' + sceneNames;
+    // Earlier dialogue is context, not evidence that a character is still
+    // physically present. Prefer the selected instant and recent turns.
+    final relevantText = visible;
     final characters = <LoreCharacter>[
       for (final c in lore.characters)
         if (_mentioned(relevantText, [c.name, ...c.aliases])) c,
     ].take(5).toList();
+    // Recover a single previously introduced character for a pronoun-only
+    // instant, without promoting every historical mention into the cast.
+    if (characters.isEmpty) {
+      final earlier = lore.characters.where(
+          (c) => _mentioned(sceneNames, [c.name, ...c.aliases])).toList();
+      if (earlier.length == 1) characters.add(earlier.single);
+    }
     final partyCharacters = <String, String>{};
-    final speakers = sceneMessages
+    final allSpeakers = sceneMessages
         .where((e) => e.speaker == ChatSpeaker.character)
-        .toList().reversed;
+        .toList().reversed.toList();
+    final recentSpeakers = allSpeakers.where((entry) =>
+        messages.contains(entry) ||
+        _mentioned(description, [entry.name])).toList();
+    final speakers = recentSpeakers.isNotEmpty
+        ? recentSpeakers : allSpeakers.take(1);
     for (final entry in speakers) {
       final name = entry.name.trim();
       if (name.isEmpty || name.length > 90) continue;
@@ -248,7 +262,7 @@ class VisualCharacterAppearance {
       throw const FormatException('Personnage visuel inconnu.');
     }
     String field(Object? text) {
-      if (text is! String || text.trim().isEmpty || text.length > 250) {
+      if (text is! String || text.trim().isEmpty || text.length > 800) {
         throw const FormatException('Description d’apparence invalide.');
       }
       return VisualDirection._visualField(text, scene);
@@ -314,17 +328,22 @@ class VisualDirection {
       throw const FormatException('Exclusions visuelles invalides.');
     }
 
+    // Appearance proposals are optional metadata. A malformed, oversized or
+    // unknown actor must never invalidate an otherwise valid image prompt.
+    final appearances = <VisualCharacterAppearance>[];
+    final seenAppearanceIds = <String>{};
     final rawAppearances = data['appearances'];
-    if (rawAppearances != null &&
-        (rawAppearances is! List || rawAppearances.length > 5)) {
-      throw const FormatException('Trop de personnages dans la scène.');
-    }
-    final appearances = [
-      for (final item in (rawAppearances as List? ?? const []))
-        VisualCharacterAppearance.parse(item, scene),
-    ];
-    if (appearances.map((a) => a.id).toSet().length != appearances.length) {
-      throw const FormatException('Apparence visuelle dupliquée.');
+    if (rawAppearances is List) {
+      for (final item in rawAppearances.take(5)) {
+        try {
+          final appearance = VisualCharacterAppearance.parse(item, scene);
+          if (seenAppearanceIds.add(appearance.id)) {
+            appearances.add(appearance);
+          }
+        } on FormatException {
+          // Ignore only this proposal, not the director's visual prompt.
+        }
+      }
     }
     return VisualDirection(
       prompt: prompt,
@@ -364,7 +383,7 @@ class VisualDirection {
     if (value is! String || RegExp(r'[\r\n]').hasMatch(value)) {
       throw const FormatException('Description d’apparence invalide.');
     }
-    return _validateVisualText(value, scene, maxLength: 250);
+    return _validateVisualText(value, scene, maxLength: 800);
   }
 }
 
@@ -408,7 +427,10 @@ Ajoute ensuite les seuls détails d'apparence utiles : âge apparent,
 silhouette, visage, yeux, cheveux, tenue et accessoires établis.
 Les caractéristiques physiques nécessaires mais inconnues peuvent être
 proposées sobrement, jamais présentées comme faits confirmés.
-N'ajoute ni personnage ni meuble gratuit. Ne garde du décor que les
+N'ajoute ni personnage ni meuble gratuit. Un personnage nommé dans
+l'historique n'est pas automatiquement présent dans l'image. Ne montre
+que les personnages physiquement présents à l'instant demandé.
+Ne garde du décor que les
 éléments narrativement importants. Un fond blanc est préférable si le
 lieu est inconnu en style manga ; En style réaliste, fond neutre ou flou.
 En style manga, le fond blanc et quelques traits suffisent.
@@ -433,7 +455,9 @@ Réponds UNIQUEMENT en JSON :
  "negativePrompt":"liste dédoublonnée de quelques exclusions, ou chaîne vide",
  "appearances":[{"id":"ID autorisé","identity":"physique stable",
                  "current":"tenue et pose"}]}
-"appearances" est facultatif. N'utilise que les IDs autorisés.
+"appearances" est facultatif. Chaque champ identity/current fait 800
+caractères maximum ; omets un champ incertain plutôt que de l'inventer.
+N'utilise que les IDs autorisés et seulement pour les acteurs visibles.
 N'ajoute ni Markdown, ni dialogue, ni texte visible ni pensées.
 Pas de titre, pas de longues listes, pas d'instructions techniques.
 '''),

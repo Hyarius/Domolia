@@ -425,6 +425,31 @@ void main() {
   });
 
   group('Manual [IMAGE] intent', () {
+
+    test('manual illustration keeps a long selected appearance intact',
+        () async {
+      final provider = _ScriptProvider('[NARRATION]\\nUnused.');
+      final chat = _chat(provider, IllustrationMode.disabled);
+      addTearDown(chat.dispose);
+      final clothing = List.filled(14,
+          'Elle porte une veste de travail anthracite et un jean délavé. ')
+          .join();
+      final longAppearance = 'Maëlle, debout près de la porte. '
+          '$clothing'
+          'Ses chaussures de marche sont bien visibles.';
+      expect(longAppearance.length, greaterThan(500));
+      chat.restoreTimeline([
+        const ChatEntry(id: 1, speaker: ChatSpeaker.player,
+            name: 'Vous', text: 'Je regarde Maëlle.'),
+        ChatEntry(id: 2, speaker: ChatSpeaker.narrator,
+            name: 'Narrateur', text: longAppearance),
+      ]);
+      expect(await chat.illustrateMessage(2), isTrue);
+      final intent = chat.timeline.whereType<ChatIllustrationIntent>().single;
+      expect(intent.description, longAppearance);
+      expect(intent.description, endsWith('bien visibles.'));
+    });
+
     test('inserts after chosen AI bubble, preserves RAW and avoids duplicates',
         () async {
       final provider = _ScriptProvider('[NARRATION]\nUnused.');
