@@ -111,7 +111,7 @@ void main() {
     expect(restored.narrativeStyle, oldBook.narrativeStyle);
     expect(restored.narrator.systemPrompt, contains(oldBook.narrativeStyle));
     expect(restored.narrator.systemPrompt, contains('ÉCRITURE ET DIALOGUES'));
-    expect(restored.narrator.systemPrompt, contains('sans sauter'));
+    expect(restored.narrator.systemPrompt, contains('Ne saute pas une étape'));
     expect(restored.narrator.systemPrompt, contains('Ne joue jamais'));
   });
 
