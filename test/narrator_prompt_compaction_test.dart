@@ -89,7 +89,12 @@ void main() {
     }
     expect(prompt, isNot(contains('ni balises')));
     expect(prompt, isNot(contains('sans format informatique')));
-    expect(prompt.length, lessThan(1700));
+    // Includes the literary guardrails even for previously saved Books.
+    expect(prompt.length, lessThan(2700));
+    expect(prompt, contains('ÉCRITURE ET DIALOGUES'));
+    expect(prompt, contains('des répliques naturelles'));
+    expect(prompt, contains('Ne force ni rencontre'));
+    expect(prompt, contains('Un personnage déjà rencontré'));
     expect(theatricalNarratorProtocol, contains('[NARRATION]'));
     expect(theatricalNarratorProtocol, contains('[PERSONNAGE:Nom]'));
     expect(theatricalNarratorProtocol, contains('[SCENE]'));
@@ -107,6 +112,9 @@ void main() {
     expect(prompt, contains('Live Memory'));
     expect(prompt, contains('promesse conditionnelle'));
     expect(prompt, contains('secrets'));
+    expect(prompt, contains('ÉCRITURE ET DIALOGUES'));
+    expect(prompt, contains('Une réponse de quelques lignes'));
+    expect(prompt, contains('STYLE PERSONNALISÉ'));
   });
 
   test('tuning remains configurable without repeating the player rules', () {
