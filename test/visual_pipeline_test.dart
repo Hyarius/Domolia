@@ -141,9 +141,9 @@ void main() {
         {
           'id': 'party:maelle',
           'identity': 'Une grande femme aux cheveux noirs. ' +
-              ('Visage anguleux aux yeux clairs. ' * 12),
+              List.filled(12, 'Visage anguleux aux yeux clairs. ').join(),
           'current': 'Veste de travail anthracite. ' +
-              ('Elle reste debout près de la porte. ' * 8),
+              List.filled(8, 'Elle reste debout près de la porte. ').join(),
         },
         {
           'id': 'party:missing',
@@ -181,14 +181,14 @@ void main() {
           name: 'Élodie', text: 'Je te laisse passer.'),
       const ChatEntry(id: 2, speaker: ChatSpeaker.narrator,
           name: 'Narrateur', text: 'Élodie s’éloigne du couloir.'),
-      for (var i = 3; i <= 8; i++)
+      for (var i = 3; i <= 13; i++)
         ChatEntry(id: i, speaker: ChatSpeaker.narrator,
             name: 'Narrateur', text: 'Le couloir reste calme.'),
-      const ChatEntry(id: 9, speaker: ChatSpeaker.character,
+      const ChatEntry(id: 14, speaker: ChatSpeaker.character,
           name: 'Maëlle', text: 'Je suis ici.'),
-      const ChatEntry(id: 10, speaker: ChatSpeaker.narrator,
+      const ChatEntry(id: 15, speaker: ChatSpeaker.narrator,
           name: 'Narrateur', text: 'Maëlle est face au joueur.'),
-      const ChatIllustrationIntent(id: 11, playerEventId: 8,
+      const ChatIllustrationIntent(id: 16, playerEventId: 8,
           description: 'Maëlle, debout devant le joueur.'),
     ];
     final selected = const VisualSceneSelector().select(
