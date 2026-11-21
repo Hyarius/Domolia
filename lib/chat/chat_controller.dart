@@ -371,9 +371,9 @@ class NarrativeChatController extends ChangeNotifier {
     final index = _timeline.indexWhere((event) => event.id == messageId);
     final entry = _timeline[index] as ChatEntry;
     final playerId = playerIdForAiMessage(messageId)!;
-    final source = entry.text.trim();
-    final description = source.length <= 500
-        ? source : source.substring(0, 500).trimRight();
+    // A selected narrative bubble can be up to 6000 characters. Keep its
+    // complete visual details instead of cutting the pose or clothing midword.
+    final description = entry.text.trim();
     final intent = ChatIllustrationIntent(
       id: _nextId, playerEventId: playerId, description: description,
     );
