@@ -53,6 +53,66 @@ void main() {
     ]).profileId, 'external');
   });
 
+  test('An image-only OpenAI key uses ChatGPT for visual direction',
+      () {
+    const profiles = [
+      AiProfile(
+        id: 'openai-image', name: 'OpenAI images',
+        kind: AiProviderKind.customAi,
+        baseUrl: 'https://api.openai.com/v1', model: '',
+        apiKey: 'sk-image-only',
+      ),
+      AiProfile(
+        id: 'chatgpt-narrator', name: 'ChatGPT',
+        kind: AiProviderKind.chatGpt,
+        baseUrl: 'https://api.openai.com/v1', model: 'gpt-test',
+        apiKey: '',
+      ),
+    ];
+    const options = ImageGenerationOptions(profileId: 'openai-image');
+    final resolved = options.resolveProfiles(profiles);
+    expect(resolved.profileId, 'openai-image');
+    expect(resolved.directorProfileId, 'chatgpt-narrator');
+    expect(canDirectImages(profiles.first), false);
+    expect(canDirectImages(profiles.last), true);
+
+    final invalidDirector = const ImageGenerationOptions(
+      profileId: 'openai-image',
+      directorProfileId: 'openai-image',
+    ).resolveProfiles(profiles);
+    expect(invalidDirector.directorProfileId, 'chatgpt-narrator');
+  });
+
+  test('An explicit OpenAI profile without a key cannot fall back to OU',
+      () {
+    final profiles = const [
+      AiProfile(
+        id: 'openai-images', name: 'ChatGPT - Image',
+        kind: AiProviderKind.customAi,
+        baseUrl: 'https://api.openai.com/v1', model: '', apiKey: '',
+      ),
+      AiProfile(
+        id: 'ou', name: 'OpenUncensored',
+        kind: AiProviderKind.customAi,
+        baseUrl: defaultAiBaseUrl, model: defaultAiModel,
+        apiKey: 'ou-key',
+      ),
+    ];
+    const options = ImageGenerationOptions(
+        profileId: 'openai-images', directorProfileId: 'ou');
+    final resolved = options.resolveProfiles(profiles);
+    expect(resolved.profileId, 'openai-images');
+    expect(resolved.directorProfileId, 'ou');
+    expect(options.profileId, 'openai-images');
+    // An unknown explicitly requested profile is also not silently replaced.
+    expect(const ImageGenerationOptions(
+      profileId: 'removed-profile',
+    ).resolveProfiles(profiles).profileId, 'removed-profile');
+    // Auto mode still chooses the funded OU profile for backwards compatibility.
+    expect(const ImageGenerationOptions()
+        .resolveProfiles(profiles).profileId, 'ou');
+  });
+
   test('Only API configuration is persisted, legacy art keys ignored', () {
     final settings = ImageGenerationOptions.fromJson({
       'profileId':'image',

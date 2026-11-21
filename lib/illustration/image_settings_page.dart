@@ -11,6 +11,7 @@ class ImageSettingsPage extends StatefulWidget {
   const ImageSettingsPage({
     super.key, required this.ai, required this.preferences,
     required this.onBack, this.sessionId, this.showBackButton = true,
+    this.imageProviderFactory,
   });
 
   final AiConnectionController ai;
@@ -18,6 +19,7 @@ class ImageSettingsPage extends StatefulWidget {
   final String? sessionId;
   final VoidCallback onBack;
   final bool showBackButton;
+  final ImageGenerationProvider Function(AiProfile)? imageProviderFactory;
 
   @override
   State<ImageSettingsPage> createState() => _ImageSettingsPageState();
@@ -28,6 +30,7 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
   List<ImageModelCapability> _models = const [];
   bool _loading = true;
   bool _loadingModels = false;
+  int _modelLoadVersion = 0;
   bool _override = false;
   bool _saving = false;
   String? _error;
@@ -84,33 +87,55 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           ? 'openai' : 'openuncensored';
 
   Future<void> _loadModels() async {
+    final version = ++_modelLoadVersion;
     final profile = _imageProfile;
     if (profile == null || profile.apiKey.isEmpty) {
       if (mounted) setState(() {
         _models = const [];
-        if (profile != null) _error = 'Clé API manquante pour ce profil.';
+        _loadingModels = false;
+        _error = profile == null
+            ? 'Profil graphique indisponible. Vérifiez la configuration.'
+            : 'Clé API manquante pour ce profil graphique.';
       });
       return;
     }
-    setState(() { _loadingModels = true; _error = null; });
+
+    // Clear results immediately: never display a previous provider's models
+    // while the newly selected provider's catalogue is being loaded.
+    setState(() {
+      _loadingModels = true;
+      _models = const [];
+      _error = null;
+    });
     try {
-      final provider = _kind(profile) == 'openai'
-          ? OpenAiImageGenerationProvider()
-          : OpenUncensoredImageGenerationProvider();
+      final provider = widget.imageProviderFactory?.call(profile) ??
+          (_kind(profile) == 'openai'
+              ? OpenAiImageGenerationProvider()
+              : OpenUncensoredImageGenerationProvider());
       final models = await provider.listModels(profile.apiKey);
-      if (mounted) setState(() => _models = models);
+      if (!mounted || version != _modelLoadVersion ||
+          _imageProfile?.id != profile.id) return;
+      setState(() => _models = models);
     } on ImageGenerationFailure catch (failure) {
-      if (mounted) setState(() {
-        _models = const [];
-        _error = failure.message;
-      });
+      if (mounted && version == _modelLoadVersion &&
+          _imageProfile?.id == profile.id) {
+        setState(() {
+          _models = const [];
+          _error = failure.message;
+        });
+      }
     } catch (_) {
-      if (mounted) setState(() {
-        _models = const [];
-        _error = 'Impossible de récupérer les modèles graphiques.';
-      });
+      if (mounted && version == _modelLoadVersion &&
+          _imageProfile?.id == profile.id) {
+        setState(() {
+          _models = const [];
+          _error = 'Impossible de récupérer les modèles graphiques.';
+        });
+      }
     } finally {
-      if (mounted) setState(() => _loadingModels = false);
+      if (mounted && version == _modelLoadVersion) {
+        setState(() => _loadingModels = false);
+      }
     }
   }
 
@@ -201,15 +226,18 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           const Center(child: CircularProgressIndicator())
         else ...[
           DropdownButtonFormField<String>(
-            key: const ValueKey('imageProviderProfile'),
+            isExpanded: true,
+            key: ValueKey('imageProviderProfile-${_options.profileId}'),
             initialValue: _options.profileId.isEmpty ? '' : _imageProfile?.id,
             decoration: const InputDecoration(labelText: 'Profil graphique'),
             items: [
               const DropdownMenuItem(value: '',
-                  child: Text('Automatique (OpenUncensored)')),
+                  child: Text('Automatique (OpenUncensored)',
+                      maxLines: 1, overflow: TextOverflow.ellipsis)),
               for (final p in widget.ai.profiles)
                 if (_supportsImages(p))
-                  DropdownMenuItem(value: p.id, child: Text(p.name)),
+                  DropdownMenuItem(value: p.id, child: Text(p.name,
+                      maxLines: 1, overflow: TextOverflow.ellipsis)),
             ],
             onChanged: !_canEdit ? null : (id) {
               if (id == null) return;
@@ -223,16 +251,23 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            key: const ValueKey('imageDirectorProfile'),
+            isExpanded: true,
+            key: ValueKey('imageDirectorProfile-${_options.directorProfileId}'),
             initialValue: widget.ai.profiles.any(
-                (p) => p.id == _options.directorProfileId)
+                (p) => p.id == _options.directorProfileId &&
+                    canDirectImages(p))
                 ? _options.directorProfileId : '',
-            decoration: const InputDecoration(labelText: 'Metteur en scène IA'),
+            decoration: const InputDecoration(labelText: 'Metteur en scène IA',
+              helperText: 'Une IA de chat (ChatGPT ou CustomAI), '
+                  'distincte du générateur d’images.'),
             items: [
               const DropdownMenuItem(value: '',
-                  child: Text('Automatique (OpenUncensored)')),
+                  child: Text('Automatique (IA conversationnelle)',
+                      maxLines: 1, overflow: TextOverflow.ellipsis)),
               for (final p in widget.ai.profiles)
-                DropdownMenuItem(value: p.id, child: Text(p.name)),
+                if (canDirectImages(p))
+                  DropdownMenuItem(value: p.id, child: Text(p.name,
+                      maxLines: 1, overflow: TextOverflow.ellipsis)),
             ],
             onChanged: !_canEdit ? null : (id) {
               if (id != null) setState(() => _options =
@@ -240,16 +275,24 @@ class _ImageSettingsPageState extends State<ImageSettingsPage> {
             },
           ),
           const SizedBox(height: 12),
+          if (_imageProfile != null) ...[
+            const SizedBox(height: 8),
+            Text('Catalogue graphique : ${_kind(_imageProfile!) == 'openai' ? 'OpenAI' : 'OpenUncensored'}',
+                style: const TextStyle(color: DomoliaColors.muted)),
+          ],
           if (_loadingModels) const LinearProgressIndicator(),
           DropdownButtonFormField<String>(
-            key: const ValueKey('imageModel'),
+            isExpanded: true,
+            key: ValueKey('imageModel-${_options.profileId}:${_options.model}:${_models.length}'),
             initialValue: model?.id ?? '',
             decoration: const InputDecoration(labelText: 'Modèle graphique'),
             items: [
               const DropdownMenuItem(value: '',
-                  child: Text('Automatique (recommandé)')),
+                  child: Text('Automatique (recommandé)',
+                      maxLines: 1, overflow: TextOverflow.ellipsis)),
               for (final m in _models)
-                DropdownMenuItem(value: m.id, child: Text(m.id)),
+                DropdownMenuItem(value: m.id, child: Text(m.id,
+                    maxLines: 1, overflow: TextOverflow.ellipsis)),
             ],
             onChanged: !_canEdit ? null : (id) {
               if (id == null) return;

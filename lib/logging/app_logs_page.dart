@@ -16,6 +16,7 @@ class _AppLogsPageState extends State<AppLogsPage> {
   late final AppLogger _logger = widget.logger ?? AppLogger.current;
   List<AppLogEntry> _entries = [];
   AppLogLevel? _filter;
+  bool _aiOnly = false;
   String _search = '';
   bool _loading = false;
   bool _loadFailed = false;
@@ -108,6 +109,7 @@ class _AppLogsPageState extends State<AppLogsPage> {
     final query = _search.toLowerCase();
     final filtered = _entries.where((entry) =>
       (_filter == null || entry.level == _filter) &&
+      (!_aiOnly || entry.component == 'ai.http') &&
       (entry.message.toLowerCase().contains(query) ||
        entry.component.toLowerCase().contains(query) ||
        entry.level.name.contains(query))).toList();
@@ -155,6 +157,18 @@ class _AppLogsPageState extends State<AppLogsPage> {
             ],
             onChanged: (value) => setState(() => _filter = value)),
         ])),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: FilterChip(
+            key: const ValueKey('logsAiOnly'),
+            label: const Text('Appels IA uniquement'),
+            selected: _aiOnly,
+            onSelected: (value) => setState(() => _aiOnly = value),
+          ),
+        ),
+      ),
       const SizedBox(height: DomoliaSpacing.compact),
       if (_logger.failedOperations > 0)
         const Text('Des opérations du journal ont échoué.',

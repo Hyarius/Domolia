@@ -268,7 +268,7 @@ class ChatGptResponsesProvider
         if (configuration.reasoningEffort != null)
           'reasoning': {'effort': configuration.reasoningEffort},
       });
-    final exchange = diagnostics?.begin(
+    final exchange = (diagnostics ?? AiExchangeRecorder()).begin(
       provider: 'chatgpt-responses',
       method: request.method,
       url: request.url.toString(),
@@ -280,13 +280,12 @@ class ChatGptResponsesProvider
     http.StreamedResponse response;
     try {
       response = await _client.send(request).timeout(const Duration(seconds: 25));
-      exchange?.statusCode = response.statusCode;
+      exchange.statusCode = response.statusCode;
     } catch (_) {
       throw const AiProviderException('Connexion à ChatGPT impossible.');
     }
     if (response.statusCode != 200) {
-      if (exchange != null) {
-        try {
+      try {
           await for (final bytes in response.stream.timeout(
               const Duration(seconds: 8))) {
             exchange.addRawResponse(bytes);
@@ -295,7 +294,6 @@ class ChatGptResponsesProvider
         } catch (_) {
           // Preserve the HTTP code if the upstream error stream is broken.
         }
-      }
       switch (response.statusCode) {
         case 400:
           throw const AiProviderException(
@@ -315,7 +313,7 @@ class ChatGptResponsesProvider
     var completed = false;
     try {
       await for (final line in response.stream.map((bytes) {
-            exchange?.addRawResponse(bytes);
+            exchange.addRawResponse(bytes);
             return bytes;
           }).transform(utf8.decoder)
             .transform(const LineSplitter())

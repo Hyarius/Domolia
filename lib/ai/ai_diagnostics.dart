@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-/// A deliberately bounded, in-memory record of the actual outgoing HTTP
-/// JSON and the unparsed incoming HTTP response. Nothing is persisted until
-/// the user explicitly exports it. Never store Authorization credentials.
+import '../logging/app_logger.dart';
+
+/// A deliberately bounded record of the actual outgoing HTTP JSON and
+/// incoming HTTP response. The hosting Party may persist redacted exchanges
+/// locally according to its retention policy; app-level logs contain metadata
+/// only. Never store Authorization credentials.
 class AiExchangeRecorder {
   AiExchange? last;
 
@@ -33,6 +36,14 @@ class AiExchangeRecorder {
       secret: secret,
       accept: accept,
     );
+    // One lightweight app-log entry for every outgoing AI request, including
+    // image preparation and model lookups. The full prompt is only available
+    // in the per-Party diagnostics, never in the shared app journal.
+    AppLogger.info('Appel IA lancé', component: 'ai.http', details: {
+      'exchangeId': value.createdAtUtc.microsecondsSinceEpoch,
+      'provider': provider,
+      'method': method,
+    });
     final capture = Zone.current[_captureZoneKey];
     if (capture is void Function(AiExchange)) {
       capture(value);
@@ -75,6 +86,7 @@ class AiExchange {
   int toolCalls = 0;
   String? error;
   bool cancelled = false;
+  bool _completionLogged = false;
   List<Map<String, dynamic>> interpretedEvents = const [];
 
   /// Called after the narrator has decoded the response (also on failure).
@@ -93,6 +105,32 @@ class AiExchange {
     this.error = error;
     this.cancelled = cancelled;
     this.interpretedEvents = List.unmodifiable(interpretedEvents);
+    // Some stages enrich a captured exchange after the transport has ended.
+    // Emit a single terminal record rather than counting one request twice.
+    if (!_completionLogged) {
+      _completionLogged = true;
+      final details = <String, Object?>{
+        'exchangeId': createdAtUtc.microsecondsSinceEpoch,
+        'provider': provider,
+        'stage': stage ?? 'unclassified',
+        'durationMs': completedAtUtc!.difference(createdAtUtc).inMilliseconds,
+        'toolCalls': toolCalls,
+        'cancelled': cancelled,
+      };
+      if (playerEventId != null) details['playerEventId'] = playerEventId;
+      if (statusCode != null) details['statusCode'] = statusCode;
+      if (promptTokens != null) details['promptTokens'] = promptTokens;
+      if (completionTokens != null) {
+        details['completionTokens'] = completionTokens;
+      }
+      if (error == null && !cancelled && (statusCode == null || statusCode! < 400)) {
+        AppLogger.info('Appel IA terminé', component: 'ai.http',
+            details: details);
+      } else {
+        AppLogger.warning('Appel IA interrompu ou échoué',
+            component: 'ai.http', details: details);
+      }
+    }
   }
 
   /// Tool rounds are billed and recorded before local theatrical decoding.

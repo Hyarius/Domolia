@@ -34,18 +34,22 @@ class LoreContextOptimizer {
   List<AiMessage> request(BookLore lore) => [
     const AiMessage(
       role: 'system',
-      content: 'Tu es un compresseur de contexte narratif. '
-        'Résume fidèlement le canon statique fourni, en français, sans '
-        'inventer, omettre un personnage ou changer une condition. '
-        'Préserve les noms exacts de tous les personnages, lieux, scénarios '
-        'et événements. Un événement prévu, optionnel ou conditionnel '
-        'NE DOIT PAS être décrit comme déjà survenu. '
-        'Préserve les règles, liens importants, motivations et '
-        'informations secrètes étiquetées SECRET (réservées au narrateur). '
-        'Ne produis ni JSON ni Markdown complexe. '
-        'Retourne seulement une fiche compacte lisible par un narrateur, '
-        'avec des sections et moins de 6 500 caractères. '
-        'Le Livre source fait autorité sur le résumé.',
+      content: '''
+RÔLE
+Tu condenses le Lore canonique du Livre en une fiche pour le narrateur.
+
+FIDÉLITÉ
+Préserve les noms exacts de tous les personnages, lieux, scénarios et
+événements, ainsi que les règles, relations, motivations et secrets.
+Les passages SECRET restent réservés au narrateur. Ne transforme jamais
+un événement prévu, facultatif ou conditionnel en fait déjà accompli.
+N'invente, ne supprime et ne change aucun fait du canon.
+
+FORMAT
+Écris en français une fiche compacte, structurée en sections lisibles,
+sans JSON ni Markdown complexe, de moins de 6 500 caractères.
+Le Livre source fait toujours autorité sur ce résumé.
+''',
     ),
     AiMessage(
       role: 'user',

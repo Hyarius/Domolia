@@ -278,6 +278,41 @@ bool _isExplicitRefusalBody(List<int> bytes) {
 
 /// User-facing errors never contain upstream response bodies or credentials.
 AiProviderException _httpFailure(int status, List<int> body) {
+  // Read machine-readable error codes only. Never expose upstream messages.
+  String? code;
+  try {
+    final decoded = jsonDecode(utf8.decode(body));
+    if (decoded is Map && decoded['error'] is Map) {
+      final err = decoded['error'] as Map;
+      final raw = err['code'] ?? err['type'];
+      if (raw is String &&
+          RegExp(r'^[a-z0-9_]{1,64}$').hasMatch(raw)) {
+        code = raw;
+      }
+    }
+  } catch (_) {
+    // HTTP status remains authoritative.
+  }
+  if (code == 'insufficient_quota' ||
+      code == 'credit_balance_exhausted' ||
+      code == 'billing_hard_limit_reached' ||
+      code == 'account_quota_exceeded' ||
+      code == 'organization_spend_limit_exceeded' ||
+      code == 'project_spend_limit_exceeded' ||
+      code == 'organization_usage_limit_exceeded') {
+    return const AiProviderException(
+      'Crédits ou quota API insuffisants. Vérifiez la facturation '
+      'de votre projet sur platform.openai.com.',
+      kind: AiProviderErrorKind.credits,
+    );
+  }
+  if (code == 'organization_verification_required') {
+    return const AiProviderException(
+      'La vérification de votre organisation API est requise '
+      'pour utiliser ce modèle.',
+      kind: AiProviderErrorKind.access,
+    );
+  }
   if (_isExplicitRefusalBody(body)) {
     return const AiProviderException(
       'Le fournisseur a explicitement refusé la demande.',
@@ -379,7 +414,8 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
       request.body = jsonEncode(payload);
     }
 
-    final exchange = payload == null ? null : diagnostics?.begin(
+    final AiExchange? exchange = payload == null ? null :
+        (diagnostics ?? AiExchangeRecorder()).begin(
       provider: 'openai-compatible',
       method: request.method,
       url: request.url.toString(),
@@ -520,7 +556,7 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
         ],
       });
 
-    final exchange = diagnostics?.begin(
+    final exchange = (diagnostics ?? AiExchangeRecorder()).begin(
       provider: 'openai-compatible',
       method: request.method,
       url: request.url.toString(),
@@ -533,7 +569,7 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
       response = await _client.send(request).timeout(
         const Duration(seconds: 25),
       );
-      exchange?.statusCode = response.statusCode;
+      exchange.statusCode = response.statusCode;
     } on TimeoutException {
       throw const AiProviderException(
         'Aucune réponse du fournisseur sous 25 s. Vérifiez le réseau ou réessayez.',
@@ -551,7 +587,7 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
       try {
         await for (final bytes in response.stream.timeout(
             const Duration(seconds: 8))) {
-          exchange?.addRawResponse(bytes);
+          exchange.addRawResponse(bytes);
           if (body.length < 16384) {
             body.addAll(bytes.take(16384 - body.length));
           }
@@ -569,7 +605,7 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
     try {
       await for (final line in response.stream
           .map((bytes) {
-            exchange?.addRawResponse(bytes);
+            exchange.addRawResponse(bytes);
             return bytes;
           })
           .transform(utf8.decoder)
@@ -698,7 +734,7 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
         ],
         if (tools.isNotEmpty) 'tool_choice': 'auto',
       });
-    final exchange = diagnostics?.begin(
+    final exchange = (diagnostics ?? AiExchangeRecorder()).begin(
       provider: 'openai-compatible', method: request.method,
       url: request.url.toString(), requestBody: request.body,
       secret: configuration.apiKey.trim(),
@@ -707,7 +743,7 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
     http.StreamedResponse response;
     try {
       response = await _client.send(request).timeout(const Duration(seconds: 25));
-      exchange?.statusCode = response.statusCode;
+      exchange.statusCode = response.statusCode;
     } on TimeoutException {
       throw const AiProviderException(
         'Aucune réponse du fournisseur sous 25 s. Vérifiez le réseau ou réessayez.',
@@ -725,7 +761,7 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
       try {
         await for (final bytes in response.stream.timeout(
             const Duration(seconds: 8))) {
-          exchange?.addRawResponse(bytes);
+          exchange.addRawResponse(bytes);
           if (body.length < 16384) {
             body.addAll(bytes.take(16384 - body.length));
           }
@@ -762,7 +798,7 @@ class OpenAiCompatibleChatProvider implements AiChatProvider, AiStreamingChatPro
     try {
       await for (final line in response.stream
         .map((bytes) {
-          exchange?.addRawResponse(bytes);
+          exchange.addRawResponse(bytes);
           totalBytes += bytes.length;
           if (totalBytes > 2 * 1024 * 1024) {
             throw const AiProviderException('Flux IA trop volumineux.');

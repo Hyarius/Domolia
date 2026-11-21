@@ -89,6 +89,83 @@ void main() {
       '/v1/images/generations']);
   });
 
+  test('Civitai models receive a distinct negative_prompt field', () async {
+    final provider = OpenUncensoredImageGenerationProvider(
+      client: MockClient((request) async {
+        if (request.method == 'GET') {
+          return http.Response(jsonEncode({'data': [
+            {'id':'juggernaut-xl', 'operations':['generate']},
+          ]}), 200);
+        }
+        final body = jsonDecode(request.body) as Map<String,dynamic>;
+        expect(body['model'], 'juggernaut-xl');
+        expect(body['prompt'], 'A lighthouse by the sea.');
+        expect(body['negative_prompt'], 'text, watermark, speech bubbles');
+        expect(body['prompt'], isNot(contains('À exclure')));
+        return http.Response(jsonEncode({'data': [
+          {'b64_json': base64Encode(_png)},
+        ]}), 200);
+      }),
+    );
+    final result = await provider.generate(
+      const ImageGenerationRequest(
+        model: 'juggernaut-xl', prompt: 'A lighthouse by the sea.',
+        negativePrompt: 'text, watermark, speech bubbles',
+      ),
+      apiKey: 'key',
+    );
+    expect(result.images, hasLength(1));
+  });
+
+  test('Chroma ignores unsupported negative_prompt and avoids duplicate list',
+      () async {
+    final provider = OpenUncensoredImageGenerationProvider(
+      client: MockClient((request) async {
+        if (request.method == 'GET') {
+          return http.Response(jsonEncode({'data': [
+            {'id':'chroma', 'operations':['generate']},
+          ]}), 200);
+        }
+        final body = jsonDecode(request.body) as Map<String,dynamic>;
+        expect(body['negative_prompt'], isNull);
+        expect(body['prompt'],
+            'A lighthouse by the sea. '
+            'Image sans texte, bulles de dialogue ni signature.');
+        expect(body['prompt'], isNot(contains('À exclure :')));
+        return http.Response(jsonEncode({'data': [
+          {'b64_json': base64Encode(_png)},
+        ]}), 200);
+      }),
+    );
+    await provider.generate(const ImageGenerationRequest(
+      model: 'chroma', prompt: 'A lighthouse by the sea.',
+      negativePrompt: 'texte, watermark, sous-titres, signature',
+    ), apiKey: 'key');
+  });
+
+  test('Venice refuses a long positive prompt before a paid image POST',
+      () async {
+    var posts = 0;
+    final provider = OpenUncensoredImageGenerationProvider(
+      client: MockClient((request) async {
+        if (request.method == 'GET') {
+          return http.Response(jsonEncode({'data': [
+            {'id':'chroma', 'operations':['generate']},
+          ]}), 200);
+        }
+        posts++;
+        return http.Response('{}', 200);
+      }),
+    );
+    await expectLater(
+      provider.generate(ImageGenerationRequest(
+        model: 'chroma', prompt: 'A' * 1501,
+      ), apiKey: 'key'),
+      throwsA(isA<ImageGenerationFailure>()),
+    );
+    expect(posts, 0);
+  });
+
   test('Temporary HTTPS URL is downloaded to local bytes', () async {
     final provider=OpenAiImageGenerationProvider(client:MockClient((req) async {
       if (req.url.host=='cdn.example.org') {

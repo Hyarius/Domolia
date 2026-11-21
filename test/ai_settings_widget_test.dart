@@ -120,6 +120,32 @@ void main() {
     expect(find.text('Non testé'), findsOneWidget);
   });
 
+
+  testWidgets('OpenAI image-only profile verifies key without a chat model',
+      (tester) async {
+    await showPage(tester);
+    await tester.enterText(
+        find.byType(TextField).first, 'https://api.openai.com/v1');
+    await tester.enterText(
+        find.byKey(const ValueKey('aiApiKeyField')), 'sk-image-test');
+    await tester.tap(find.byKey(const ValueKey('aiModelSelector')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Images uniquement (sans chat)').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Enregistrer la configuration'));
+    await tester.pumpAndSettle();
+    expect(controller.model, isEmpty);
+    expect(controller.imageOnlyProfile, true);
+    expect(find.text('Vérifier la clé API (sans génération)'), findsOneWidget);
+    await tester.tap(find.text('Vérifier la clé API (sans génération)'));
+    await tester.pumpAndSettle();
+    expect(provider.lastConfiguration?.model, isEmpty);
+    expect(find.text('Clé API vérifiée'), findsOneWidget);
+    expect(find.textContaining('Génération d’image non testée'),
+        findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Creating, naming, switching, renaming and deleting profiles',
       (tester) async {
     await showPage(tester);

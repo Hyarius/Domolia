@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
+import '../storage/domolia_storage_paths.dart';
 
 enum AppLogLevel { trace, debug, info, warning, error }
 
@@ -118,7 +118,7 @@ class AppLogger {
   static AppLogger get current => _current;
   static Future<void> initialize() async {
     try {
-      final support = await getApplicationSupportDirectory();
+      final support = await DomoliaStoragePaths.getSupportDirectory();
       _current = AppLogger(
         storage: FileAppLogStorage(Directory(path.join(support.path, 'logs'))),
       );
@@ -183,8 +183,12 @@ class AppLogger {
     for (final item in details.entries.take(12)) {
       final value = item.value;
       final key = _clean(item.key, limit: 48);
-      if (RegExp(r'authorization|token|secret|password|api.?key|credential|cookie|bearer',
-          caseSensitive: false).hasMatch(key)) {
+      final safeTokenMetric = const {
+        'promptTokens', 'completionTokens', 'cachedTokens', 'reasoningTokens',
+      }.contains(key) && value is num;
+      if (!safeTokenMetric &&
+          RegExp(r'authorization|token|secret|password|api.?key|credential|cookie|bearer',
+              caseSensitive: false).hasMatch(key)) {
         safeDetails[key] = '[REDACTED]';
         continue;
       }

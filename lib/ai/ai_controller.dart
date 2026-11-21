@@ -48,6 +48,14 @@ class AiConnectionController extends ChangeNotifier {
   String get baseUrl => selectedProfile.baseUrl;
   String get model => selectedProfile.model;
   bool get hasKey => selectedProfile.apiKey.isNotEmpty;
+  static bool isImageModel(String id) =>
+      id.startsWith('gpt-image-') || id == 'chatgpt-image-latest';
+
+  /// Image API credentials do not need a text model or a paid chat probe.
+  bool get imageOnlyProfile =>
+      selectedKind == AiProviderKind.customAi &&
+      Uri.tryParse(baseUrl)?.host == 'api.openai.com' &&
+      (model.isEmpty || isImageModel(model));
   List<AiModel> get models => List.unmodifiable(_catalogues[_selectedId] ?? const <AiModel>[]);
   AiConnectionStatus get status =>
       _statuses[_selectedId] ?? AiConnectionStatus.untested;
@@ -187,6 +195,20 @@ class AiConnectionController extends ChangeNotifier {
     if (chatGpt == null || chatGptProvider == null) {
       throw const AiProviderException('Connexion ChatGPT indisponible.');
     }
+    if (profile.model.isEmpty) {
+      throw const AiProviderException(
+          'Chargez et choisissez un modèle ChatGPT avant de continuer.');
+    }
+    // A legacy profile may still contain a model from its former CustomAI
+    // connection. Verify the catalogue once per session before sending a
+    // potentially paid request through the ChatGPT account.
+    final catalogue = _catalogues[id] ?? await chatGpt!.listModels(id);
+    _catalogues[id] = catalogue;
+    if (!catalogue.any((model) => model.id == profile.model)) {
+      throw const AiProviderException(
+          'Modèle incompatible avec ce compte ChatGPT. '
+          'Chargez les modèles puis sélectionnez un modèle disponible.');
+    }
     final token = await chatGpt!.accessToken(id);
     return AiConnectionBinding(
       provider: chatGptProvider!,
@@ -259,6 +281,8 @@ class AiConnectionController extends ChangeNotifier {
         for (final item in _profiles)
           item.id == _selectedId
               ? item.copyWith(kind: kind,
+                  // Never carry a CustomAI model into the ChatGPT selector.
+                  model: kind == AiProviderKind.chatGpt ? '' : defaultAiModel,
                   toolCallingCompatibility: AiToolCallingCompatibility.unknown)
               : item,
       ];
@@ -349,6 +373,13 @@ class AiConnectionController extends ChangeNotifier {
     if (_closed || busy || selectedKind != AiProviderKind.chatGpt) return false;
     try {
       final value = validatedAiModel(id);
+      if (!_catalogues.containsKey(_selectedId) ||
+          !_catalogues[_selectedId]!.any((entry) => entry.id == value)) {
+        message = 'Chargez les modèles ChatGPT, puis choisissez un modèle '
+            'présent dans la liste de votre compte.';
+        _notify();
+        return false;
+      }
       final next = [
         for (final profile in _profiles)
           profile.id == _selectedId
@@ -360,7 +391,11 @@ class AiConnectionController extends ChangeNotifier {
       ];
       await store.write(AiProfilesState(profiles: next, selectedId: _selectedId));
       _profiles = next;
-      _invalidate(_selectedId);
+      // A model change invalidates connection probes, but NOT the ChatGPT
+      // catalogue used to validate future selections.
+      _statuses.remove(_selectedId);
+      _errors.remove(_selectedId);
+      _replies.remove(_selectedId);
       return true;
     } catch (_) {
       message = 'Impossible de sélectionner le modèle ChatGPT.';
@@ -447,7 +482,11 @@ class AiConnectionController extends ChangeNotifier {
         );
       }
       final normalizedUrl = validatedAiBaseUrl(url);
-      final normalizedModel = validatedAiModel(selectedModel);
+      final imageApi = Uri.parse(normalizedUrl).host == 'api.openai.com';
+      final rawModel = selectedModel.trim();
+      final normalizedModel = imageApi &&
+              (rawModel.isEmpty || isImageModel(rawModel))
+          ? '' : validatedAiModel(selectedModel);
       final current = selectedProfile;
       final key = newKey.trim().isNotEmpty ? newKey.trim() : current.apiKey;
       final nextProfile = current.copyWith(
@@ -625,6 +664,20 @@ class AiConnectionController extends ChangeNotifier {
           throw const AiProviderException('Connexion ChatGPT indisponible.');
         }
         final list = await chatGpt!.listModels(_selectedId);
+        if (list.isNotEmpty &&
+            !list.any((entry) => entry.id == selectedProfile.model)) {
+          final next = [
+            for (final profile in _profiles)
+              profile.id == _selectedId
+                  ? profile.copyWith(model: list.first.id,
+                      toolCallingCompatibility:
+                          AiToolCallingCompatibility.unknown)
+                  : profile,
+          ];
+          await store.write(AiProfilesState(
+              profiles: next, selectedId: _selectedId));
+          _profiles = next;
+        }
         _catalogues[_selectedId] = list;
         message = list.isEmpty ? 'Aucun modèle ChatGPT disponible.'
             : 'Catalogue ChatGPT chargé.';
@@ -665,20 +718,30 @@ class AiConnectionController extends ChangeNotifier {
       if (binding.configuration.apiKey.isEmpty) {
         throw const AiProviderException('Enregistrez une clé API avant de tester.');
       }
-      final reply = await binding.provider.complete(
-        binding.configuration,
-        messages: const [
-          AiMessage(
-            role: 'user',
-            content:
-                'Réponds en français, en une phrase très courte, pour confirmer la connexion.',
-          ),
-        ],
-        maxTokens: 64,
-      );
-      _statuses[id] = AiConnectionStatus.connected;
-      _replies[id] =
-          reply.length > 320 ? '${reply.substring(0, 320)}…' : reply;
+      if (imageOnlyProfile) {
+        // Authentication-only GET /models: no chat request and no image cost.
+        // This does NOT confirm image-generation authorization or billing.
+        await binding.provider.listModels(binding.configuration);
+        _statuses[id] = AiConnectionStatus.connected;
+        _replies[id] = 'Clé API reconnue par le catalogue. '
+            'Génération d’image non testée ; les droits et crédits '
+            'seront vérifiés par le fournisseur lors de la génération.';
+      } else {
+        final reply = await binding.provider.complete(
+          binding.configuration,
+          messages: const [
+            AiMessage(
+              role: 'user',
+              content:
+                  'Réponds en français, en une phrase très courte, pour confirmer la connexion.',
+            ),
+          ],
+          maxTokens: 64,
+        );
+        _statuses[id] = AiConnectionStatus.connected;
+        _replies[id] =
+            reply.length > 320 ? '${reply.substring(0, 320)}…' : reply;
+      }
     } on AiProviderException catch (error) {
       _statuses[id] = AiConnectionStatus.invalid;
       _errors[id] = error.userMessage;

@@ -136,6 +136,25 @@ const _profile = AiProfile(
   nsfwCompatibility: AiNsfwCompatibility.unsupported,
 );
 
+Future<void> _openConversationTraceTab(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('conversationSettingsLogsTab')));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _scrollConversation(
+    WidgetTester tester, Finder target, double delta,
+    {bool diagnostics = false}) async {
+  final key = ValueKey(diagnostics
+      ? 'conversationSettingsDiagnostics' : 'conversationSettings');
+  await tester.scrollUntilVisible(
+    target, delta,
+    scrollable: find.descendant(
+      of: find.byKey(key),
+      matching: find.byType(Scrollable),
+    ).first,
+  );
+}
+
 void main() {
   test('Books remain independent, with profile binding outside export', () async {
     final store = _MemoryBooks();
@@ -613,8 +632,9 @@ void main() {
     expect((await library.session(session.id))!.aiProfileId, 'profile-1');
     expect(ai.profiles, hasLength(1));
 
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('conversationExport')), 250);
+    await _openConversationTraceTab(tester);
+    await _scrollConversation(tester,
+      find.byKey(const ValueKey('conversationExport')), 250, diagnostics: true);
     await tester.ensureVisible(
       find.byKey(const ValueKey('conversationExport')));
     await tester.pumpAndSettle();
@@ -624,8 +644,6 @@ void main() {
     expect(find.text('Portée de l’export'), findsOneWidget);
     await tester.tap(find.text('Annuler'));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.byTooltip('Retour à la conversation'), -250);
     await tester.ensureVisible(find.byTooltip('Retour à la conversation'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Retour à la conversation'));
@@ -715,12 +733,13 @@ void main() {
       )),
     ));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('conversationExport')), 200);
+    await _openConversationTraceTab(tester);
+    await _scrollConversation(tester,
+      find.byKey(const ValueKey('conversationExport')), 200, diagnostics: true);
     expect(find.byKey(const ValueKey('conversationExport')), findsOneWidget);
     expect(find.byKey(const ValueKey('bookRawExport')), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('bookRawExport')), 200);
+    await _scrollConversation(tester,
+      find.byKey(const ValueKey('bookRawExport')), 200, diagnostics: true);
     await tester.ensureVisible(find.byKey(const ValueKey('bookRawExport')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('bookRawExport')));
@@ -778,8 +797,9 @@ void main() {
     ));
     await tester.pumpAndSettle();
     await library.remove(book.id);
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('bookRawExport')), 200);
+    await _openConversationTraceTab(tester);
+    await _scrollConversation(tester,
+      find.byKey(const ValueKey('bookRawExport')), 200, diagnostics: true);
     await tester.ensureVisible(find.byKey(const ValueKey('bookRawExport')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('bookRawExport')));
@@ -857,12 +877,13 @@ void main() {
       )),
     ));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('conversationExport')), 200);
+    await _openConversationTraceTab(tester);
+    await _scrollConversation(tester,
+      find.byKey(const ValueKey('conversationExport')), 200, diagnostics: true);
     expect(find.byKey(const ValueKey('conversationExport')), findsOneWidget);
     expect(find.byKey(const ValueKey('bookRawExport')), findsOneWidget);
-    await tester.scrollUntilVisible(find.byKey(
-      const ValueKey('aiPipelineExport')), 180);
+    await _scrollConversation(tester,
+      find.byKey(const ValueKey('aiPipelineExport')), 180, diagnostics: true);
     await tester.ensureVisible(find.byKey(
       const ValueKey('aiPipelineExport')));
     await tester.pumpAndSettle();
@@ -882,6 +903,18 @@ void main() {
     expect(turn['phases'][0]['interpretation']['error'],
       'JSONification invalide');
     expect(exportedText!, isNot(contains('secret-token')));
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('conversationViewAiTrace')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('conversationViewAiTrace')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('conversationAiTraceList')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('conversationAiTrace-diag-1')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('conversationAiTraceBody-diag-1')),
+        findsOneWidget);
+    expect(loads, 2);
     expect(tester.takeException(), isNull);
   });
 
@@ -939,12 +972,12 @@ void main() {
     // Target the tile's title, not the entire (potentially very tall)
     // ExpansionTile; tapping its center can hit outside a small screen.
     final advanced = find.text('Réglages IA avancés');
-    await tester.scrollUntilVisible(advanced, 180);
+    await _scrollConversation(tester,advanced, 180);
     await tester.ensureVisible(advanced);
     await tester.pumpAndSettle();
     await tester.tap(advanced);
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.byKey(
+    await _scrollConversation(tester,find.byKey(
       const ValueKey('conversationRecompileLore')), 180);
     await tester.tap(find.byKey(const ValueKey('conversationRecompileLore')));
     await tester.pumpAndSettle();
@@ -1010,14 +1043,14 @@ void main() {
     // Target the tile's title, not the entire (potentially very tall)
     // ExpansionTile; tapping its center can hit outside a small screen.
     final advanced = find.text('Réglages IA avancés');
-    await tester.scrollUntilVisible(advanced, 180);
+    await _scrollConversation(tester,advanced, 180);
     await tester.ensureVisible(advanced);
     await tester.pumpAndSettle();
     await tester.tap(advanced);
     await tester.pumpAndSettle();
     final token = find.byKey(
         const ValueKey('conversationTokens-narrator-0'));
-    await tester.scrollUntilVisible(token, 230);
+    await _scrollConversation(tester,token, 230);
     await tester.ensureVisible(token);
     await tester.pumpAndSettle();
     await tester.tap(token);
@@ -1031,7 +1064,7 @@ void main() {
 
     final reasoning = find.byKey(
       const ValueKey('conversationReasoning-narrator-'));
-    await tester.scrollUntilVisible(reasoning, 200);
+    await _scrollConversation(tester,reasoning, 200);
     await tester.ensureVisible(reasoning);
     await tester.pumpAndSettle();
     await tester.tap(reasoning);

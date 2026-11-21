@@ -340,6 +340,10 @@ void main() {
     expect(provider.calls,1);
     expect(provider.lastRequest!.quality,isNull);
     expect(provider.lastRequest!.model,'test-image');
+    expect(provider.lastRequest!.negativePrompt,
+        contains('bulles de dialogue'));
+    expect(provider.lastRequest!.prompt,
+        isNot(contains('À exclure :')));
     expect(controller.forIntent(2)?.state,IllustrationJobState.available);
   });
 

@@ -147,7 +147,7 @@ void main() {
       selected), throwsFormatException);
   });
 
-  test('Book exclusions are added without treating scene dialogue as overlay', () {
+  test('Book exclusions remain out of the positive image prompt', () {
     final selected=const VisualSceneSelector().select(
         intent:intent,timeline:scene(),lore:lore);
     const director=VisualDirection(
@@ -159,7 +159,7 @@ void main() {
       negativePrompt:'sous-titres, textes');
     expect(prompt,startsWith(director.prompt));
     expect(prompt,contains('gravure sombre'));
-    expect(prompt,contains('À exclure : filigranes, sous-titres, textes'));
+    expect(prompt, isNot(contains('À exclure :')));
     expect(prompt,isNot(contains('Texte établi')));
     expect(prompt,isNot(contains('Je regarde Léa Monel')));
     expect(prompt,isNot(contains('Soren referme lentement le tiroir derrière lui.')));
@@ -419,6 +419,8 @@ void main() {
     expect(provider.messages.first.content,contains('âge apparent'));
     expect(provider.messages.first.content,contains('cheveux'));
     expect(provider.messages.first.content,contains('contacts physiques'));
+    expect(provider.messages.first.content,contains('300 à 700 caractères'));
+    expect(provider.messages.first.content,contains('QUI touche QUOI'));
     expect(provider.messages.first.content,contains('cadrage'));
     expect(provider.messages.last.content,
       contains('INSTANT À ILLUSTRER (prioritaire)'));
@@ -435,7 +437,7 @@ void main() {
     expect(prompt, isNot(contains('ACTION PRIORITAIRE')));
     expect(prompt, isNot(contains('Personnage naelle')));
     expect(prompt, isNot(contains('Je regarde Naëlle s’accroupir.')));
-    expect(prompt, contains('À exclure : texte, sous-titres'));
+    expect(prompt, isNot(contains('À exclure :')));
     expect(() => VisualDirection.parse(jsonEncode({
       'prompt': 'Naëlle se tient sur le parquet sombre et '
           'porte une jupe et des collants.',

@@ -83,7 +83,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
       _selectedModel ?? widget.controller.model,
       _key.text,
     );
-    if (saved && mounted) _key.clear();
+    if (saved && mounted) _reloadFields();
     return saved;
   }
 
@@ -266,8 +266,12 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
     final (label, indicatorColor) = switch (status) {
       AiConnectionStatus.untested => ('Non testé', DomoliaColors.muted),
       AiConnectionStatus.testing => ('En cours', DomoliaColors.muted),
-      AiConnectionStatus.connected => ('Connecté', const Color(0xFF59D78F)),
-      AiConnectionStatus.invalid => ('Invalide', const Color(0xFFFF7777)),
+      AiConnectionStatus.connected => (
+          controller.imageOnlyProfile ? 'Clé API vérifiée' : 'Connecté',
+          const Color(0xFF59D78F)),
+      AiConnectionStatus.invalid => (
+          controller.imageOnlyProfile ? 'Vérification échouée' : 'Invalide',
+          const Color(0xFFFF7777)),
     };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -345,7 +349,12 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
             ),
           ),
         ),
-        const SizedBox(height: DomoliaSpacing.field),
+        ExpansionTile(
+          key: const ValueKey('aiCompatibilityAdvanced'),
+          title: const Text('Compatibilité et tests avancés'),
+          subtitle: const Text('À modifier seulement si un modèle en a besoin'),
+          childrenPadding: const EdgeInsets.symmetric(vertical: 8),
+          children: [
         DropdownButtonFormField<AiNsfwCompatibility>(
           key: const ValueKey('aiNsfwCapability'),
           initialValue: controller.selectedProfile.nsfwCompatibility,
@@ -403,6 +412,8 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
           icon: const Icon(Icons.fact_check_outlined),
           label: Text(_probingTools
               ? 'Vérification en cours…' : 'Tester le Tool Calling (payant)'),
+        ),
+          ],
         ),
         const SizedBox(height: DomoliaSpacing.compact),
         Wrap(
@@ -699,11 +710,26 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
         if (!c.initialized || c.profiles.isEmpty) {
           return const Center(child: CircularProgressIndicator());
         }
-        final selectedModel = _selectedModel ?? c.model;
+        // ChatGPT is an account-backed catalogue, not a free-form model
+        // field. Never display a stale CustomAI model as a valid choice.
+        final isChatGpt = c.selectedKind == AiProviderKind.chatGpt;
+        final selectedModel = isChatGpt ? c.model : _selectedModel ?? c.model;
         final modelIds = <String>{
-          if (selectedModel.isNotEmpty) selectedModel,
-          for (final entry in c.models) entry.id,
+          if (!isChatGpt) '',
+          if (!isChatGpt && selectedModel.isNotEmpty &&
+              !AiConnectionController.isImageModel(selectedModel))
+            selectedModel,
+          for (final entry in c.models)
+            if (isChatGpt ||
+                !AiConnectionController.isImageModel(entry.id))
+              entry.id,
         }.toList();
+        final effectiveModel = !isChatGpt &&
+                AiConnectionController.isImageModel(selectedModel)
+            ? '' : selectedModel;
+        final imageOnlySelected = !isChatGpt &&
+            effectiveModel.isEmpty &&
+            Uri.tryParse(_base.text.trim())?.host == 'api.openai.com';
 
         return SafeArea(
           child: ListView(
@@ -768,13 +794,15 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               const SizedBox(height: DomoliaSpacing.field),
               InputDecorator(
                 decoration: const InputDecoration(
-                  labelText: 'Modèle de chat',
-                  helperText: 'Charger les modèles actualise cette liste.',
+                  labelText: 'Modèle de chat (facultatif pour les images)',
+                  helperText: 'Pour un profil OpenAI réservé aux images, '
+                      'choisissez « Images uniquement ». Le modèle graphique '
+                      'se règle séparément dans Paramètres → Images.',
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     key: const ValueKey('aiModelSelector'),
-                    value: modelIds.contains(selectedModel) ? selectedModel : null,
+                    value: modelIds.contains(effectiveModel) ? effectiveModel : null,
                     isExpanded: true,
                     itemHeight: 72,
                     menuMaxHeight: 360,
@@ -784,11 +812,11 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                     selectedItemBuilder: (context) => [
                       for (final id in modelIds)
                         Tooltip(
-                          message: id,
+                          message: id.isEmpty ? 'Images uniquement' : id,
                           child: Align(
                             alignment: Alignment.centerLeft,
                             child: Text(
-                              id,
+                              id.isEmpty ? 'Images uniquement (sans chat)' : id,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -800,7 +828,7 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                         DropdownMenuItem(
                           value: id,
                           child: Text(
-                            id,
+                            id.isEmpty ? 'Images uniquement (sans chat)' : id,
                             maxLines: 2,
                             softWrap: true,
                             overflow: TextOverflow.ellipsis,
@@ -810,11 +838,12 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                     onChanged: c.busy
                         ? null
                         : (value) {
-                            if (value != null) {
+                            if (value == null) return;
+                            if (c.selectedKind == AiProviderKind.chatGpt) {
+                              // Only catalogued models can be persisted.
+                              c.selectChatGptModel(value);
+                            } else {
                               setState(() => _selectedModel = value);
-                              if (c.selectedKind == AiProviderKind.chatGpt) {
-                                c.selectChatGptModel(value);
-                              }
                             }
                           },
                   ),
@@ -836,12 +865,19 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               OutlinedButton.icon(
                 onPressed: c.busy ? null : _saveAndTest,
                 icon: const Icon(Icons.wifi_tethering),
-                label: const Text('Tester la connexion'),
+                label: Text(imageOnlySelected
+                    ? 'Vérifier la clé API (sans génération)'
+                    : 'Tester la connexion'),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Le test peut consommer des crédits du fournisseur IA.',
-                style: TextStyle(color: DomoliaColors.muted, fontSize: 12),
+              Text(
+                imageOnlySelected
+                    ? 'Ce test interroge le catalogue des modèles, sans '
+                      'générer d’image ni de texte. Il ne garantit pas '
+                      'l’accès au modèle d’image ni le solde de crédits.'
+                    : 'Le test de chat peut consommer des crédits.',
+                style: const TextStyle(
+                    color: DomoliaColors.muted, fontSize: 12),
               ),
               if (c.hasKey) ...[
                 const SizedBox(height: 14),
@@ -951,11 +987,12 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
                     onChanged: c.busy
                         ? null
                         : (value) {
-                            if (value != null) {
+                            if (value == null) return;
+                            if (c.selectedKind == AiProviderKind.chatGpt) {
+                              // Only catalogued models can be persisted.
+                              c.selectChatGptModel(value);
+                            } else {
                               setState(() => _selectedModel = value);
-                              if (c.selectedKind == AiProviderKind.chatGpt) {
-                                c.selectChatGptModel(value);
-                              }
                             }
                           },
                   ),
@@ -995,7 +1032,9 @@ class _AiSettingsPanelState extends State<AiSettingsPanel> {
               if (c.testReply != null) ...[
                 const SizedBox(height: 12),
                 Text(
-                  'Réponse du modèle : ${c.testReply!}',
+                  c.imageOnlyProfile
+                      ? 'Résultat du contrôle : ${c.testReply!}'
+                      : 'Réponse du modèle : ${c.testReply!}',
                   key: const ValueKey('aiTestReply'),
                 ),
               ],
