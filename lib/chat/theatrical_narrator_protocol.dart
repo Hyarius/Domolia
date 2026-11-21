@@ -15,9 +15,8 @@ Une porte claque.
 « Qui est là ? »
 
 Pas de titre, préambule, explication ni [JOUEUR].
-Regroupe les phrases en quelques blocs cohérents, sans créer une bulle
-pour chaque phrase. Le format technique ne doit jamais dicter le style.
-Rends la main au joueur avant sa prochaine décision.
+Regroupe les phrases en blocs cohérents, sans bulle par phrase.
+Le format ne dicte pas le style ; rends la main avant le prochain choix.
 ''';
 
 /// Added only for Suggestions/Automatic; absent in Disabled mode.
