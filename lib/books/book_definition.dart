@@ -173,11 +173,14 @@ class BookDefinition {
   ];
 
   static const detailInstructions = [
-    'Niveau de détail 1 : réponds en descriptions très courtes et directes.',
-    'Niveau de détail 2 : utilise des descriptions légères et concises.',
-    'Niveau de détail 3 : privilégie une narration naturelle et modérée.',
-    'Niveau de détail 4 : développe les descriptions et le contexte sensible.',
-    'Niveau de détail 5 : enrichis les descriptions, ambiance et sensations.',
+    'Niveau de détail 1 : seulement les gestes, répliques et faits nécessaires.',
+    'Niveau de détail 2 : quelques détails précis, sans décor superflu.',
+    'Niveau de détail 3 : juste assez de lieu, d’action et de sensations pour '
+        'comprendre la scène.',
+    'Niveau de détail 4 : enrichis les gestes et les sensations pertinentes, '
+        'sans ralentir artificiellement l’échange.',
+    'Niveau de détail 5 : descriptions riches et incarnées, sans remplir '
+        'la scène de détails gratuits.',
   ];
 
   static String detailInstruction(int level) {
