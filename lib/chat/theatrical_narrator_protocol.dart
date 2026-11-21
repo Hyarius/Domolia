@@ -15,7 +15,9 @@ Une porte claque.
 « Qui est là ? »
 
 Pas de titre, préambule, explication ni [JOUEUR].
-Regroupe les phrases en quelques blocs cohérents et rends la main au joueur.
+Regroupe les phrases en quelques blocs cohérents, sans créer une bulle
+pour chaque phrase. Le format technique ne doit jamais dicter le style.
+Rends la main au joueur avant sa prochaine décision.
 ''';
 
 /// Added only for Suggestions/Automatic; absent in Disabled mode.
