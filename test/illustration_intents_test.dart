@@ -499,7 +499,7 @@ void main() {
       expect((chat.timeline.last as ChatIllustrationIntent).playerEventId, 4);
     });
 
-    test('rejects opening and player texts; truncates long descriptions', () async {
+    test('rejects opening and player texts; keeps long descriptions', () async {
       final chat = _chat(_ScriptProvider('[NARRATION]\nUnused.'),
           IllustrationMode.suggestions);
       addTearDown(chat.dispose);
@@ -516,7 +516,7 @@ void main() {
       expect(chat.canIllustrateMessage(2), isTrue);
       expect(await chat.illustrateMessage(2), isTrue);
       expect((chat.timeline.last as ChatIllustrationIntent).description,
-          hasLength(500));
+          hasLength(520));
     });
 
     test('failed atomic write leaves no partial manual intention', () async {
