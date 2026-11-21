@@ -432,7 +432,7 @@ void main() {
       final chat = _chat(provider, IllustrationMode.disabled);
       addTearDown(chat.dispose);
       final longAppearance = 'Maëlle, debout près de la porte. ' +
-          ('Elle porte une veste de travail anthracite et un jean délavé. ' * 14) +
+          List.filled(14, 'Elle porte une veste de travail anthracite et un jean délavé. ').join() +
           'Ses chaussures de marche sont bien visibles.';
       expect(longAppearance.length, greaterThan(500));
       chat.restoreTimeline([
