@@ -154,6 +154,15 @@ class VisualSceneSelector {
       for (final p in lore.places)
         if (_mentioned(relevantText, [p.name, ...p.aliases])) p,
     ].take(4).toList();
+    // The current room may have been established before the ten recent
+    // messages. A scene separator bounds history; recover only an
+    // unambiguous place from the same scene, without bringing back every
+    // location merely visited earlier.
+    if (places.isEmpty) {
+      final earlierPlaces = lore.places.where(
+          (p) => _mentioned(sceneNames, [p.name, ...p.aliases])).toList();
+      if (earlierPlaces.length == 1) places.add(earlierPlaces.single);
+    }
     final eligibleMemory = memory.where((m) =>
         m.sourceTurnId <= intent.playerEventId &&
         m.certainty == 'confirmed' && m.visibility == 'player' &&
