@@ -67,7 +67,8 @@ void main() {
     final initialStyle = tester.widget<TextField>(
       find.byKey(const ValueKey('narratorStyleField')),
     );
-    expect(initialStyle.controller!.text, contains('jeu de rôle en français'));
+    expect(initialStyle.controller!.text,
+        contains('Écris une scène de fiction interactive'));
 
     await tester.enterText(
       find.byKey(const ValueKey('narratorStyleField')),

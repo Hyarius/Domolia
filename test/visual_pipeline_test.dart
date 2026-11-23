@@ -112,13 +112,91 @@ void main() {
     expect(validatedImagePrompt(selected,parsed),
         contains('illustration cinématographique'));
     expect(parsed.prompt,isNot(contains('Personnage lea-monel')));
-    expect(()=>VisualDirection.parse(jsonEncode(
+    expect(VisualDirection.parse(jsonEncode(
        direction()..['appearances']=[{
          'id':'party:inconnue',
          'identity':'Cheveux roux','current':'Tenue verte',
-       }]),selected),throwsFormatException);
+       }]),selected).appearances, isEmpty);
     expect(()=>VisualDirection.parse(jsonEncode(
        direction()..['unverifiedProp']='key'),selected),throwsFormatException);
+  });
+
+
+  test('Director keeps image prompt when appearance proposals are invalid', () {
+    const currentIntent = ChatIllustrationIntent(
+      id: 3, playerEventId: 1, description: 'Maëlle se tient face au joueur.');
+    const events = <ChatTimelineEvent>[
+      ChatEntry(id: 1, speaker: ChatSpeaker.character,
+          name: 'Maëlle', text: 'Bonjour.'),
+      ChatEntry(id: 2, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Elle est face au joueur.'),
+      currentIntent,
+    ];
+    final scene = const VisualSceneSelector().select(
+      intent: currentIntent, timeline: events, lore: const BookLore());
+    final parsed = VisualDirection.parse(jsonEncode({
+      'prompt': 'Maëlle, adulte aux cheveux noirs, est debout en face '
+          'du joueur dans un couloir. Plan moyen, lumière douce.',
+      'appearances': [
+        {
+          'id': 'party:maelle',
+          'identity': 'Une grande femme aux cheveux noirs. ' +
+              List.filled(12, 'Visage anguleux aux yeux clairs. ').join(),
+          'current': 'Veste de travail anthracite. ' +
+              List.filled(8, 'Elle reste debout près de la porte. ').join(),
+        },
+        {
+          'id': 'party:missing',
+          'identity': 'Inconnue',
+          'current': 'Tenue inconnue',
+        },
+        {
+          'id': 'party:maelle',
+          'identity': 'Doublon',
+          'current': 'Doublon',
+        },
+      ],
+    }), scene);
+    expect(parsed.prompt, contains('Maëlle, adulte'));
+    expect(parsed.appearances, hasLength(1));
+    expect(parsed.appearances.single.id, 'party:maelle');
+    expect(parsed.appearances.single.identity.length, greaterThan(250));
+    final invalidMetadata = VisualDirection.parse(jsonEncode({
+      'prompt': parsed.prompt,
+      'appearances': 'not a list',
+    }), scene);
+    expect(invalidMetadata.appearances, isEmpty);
+    expect(invalidMetadata.prompt, parsed.prompt);
+    expect(VisualDirection.parse(jsonEncode({
+      'prompt': parsed.prompt,
+      'appearances': [
+        {'id': 'party:maelle', 'identity': 'x' * 900, 'current': 'Veste'},
+      ],
+    }), scene).appearances, isEmpty);
+  });
+
+  test('Earlier speakers are historical context, not the visible cast', () {
+    final timeline = <ChatTimelineEvent>[
+      const ChatEntry(id: 1, speaker: ChatSpeaker.character,
+          name: 'Élodie', text: 'Je te laisse passer.'),
+      const ChatEntry(id: 2, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Élodie s’éloigne du couloir.'),
+      for (var i = 3; i <= 13; i++)
+        ChatEntry(id: i, speaker: ChatSpeaker.narrator,
+            name: 'Narrateur', text: 'Le couloir reste calme.'),
+      const ChatEntry(id: 14, speaker: ChatSpeaker.character,
+          name: 'Maëlle', text: 'Je suis ici.'),
+      const ChatEntry(id: 15, speaker: ChatSpeaker.narrator,
+          name: 'Narrateur', text: 'Maëlle est face au joueur.'),
+      const ChatIllustrationIntent(id: 16, playerEventId: 8,
+          description: 'Maëlle, debout devant le joueur.'),
+    ];
+    final selected = const VisualSceneSelector().select(
+      intent: timeline.last as ChatIllustrationIntent,
+      timeline: timeline, lore: const BookLore());
+    expect(selected.partyCharacters.keys, contains('party:maelle'));
+    expect(selected.partyCharacters.keys, isNot(contains('party:elodie')));
+    expect(selected.evidence, isNot(contains('party:elodie')));
   });
 
   test('Director JSON fences are accepted without admitting extra text', () {
@@ -242,14 +320,14 @@ void main() {
     expect(prompt, isNot(contains('Apparence de')));
     expect(direction.appearances.single.identity,
         'Cheveux bruns et yeux verts');
-    expect(() => VisualDirection.parse(jsonEncode({
+    expect(VisualDirection.parse(jsonEncode({
       'prompt':'Une boulangère adulte se tient derrière un comptoir '
           'de cuisine et ajuste son tablier.',
       'appearances':[{
         'id':'party:inconnue',
         'identity':'Cheveux bruns', 'current':'Tablier blanc',
       }],
-    }), scene), throwsFormatException);
+    }), scene).appearances, isEmpty);
   });
 
   test('Confirmed visual details survive a pronoun-only subsequent scene', () {
@@ -438,7 +516,7 @@ void main() {
     expect(prompt, isNot(contains('Personnage naelle')));
     expect(prompt, isNot(contains('Je regarde Naëlle s’accroupir.')));
     expect(prompt, isNot(contains('À exclure :')));
-    expect(() => VisualDirection.parse(jsonEncode({
+    expect(VisualDirection.parse(jsonEncode({
       'prompt': 'Naëlle se tient sur le parquet sombre et '
           'porte une jupe et des collants.',
       'appearances': [{
@@ -446,7 +524,7 @@ void main() {
         'identity': 'Cheveux noirs',
         'current': 'Jupe sombre',
       }],
-    }), selected), throwsFormatException);
+    }), selected).appearances, isEmpty);
   });
 
 

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:domolia/ai/ai_provider.dart';
+import 'package:domolia/books/book_definition.dart';
 import 'package:domolia/books/book_lore.dart';
 import 'package:domolia/books/lore_startup_context.dart';
 import 'package:domolia/chat/chat_controller.dart';
@@ -89,11 +90,30 @@ void main() {
     }
     expect(prompt, isNot(contains('ni balises')));
     expect(prompt, isNot(contains('sans format informatique')));
-    expect(prompt.length, lessThan(1700));
+    // Includes the literary guardrails even for previously saved Books.
+    expect(prompt.length, lessThan(2700));
+    expect(prompt, contains('ÉCRITURE ET DIALOGUES'));
+    expect(prompt, contains('des répliques naturelles'));
+    expect(prompt, contains('Ne force ni rencontre'));
+    expect(prompt, contains('Un personnage déjà rencontré'));
     expect(theatricalNarratorProtocol, contains('[NARRATION]'));
     expect(theatricalNarratorProtocol, contains('[PERSONNAGE:Nom]'));
     expect(theatricalNarratorProtocol, contains('[SCENE]'));
     expect(theatricalNarratorProtocol, contains('[JOUEUR]'));
+  });
+
+  test('Saved Book style keeps its wording and gains runtime craft rules', () {
+    const oldBook = BookDefinition(
+      id: 'existing', title: 'Livre existant',
+      narrativeStyle: 'STYLE PERSONNALISÉ : sobre et dialogué.',
+    );
+    final restored = BookDefinition.importJson(oldBook.exportJson());
+    expect(restored.narrativeStyle, oldBook.narrativeStyle);
+    expect(restored.narrator.systemPrompt, contains(oldBook.narrativeStyle));
+    expect(restored.narrator.systemPrompt, contains('ÉCRITURE ET DIALOGUES'));
+    expect(restored.narrator.systemPrompt,
+        contains('pas une étape du trajet'));
+    expect(restored.narrator.systemPrompt, contains('Ne joue jamais'));
   });
 
   test('custom Book prompts cannot remove narrative invariants', () {
@@ -107,6 +127,9 @@ void main() {
     expect(prompt, contains('Live Memory'));
     expect(prompt, contains('promesse conditionnelle'));
     expect(prompt, contains('secrets'));
+    expect(prompt, contains('ÉCRITURE ET DIALOGUES'));
+    expect(prompt, contains('Une réponse de quelques lignes'));
+    expect(prompt, contains('STYLE PERSONNALISÉ'));
   });
 
   test('tuning remains configurable without repeating the player rules', () {

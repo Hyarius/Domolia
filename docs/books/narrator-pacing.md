@@ -8,11 +8,11 @@ Les trois dimensions sont indépendantes :
 
 Le réglage par défaut est **Courte / Interactif (2 / 2)**. Il vise des tours réactifs, de l’ordre de 90 à 170 mots, et un seul temps fort avant l’intervention du joueur. Pour une description courte mais très imagée, choisir détail élevé et longueur courte ; pour une scène de plusieurs actions, augmenter l’avancement indépendamment de la longueur.
 
-Les **mots-clés de style** sont des orientations littéraires : Immersif, Dialogué, Sensoriel, Sobre, Poétique, Tendu, Mystérieux, Humoristique, ou des valeurs saisies à la main. Maximum 8 mots-clés de 32 caractères, séparés par des virgules et dédupliqués sans tenir compte de la casse. Le style libre existant reste prioritaire pour la définition du Livre.
+Les **mots-clés de style** sont des orientations littéraires : Immersif, Dialogué, Sensoriel, Sobre, Poétique, Tendu, Mystérieux, Humoristique, ou des valeurs saisies à la main. Maximum 8 mots-clés de 32 caractères, séparés par des virgules et dédupliqués sans tenir compte de la casse. Le style libre existant reste prioritaire pour la définition du Livre ; les consignes communes portent sur la fidélité et la qualité de la scène, pas sur un genre littéraire imposé.
 
 ## Séparation des passes
 
-Les consignes ci-dessus sont ajoutées **au prompt RAW du narrateur**, après les instructions littéraires du Livre. Le JSONificateur continue de recevoir et structurer le RAW complet ; ses règles, sa sortie et son budget de tokens ne sont pas modifiés. La cible en mots n'est pas un plafond de tokens forcé susceptible de tronquer l’histoire.
+Les consignes ci-dessus sont ajoutées **au prompt RAW du narrateur**, après les instructions littéraires du Livre. Une couche de qualité littéraire commune s'applique à tous les Livres, y compris ceux qui conservent un ancien style personnalisé : dialogues de PNJ distincts, action du joueur respectée, rythme naturel, scènes ordinaires sans suspense forcé. Cette couche n'écrase pas le champ artistique du Livre. Le JSONificateur continue de recevoir et structurer le RAW complet ; ses règles, sa sortie et son budget de tokens ne sont pas modifiés. La cible en mots n'est pas un plafond de tokens forcé susceptible de tronquer l’histoire.
 
 Même avec un avancement élevé, le narrateur ne doit jamais inventer les décisions du joueur : une action ou réaction qui dépend du joueur interrompt la scène. Les dialogues et réactions se concluent sur une occasion naturelle de répondre ; il n'est pas nécessaire de terminer par une question rituelle.
 
