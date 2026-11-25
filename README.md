@@ -213,3 +213,11 @@ Le modèle produit directement un petit script. Chaque ligne de dialogue est att
 Une nouvelle Partie utilise un appel de narration par intervention du joueur. Le rappel local fonctionne sans modèle auxiliaire. La fenêtre récente contient jusqu’à quatre échanges et 2 400 caractères, auxquels s’ajoutent l’action en cours, le contexte du Livre et les extraits sélectionnés. Le plafond de sortie par défaut est de 1 536 tokens. Les préférences enregistrées du Livre et de la Partie continuent de s’appliquer.
 
 Les consultations d’outils et l’extraction IA de souvenirs peuvent être activées dans les réglages de la Partie. Ces options peuvent ajouter des appels facturés. Les diagnostics de la Partie distinguent la consommation rapportée par le fournisseur des limites configurées.
+
+## Tester la narration avec un modèle local
+
+Depuis un poste Linux x86-64 équipé de Flutter, lancez `bash tool/test_local_ai.sh`. Au premier lancement, le script télécharge Qwen2.5-3B-Instruct Q4_K_M (1,93 Go) et llama.cpp b12738, vérifie leurs empreintes et les met en cache. Il démarre ensuite le serveur sur la boucle locale, joue les scènes avec le client de streaming de Domolia, puis arrête le serveur. Aucune clé ni aucun crédit IA ne sont nécessaires.
+
+Les scénarios couvrent une ouverture, une négociation sur deux interventions et le rappel d’un numéro après 40 puis 80 tours. Les tests contrôlent notamment l’attribution des répliques, le rappel de l’indice, le nombre d’appels et les budgets. Les compteurs viennent du modèle local et incluent son format de conversation. Chaque cas conserve sa requête, sa réponse, les bulles interprétées et les compteurs dans `build/local-ai/report.json`. Le rapport permet aussi de relire le dialogue et d’apprécier sa qualité littéraire.
+
+`flutter test` exécute les TU rapides. Le workflow **Local AI scene tests** exécute en plus le modèle sur les PR qui modifient la narration et publie le rapport dans l’artefact **local-ai-scenes**. Pour réutiliser une installation existante, `DOMOLIA_LLAMA_SERVER` peut pointer vers un binaire llama-server avec TLS et `DOMOLIA_MODEL_FILE` vers le même GGUF vérifié.

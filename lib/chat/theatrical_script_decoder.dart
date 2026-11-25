@@ -112,6 +112,10 @@ class _TheatricalLines {
     // transcripts and models using the previous syntax share validation.
     if (trimmed == '*') {
       trimmed = '[NARRATION]';
+    } else if (trimmed.startsWith('* ')) {
+      // Some local models put the gesture and a closing delimiter on one line.
+      final gesture = trimmed.substring(2).replaceFirst(RegExp(r'\s+(?:---|\*)$'), '');
+      trimmed = '[NARRATION] $gesture';
     } else if (trimmed == '---') {
       trimmed = '[SCENE]';
     } else if (trimmed.startsWith('@')) {
@@ -200,6 +204,7 @@ class _TheatricalLines {
     final candidate = _pendingLine.trimLeft();
     // A split marker must not flash as raw syntax in the UI.
     final withheld = candidate.startsWith('@') || candidate == '*' ||
+        candidate.startsWith('* ') ||
         (candidate.isNotEmpty && '---'.startsWith(candidate)) ||
         candidate.startsWith('[') ||
         candidate.startsWith(String.fromCharCodes([96, 96, 96])) ||

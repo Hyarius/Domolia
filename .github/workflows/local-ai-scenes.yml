@@ -1,0 +1,47 @@
+name: Local AI scene tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/ai/**'
+      - 'lib/books/**'
+      - 'lib/chat/**'
+      - 'lib/memory/**'
+      - 'test/local_ai_scene_test.dart'
+      - 'test/fixtures/print_shop.dart'
+      - 'tool/test_local_ai.sh'
+      - 'pubspec.yaml'
+      - '.github/workflows/local-ai-scenes.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: local-ai-scenes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scenes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/domolia/local-ai
+          key: local-ai-linux-x64-qwen2.5-3b-q4km-9c9f56a3-b12738
+      - name: Run scenes on CPU
+        run: bash tool/test_local_ai.sh
+      - name: Save responses and token counts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-ai-scenes
+          path: build/local-ai/report.json
+          if-no-files-found: warn
