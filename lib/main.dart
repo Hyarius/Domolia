@@ -208,6 +208,7 @@ class _HomePageState extends State<HomePage> {
     _chat = widget.chat ?? NarrativeChatController(
       provider: _ai.provider,
       configuration: () => null,
+      structuredStreamingEnabled: true,
       diagnostics: _aiDiagnostics,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -419,7 +420,7 @@ class _HomePageState extends State<HomePage> {
             maxOutputTokens: settings.maxOutputTokens,
             toolCallingEnabled: task == AiNarrativeTask.narrator &&
                 binding.provider is AiToolCallingChatProvider &&
-                (current?.toolCallingEnabled ?? true) &&
+                (current?.toolCallingEnabled ?? false) &&
                 _ai.profiles.any((p) => p.id == id &&
                     p.toolCallingCompatibility ==
                         AiToolCallingCompatibility.supported),

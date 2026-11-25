@@ -125,7 +125,7 @@ class BookDefinition {
     this.narrativeStyle = defaultNarratorNarrativePrompt,
     this.detailLevel = 3,
     this.tuning = const NarrativeTuning(),
-    this.illustrationMode = IllustrationMode.suggestions,
+    this.illustrationMode = IllustrationMode.disabled,
     this.illustrationSettings = const BookIllustrationSettings(),
     this.openingMessages = defaultNarratorOpeningMessages,
     this.extensions = const <String, Object?>{},

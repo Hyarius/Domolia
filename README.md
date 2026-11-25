@@ -1,6 +1,8 @@
 # Domolia
 
-Application Android de jeu de rôle narratif, en cours de développement.
+Domolia est un livre dont vous êtes le héros sur Android. Vous écrivez librement ce que votre personnage fait ou dit. Le narrateur joue le monde et les autres personnages. Leurs répliques apparaissent à mesure qu’elles sont écrites, entre de courtes indications de scène.
+
+Le **Livre** définit le cadre, les personnages, le ton et l’ouverture. Chaque **Partie** a son propre historique. Le tag **NSFW** exprime la préférence du Livre. Pour jouer avec OpenUncensored, choisissez votre profil et votre modèle dans les réglages du narrateur.
 
 ## Identité visuelle
 
@@ -159,7 +161,7 @@ Dans « Fournisseur IA », le menu **Configuration API** en haut de page permet 
 
 L'écran **Conversation** s'ouvre depuis l'accueil ou le menu. Il ressemble à une discussion de groupe : chaque message est précédé de son **nom** et de son **avatar**, et possède sa bulle distincte. « Vous », « Narrateur » et chaque personnage peuvent s'exprimer dans leur propre bulle. Le narrateur n'est pas une sortie de texte spéciale : c'est un participant de la scène.
 
-Le moteur de dialogue demande aux modèles un format **une ligne JSON par prise de parole** et affiche progressivement le texte dans les bulles. Le joueur conserve l'exclusivité de ses actions et de ses paroles. L'utilisateur peut arrêter la génération, réessayer une erreur et régénérer la dernière réponse. Les conversations restent temporaires avant la PR05.
+Le moteur de dialogue décode le script au fil de la réponse et affiche chaque voix dans sa bulle. Le joueur conserve l'exclusivité de ses actions et de ses paroles. L'utilisateur peut arrêter la génération, réessayer une erreur et régénérer la dernière réponse. Les Parties sont enregistrées sur le téléphone.
 
 **Important :** dans l'application, « Envoyer » contacte l'API configurée par l'utilisateur, y compris lorsqu'elle est payante. Les tests automatisés de la PR04 utilisent **uniquement des modèles et flux mockés localement**, jamais les API réelles (gratuites ou payantes). Aucun crédit externe n'est consommé pendant la CI.
 
@@ -177,7 +179,7 @@ Le menu **Narrateur** (également accessible depuis **Paramètres**) permet de p
 1. Le **style narratif** du jeu de rôle : instructions de narration transmises à l'IA.
 2. Les **premiers messages possibles**, à raison d'un message par ligne. Une ouverture est choisie automatiquement lorsque vous démarrez une nouvelle conversation, et s'affiche comme une bulle du narrateur.
 
-Les réglages sont sauvegardés localement et réutilisés au prochain lancement de l'application. Les instructions du protocole JSON demeurent fixes et non éditables ; elles sont combinées au style à chaque requête. Le premier message est inséré localement, **sans appel réseau ni consommation de crédits**. Les tests et la CI utilisent uniquement des fournisseurs simulés.
+Les réglages sont sauvegardés localement et réutilisés au prochain lancement de l'application. Les instructions du script théâtral demeurent fixes et non éditables ; elles sont combinées au style à chaque requête. Le premier message est inséré localement, **sans appel réseau ni consommation de crédits**. Les tests et la CI utilisent uniquement des fournisseurs simulés.
 
 
 ## Conversations : appui long, reprise et exports
@@ -202,44 +204,12 @@ Le menu latéral se limite à **Accueil**, **Livres**, **À propos** et **Param�
 Chaque Livre possède un titre, une couverture, un narrateur, un niveau de détail et des tags. Les parties sont enregistrées localement et les configurations IA restent séparées dans le stockage sécurisé. Un Livre peut être exporté/importé comme JSON portable, sans clés, compte, lien de profil ou historique de Partie. Format et limites : [docs/books/format.md](docs/books/format.md).
 
 
-## IA par tâche et contexte de départ local
+## Comment Domolia prépare une scène
 
-Dans **Paramètres → Configurations IA → IA par tâche**, les profils
-distants configurables sont le **narrateur RAW**, le **JSONificateur**
-et l'**extraction de Live Memory**. Leurs budgets de sortie et efforts
-de raisonnement restent réglables individuellement. Chaque Partie peut
-surcharger son narrateur, sa mémoire et ses paramètres de génération.
+Le téléphone prépare la requête à partir du style du Livre, de ses règles et du dernier geste du joueur. Les fiches pertinentes apportent aux personnages un rôle, un tempérament et un objectif. Les dialogues récents donnent au modèle les voix et la situation immédiate. Si le joueur reparle d’un indice plus ancien, Domolia recherche un échange de la Partie et en cite un court passage avec son auteur. Une reprise reconstruit ce contexte depuis l’historique conservé.
 
-Depuis la PR #31, Domolia **ne paye plus d'appel IA pour résumer le Lore**.
-Un **contexte de départ** de 3 600 caractères au maximum est assemblé
-**localement**, avant le premier RAW de la Partie, puis conservé avec
-l'empreinte du Livre dans le cache SQLite existant. Réouvrir la Partie
-ne relance pas cette préparation ; modifier le Lore ou demander une
-repréparation invalide ce cache. Les anciens réglages de profil
-« Optimiseur de Lore » restent lisibles pour compatibilité mais ne sont
-plus proposés ni exécutés.
+Le modèle produit directement un petit script. Chaque ligne de dialogue est attribuée à son personnage. Les didascalies et les changements de scène sont décodés sur le téléphone. Le tour entier est enregistré après validation. Un Livre peut personnaliser la longueur, le rythme et le style.
 
-Ce contexte ne contient que le cadre du monde, la situation initiale,
-les règles principales, une courte présentation de l'intrigue principale
-et les personnages explicitement présents au départ. Il n'embarque
-pas l'arbre détaillé des scénarios ni les conditions et secrets des
-événements. Le Livre original demeure intact et consultable localement :
-`search_lore`, `get_lore_entry`, `get_lore_global` (section globale
-paginée), `search_history`, et les outils de Live Memory. Une simple
-mention d'un événement n'est jamais la preuve qu'il a eu lieu.
-Le système sélectionne en outre au plus 850 caractères de références
-locales récentes avec Tool Calling, 1 600 sans outils. La sélection
-bornée évite qu'un Livre riche ne bloque le narrateur pour
-« Lore essentiel trop volumineux ».
+Une nouvelle Partie utilise un appel de narration par intervention du joueur. Le rappel local fonctionne sans modèle auxiliaire. La fenêtre récente contient jusqu’à quatre échanges et 2 400 caractères, auxquels s’ajoutent l’action en cours, le contexte du Livre et les extraits sélectionnés. Le plafond de sortie par défaut est de 1 536 tokens. Les préférences enregistrées du Livre et de la Partie continuent de s’appliquer.
 
-Le JSONificateur transforme toujours le RAW en paragraphes numérotés
-et bulles, sans recalcul de positions UTF-16 par l'IA. Le RAW est
-conservé si la conversion échoue, et seule la conversion peut alors
-être réessayée. Les diagnostics et le journal de consommation de tokens
-répertorient les appels au narrateur et à la mémoire séparément.
-
-Le bouton **Repréparer le contexte au prochain message** recalcule la
-fiche initiale localement, sans coût d'API. Les appels narrateur,
-JSONificateur et Live Memory continuent à consommer les crédits du
-fournisseur selon les profils choisis. Le schéma portable du Livre
-ne contient aucune clé IA ni aucune donnée de la Partie.
+Les consultations d’outils et l’extraction IA de souvenirs peuvent être activées dans les réglages de la Partie. Ces options peuvent ajouter des appels facturés. Les diagnostics de la Partie distinguent la consommation rapportée par le fournisseur des limites configurées.

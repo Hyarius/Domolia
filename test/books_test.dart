@@ -1122,8 +1122,8 @@ void main() {
     expect(restored.formatterProfileId, isNull);
     expect(restored.optimizerProfileId, isNull);
     expect(restored.memoryProfileId, isNull);
-    expect(restored.memoryEnabled, isTrue);
-    expect(restored.toolCallingEnabled, isTrue);
+    expect(restored.memoryEnabled, isFalse);
+    expect(restored.toolCallingEnabled, isFalse);
     expect(restored.illustrationModeOverride, isNull);
     expect(restored.generationOverrides, isEmpty);
     expect(library.byId(book.id)!.narrativeStyle,
@@ -1199,8 +1199,8 @@ void main() {
     final restored = (await library.session(party.id))!;
     expect(restored.aiProfileId, isNull);
     expect(restored.illustrationModeOverride, isNull);
-    expect(restored.memoryEnabled, isTrue);
-    expect(restored.toolCallingEnabled, isTrue);
+    expect(restored.memoryEnabled, isFalse);
+    expect(restored.toolCallingEnabled, isFalse);
     expect(restored.generationOverrides, isEmpty);
     expect(await images.overrideFor(party.id), isNull);
     expect((await images.forSession(party.id)).model, 'app-model');

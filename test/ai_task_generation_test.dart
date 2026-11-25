@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('Recommended budgets differ for narrative and mechanical tasks', () {
     expect(AiTaskGenerationSettings.defaults(AiNarrativeTask.narrator)
-        .maxOutputTokens, 8192);
+        .maxOutputTokens, 1536);
     expect(AiTaskGenerationSettings.defaults(AiNarrativeTask.jsonifier)
         .maxOutputTokens, 4096);
     expect(AiTaskGenerationSettings.defaults(AiNarrativeTask.optimizer)

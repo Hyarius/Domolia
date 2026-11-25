@@ -82,11 +82,11 @@ List<RawGeneration> get raws => const [
 
 void expectTheatricalHistory(List<String> assistantTexts) {
   final script = assistantTexts.join('\n');
-  expect(script, contains('[NARRATION]\nTomas repose une tasse.'));
+  expect(script, contains('*\nTomas repose une tasse.'));
   expect(script, contains(
-    '[PERSONNAGE:Tomas|à voix basse]\n« Trois soirs de suite. »'));
-  expect(script, contains('[SCENE]\n[NARRATION]\nLe vent se lève.'));
-  expect(script, contains('[PERSONNAGE:Éline Vare]\n« Puis-je vous aider ? »'));
+    '@Tomas|à voix basse\n« Trois soirs de suite. »'));
+  expect(script, contains('---\n*\nLe vent se lève.'));
+  expect(script, contains('@Éline Vare\n« Puis-je vous aider ? »'));
   expect(script, isNot(contains('Résumé narratif factuel du tour')));
   expect(script, isNot(contains('Tomas : « Trois soirs de suite. »')));
   expect(script, isNot(contains('Éline Vare : Dialogue')));

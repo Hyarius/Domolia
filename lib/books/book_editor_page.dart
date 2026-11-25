@@ -221,7 +221,7 @@ class BookEditorPageState extends State<BookEditorPage> {
         narrativeStyle: defaultNarratorNarrativePrompt,
         detailLevel: 3,
         tuning: const NarrativeTuning(),
-        illustrationMode: IllustrationMode.suggestions,
+        illustrationMode: IllustrationMode.disabled,
         illustrationSettings: const BookIllustrationSettings(),
       ));
       if (!mounted) return;

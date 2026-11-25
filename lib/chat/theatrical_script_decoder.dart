@@ -107,7 +107,21 @@ class _TheatricalLines {
   }
 
   void _consumeLine(String line, List<ChatOutputEvent> output) {
-    final trimmed = line.trim();
+    var trimmed = line.trim();
+    // Normalize the economical scene notation at the parser boundary. Old
+    // transcripts and models using the previous syntax share validation.
+    if (trimmed == '*') {
+      trimmed = '[NARRATION]';
+    } else if (trimmed == '---') {
+      trimmed = '[SCENE]';
+    } else if (trimmed.startsWith('@')) {
+      final label = trimmed.substring(1);
+      if (label.isEmpty || label.contains(RegExp(r'[\[\]@]')) ||
+          label.split('|').length > 2) {
+        throw const FormatException('Nom de scène invalide.');
+      }
+      trimmed = '[PERSONNAGE:$label]';
+    }
     if (_fence.hasMatch(trimmed)) return;
     if (_player.hasMatch(trimmed)) {
       throw const FormatException(
@@ -135,7 +149,7 @@ class _TheatricalLines {
       final name = character.group(1)!.trim();
       final status = character.group(2)?.trim();
       if (name.isEmpty || name.length > 50 ||
-          {'vous', 'joueur', 'player', 'narrateur', 'narrator'}
+          {'vous', 'joueur', 'player', 'moi', 'narrateur', 'narrator'}
               .contains(name.toLowerCase()) ||
           (status != null && (status.isEmpty || status.length > 50))) {
         throw const FormatException('Personnage narratif invalide.');
@@ -185,7 +199,9 @@ class _TheatricalLines {
     if (_imageBlock) return null;
     final candidate = _pendingLine.trimLeft();
     // A split marker must not flash as raw syntax in the UI.
-    final withheld = candidate.startsWith('[') ||
+    final withheld = candidate.startsWith('@') || candidate == '*' ||
+        (candidate.isNotEmpty && '---'.startsWith(candidate)) ||
+        candidate.startsWith('[') ||
         candidate.startsWith(String.fromCharCodes([96, 96, 96])) ||
         candidate.startsWith('{');
     final text = [

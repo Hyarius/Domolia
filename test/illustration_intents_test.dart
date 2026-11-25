@@ -167,11 +167,11 @@ void main() {
   });
 
   group('Book and Party compatibility', () {
-    test('new Books suggest, old Books default disabled', () {
+    test('scene-first Books and legacy Books default to disabled', () {
       const fresh = BookDefinition(id: 'registre', title: 'Le Registre de Sel');
-      expect(fresh.illustrationMode, IllustrationMode.suggestions);
+      expect(fresh.illustrationMode, IllustrationMode.disabled);
       expect(BookDefinition.importJson(fresh.exportJson()).illustrationMode,
-          IllustrationMode.suggestions);
+          IllustrationMode.disabled);
       final old = jsonDecode(fresh.exportJson()) as Map<String, dynamic>;
       old['version'] = 2;
       (old['narrative'] as Map<String, dynamic>)

@@ -37,7 +37,10 @@ String stripIllustrationBlocks(String raw) {
       inside = true;
       continue;
     }
-    if (inside && narrative.hasMatch(trimmed)) inside = false;
+    if (inside && (narrative.hasMatch(trimmed) || trimmed.startsWith('@') ||
+        trimmed.trimRight() == '*' || trimmed.trimRight() == '---')) {
+      inside = false;
+    }
     if (!inside) kept.add(line);
   }
   return kept.join('\n').trim();

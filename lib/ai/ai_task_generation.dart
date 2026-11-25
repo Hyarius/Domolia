@@ -19,7 +19,7 @@ class AiTaskGenerationSettings {
   static const minTokens = 128;
   static const maxTokens = 32768;
   static const tokenChoices = <int>[
-    512, 1024, 2400, 4096, 8192, 16384, 32768,
+    512, 1024, 1536, 2400, 4096, 8192, 16384, 32768,
   ];
   /// "auto" uses the Luna preset; "provider" omits the API field.
   static const reasoningChoices = <String>[
@@ -31,7 +31,7 @@ class AiTaskGenerationSettings {
 
   static AiTaskGenerationSettings defaults(AiNarrativeTask task) =>
       AiTaskGenerationSettings(maxOutputTokens: switch (task) {
-        AiNarrativeTask.narrator => 8192,
+        AiNarrativeTask.narrator => 1536,
         AiNarrativeTask.jsonifier => 4096,
         AiNarrativeTask.optimizer => 4096,
         AiNarrativeTask.memory => 1024,

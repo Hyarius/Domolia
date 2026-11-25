@@ -56,9 +56,9 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   String? _selected;
 
   String? _memoryProfile;
-  bool _memoryEnabled = true;
+  bool _memoryEnabled = false;
   String? _inheritedNarratorProfile;
-  bool _toolCallingEnabled = true;
+  bool _toolCallingEnabled = false;
   IllustrationMode? _illustrationModeOverride;
   int _cachedLoreCharacters = 0;
   Map<AiNarrativeTask, AiTaskGenerationOverride> _generationOverrides = {};
@@ -83,8 +83,8 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           _selected = session?.aiProfileId;
 
           _memoryProfile = session?.memoryProfileId;
-          _memoryEnabled = session?.memoryEnabled ?? true;
-          _toolCallingEnabled = session?.toolCallingEnabled ?? true;
+          _memoryEnabled = session?.memoryEnabled ?? false;
+          _toolCallingEnabled = session?.toolCallingEnabled ?? false;
           _illustrationModeOverride = session?.illustrationModeOverride;
           _inheritedNarratorProfile = bookProfile;
           _cachedLoreCharacters = session?.optimizedLore?.length ?? 0;
@@ -866,7 +866,8 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                 SwitchListTile(
                   key: const ValueKey('conversationMemoryEnabled'),
                   title: const Text('Mémoire automatique'),
-                  subtitle: const Text('Une extraction IA supplémentaire '
+                  subtitle: const Text('Le rappel de passages est toujours local. '
+                      'Une extraction IA supplémentaire '
                       'peut être facturée après chaque tour validé. '
                       'Désactiver ne supprime pas les souvenirs.'),
                   value: _memoryEnabled,
