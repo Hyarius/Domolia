@@ -25,6 +25,7 @@ application.set("{" + android + "}dataExtractionRules", "@xml/domolia_data_extra
 for permission in (
     "android.permission.INTERNET",
     "android.permission.REQUEST_INSTALL_PACKAGES",
+    "android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION",
 ):
     existing = manifest_root.findall("uses-permission")
     if not any(item.get("{" + android + "}name") == permission for item in existing):

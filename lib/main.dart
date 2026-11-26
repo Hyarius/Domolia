@@ -143,7 +143,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   _Page _page = _Page.home;
   final List<_Page> _history = [];
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -182,7 +182,12 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _ownsUpdates = widget.updates == null;
-    _updates = widget.updates ?? createProductionUpdateController();
+    WidgetsBinding.instance.addObserver(this);
+    _updates = widget.updates ?? createProductionUpdateController(
+      canAutoInstall: () => mounted &&
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed &&
+          (_page == _Page.home || _page == _Page.updates) && !_chat.busy,
+    );
     _ownsAi = widget.ai == null;
     _ai = widget.ai ?? AiConnectionController(
       store: SecureAiProfileStore(),
@@ -221,7 +226,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_updates.checkAutomatically());
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (_ownsUpdates) _updates.dispose();
     if (_ownsChat) _chat.dispose();
     _liveMemory?.dispose();
@@ -370,6 +381,7 @@ class _HomePageState extends State<HomePage> {
       }
       _page = next;
     });
+    if (next == _Page.home || next == _Page.updates) unawaited(_updates.checkAutomatically());
   }
 
   Future<void> _goBack() async {
@@ -381,6 +393,7 @@ class _HomePageState extends State<HomePage> {
     }
     if (!await _canLeaveCurrentPage() || !mounted || _history.isEmpty) return;
     setState(() => _page = _history.removeLast());
+    if (_page == _Page.home || _page == _Page.updates) unawaited(_updates.checkAutomatically());
     if (_page == _Page.chat &&
         _activeSessionId != null && _selectedBookId != null) {
       // The Book may have been edited/reset without restarting this Party.

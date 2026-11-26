@@ -30,7 +30,8 @@ if application_id != "fr.domolia.domolia" or int(code) != run:
 permissions = subprocess.check_output(
     [str(aapt), "dump", "permissions", str(apk)], text=True
 )
-for permission in ("android.permission.INTERNET", "android.permission.REQUEST_INSTALL_PACKAGES"):
+for permission in ("android.permission.INTERNET", "android.permission.REQUEST_INSTALL_PACKAGES",
+                   "android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION"):
     if permission not in permissions:
         raise SystemExit(f"Missing generated Android permission: {permission}")
 manifest = subprocess.check_output(

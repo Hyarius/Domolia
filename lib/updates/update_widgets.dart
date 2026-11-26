@@ -90,7 +90,7 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
       Text('Version installée : ${version == null ? 'inconnue' : '${version.versionName} (build ${version.versionCode})'}'),
       const SizedBox(height: DomoliaSpacing.field),
       FilledButton.icon(
-        onPressed:checking || downloading ? null : widget.onCheckManually ?? updater.checkNow,
+        onPressed:checking || downloading || updater.phase == UpdatePhase.installing ? null : widget.onCheckManually ?? updater.checkNow,
         icon:const Icon(Icons.refresh),
         label:const Text('Vérifier maintenant'),
       ),
@@ -99,8 +99,8 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
         icon:const Icon(Icons.close),label:const Text('Annuler le téléchargement')),
       const SizedBox(height:DomoliaSpacing.section),
       SwitchListTile(
-        title:const Text('Vérifier automatiquement au démarrage'),
-        subtitle:const Text('Télécharger sans bloquer la navigation.'),
+        title:const Text('Mises à jour automatiques'),
+        subtitle:const Text('Domolia vérifie le canal à l’ouverture et au retour à l’accueil. Android peut demander une confirmation.'),
         value:updater.automatic,
         activeTrackColor:DomoliaColors.goldDark,
         onChanged:(enabled) => updater.changeAutomatic(enabled),
@@ -129,6 +129,9 @@ class _UpdateSettingsPanelState extends State<UpdateSettingsPanel> {
         UpdatePhase.idle => 'en attente',
         UpdatePhase.checking => 'vérification en cours',
         UpdatePhase.upToDate => 'à jour',
+        UpdatePhase.readyToInstall => 'prête à installer',
+        UpdatePhase.installing => 'installation en cours',
+        UpdatePhase.installed => 'mise à jour installée',
         UpdatePhase.downloading => 'téléchargement en cours',
         UpdatePhase.cancelled => 'annulé',
         UpdatePhase.installationRequested => 'installation proposée',
@@ -175,6 +178,8 @@ class UpdateCheckDialog extends StatelessWidget {
             'Recherche de mises à jour sur ${controller.channel}…',
           UpdatePhase.upToDate =>
             'Domolia est déjà à jour sur le canal ${controller.channel}.',
+          UpdatePhase.readyToInstall || UpdatePhase.installing || UpdatePhase.installed =>
+            controller.message ?? 'Mise à jour Android.',
           UpdatePhase.downloading =>
             'Une nouvelle version est disponible. Téléchargement en cours…',
           UpdatePhase.cancelled => 'Le téléchargement a été annulé.',
