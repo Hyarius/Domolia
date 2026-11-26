@@ -20,7 +20,9 @@ version_is() {
 }
 diagnostics() {
   adb shell run-as "$package" cat files/update-error || true
-  adb logcat -d -s PackageInstaller PackageInstallerSession PackageManager AndroidRuntime flutter | tail -80
+  adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' || true
+  adb shell dumpsys package "$package" | grep -E 'versionCode=|installerPackageName=' || true
+  adb logcat -d | grep -Ei 'domolia|PackageInstallerSession|silent update|INSTALL_FAILED' | tail -90 || true
 }
 trap 'diagnostics' ERR
 
@@ -35,6 +37,9 @@ version_is 1
 adb shell am force-stop "$package"
 adb shell run-as "$package" rm files/update-error
 
+# Android counts the rejected silent attempt towards its 30-second per-installer
+# throttle. Space these two artificial releases like independent updates.
+sleep 35
 upload "$RUNNER_TEMP/domolia-2.apk"
 adb shell am start -n "$package/.MainActivity"
 for _ in {1..90}; do
