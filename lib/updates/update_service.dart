@@ -178,13 +178,15 @@ class UpdateController extends ChangeNotifier {
     final result = await android.install(path);
     if (_closed) return;
     _installationAttempted = version;
-    (phase, message) = switch (result) {
+    final (nextPhase, nextMessage) = switch (result) {
       'installed' => (UpdatePhase.installed, 'Mise à jour installée.'),
       'launched' => (UpdatePhase.installationRequested, 'Confirmez la mise à jour dans Android.'),
       'permissionRequired' => (UpdatePhase.permissionRequired, 'Installation non autorisée. Touchez Vérifier maintenant pour réessayer.'),
       'cancelled' => (UpdatePhase.cancelled, 'Installation reportée.'),
       _ => throw StateError('Réponse inconnue de l’installateur Android.'),
     };
+    phase = nextPhase;
+    message = nextMessage;
     _notify();
   }
 
