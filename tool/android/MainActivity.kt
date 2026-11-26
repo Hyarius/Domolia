@@ -94,15 +94,6 @@ class MainActivity : FlutterActivity() {
             info.versionCode.toLong()
         }
 
-    private fun certificates(info: PackageInfo): Set<String> =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            info.signingInfo?.apkContentsSigners?.map { it.toCharsString() }?.toSet()
-                ?: emptySet()
-        } else {
-            @Suppress("DEPRECATION")
-            info.signatures?.map { it.toCharsString() }?.toSet() ?: emptySet()
-        }
-
     private fun requestUpdate(path: String, result: MethodChannel.Result) {
         check(installResult == null) { "Une installation est déjà en cours." }
         // Do not let Dart pass arbitrary files to FileProvider.
@@ -141,25 +132,17 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun validateArchive(apk: File) {
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
-            PackageManager.GET_SIGNING_CERTIFICATES else {
-            @Suppress("DEPRECATION")
-            PackageManager.GET_SIGNATURES
-        }
-        val archive = archiveInfo(apk.path, flags)
+        // PackageInstaller authenticates the replacement against the installed signer
+        // (including valid key rotations). Archive signingInfo can be null on Android 13.
+        val archive = archiveInfo(apk.path, 0)
             ?: throw IllegalArgumentException("APK Android invalide.")
         require(archive.packageName == packageName) { "Identifiant Android différent." }
         require(versionCode(archive) > versionCode(packageInfo(packageName, 0))) {
             "Version Android non supérieure."
         }
-        val installed = packageInfo(packageName, flags)
-        require(certificates(installed).isNotEmpty() &&
-                certificates(installed) == certificates(archive)) {
-            "Signature Android incompatible."
-        }
     }
 
-    // Reading the signature and staging the APK can take seconds on a phone.
+    // Reading and staging the APK can take seconds on a phone.
     private fun prepareUpdate(apk: File) {
         Thread {
             var sessionId: Int? = null
