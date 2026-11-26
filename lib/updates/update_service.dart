@@ -181,7 +181,7 @@ class UpdateController extends ChangeNotifier {
     final (nextPhase, nextMessage) = switch (result) {
       'installed' => (UpdatePhase.installed, 'Mise à jour installée.'),
       'launched' => (UpdatePhase.installationRequested, 'Confirmez la mise à jour dans Android.'),
-      'permissionRequired' => (UpdatePhase.permissionRequired, 'Installation non autorisée. Touchez Vérifier maintenant pour réessayer.'),
+      'permissionRequired' => (UpdatePhase.permissionRequired, 'Autorisez les installations depuis Domolia pour continuer. Touchez Vérifier maintenant pour réessayer.'),
       'cancelled' => (UpdatePhase.cancelled, 'Installation reportée.'),
       _ => throw StateError('Réponse inconnue de l’installateur Android.'),
     };

@@ -43,11 +43,18 @@ class MainActivity : FlutterActivity() {
                         }
                         "installedApp" -> {
                             val info = packageInfo(packageName, 0)
+                            val code = versionCode(info)
+                            // Once an update is installed, its private APK copy can be released.
+                            val filename = Regex("""update-(\d+)\.apk""")
+                            File(filesDir, "updates").listFiles()?.forEach { file ->
+                                val build = filename.matchEntire(file.name)?.groupValues?.get(1)?.toLongOrNull()
+                                if (build != null && build <= code && file.isFile) file.delete()
+                            }
                             result.success(
                                 mapOf(
                                     "packageName" to packageName,
                                     "versionName" to (info.versionName ?: ""),
-                                    "versionCode" to versionCode(info)
+                                    "versionCode" to code
                                 )
                             )
                         }
@@ -150,7 +157,6 @@ class MainActivity : FlutterActivity() {
                 certificates(installed) == certificates(archive)) {
             "Signature Android incompatible."
         }
-
     }
 
     // Reading the signature and staging the APK can take seconds on a phone.
