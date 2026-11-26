@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -euxo pipefail
 package=fr.domolia.domolia
 candidate=files/updates/update-2.apk
 signer=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
@@ -12,7 +12,7 @@ for version in 1 2; do
     --out "$RUNNER_TEMP/published-$version.apk" "$RUNNER_TEMP/domolia-$version.apk"
 done
 signer_digest() {
-  "$signer" verify --print-certs "$1" | awk '/Signer #1 certificate SHA-256 digest:/ { print $NF }'
+  "$signer" verify --print-certs "$1" | tee /dev/stderr | awk '/certificate SHA-256 digest:/ && !seen++ { print $NF }'
 }
 publisher_digest=$(signer_digest "$RUNNER_TEMP/published-1.apk")
 test -n "$publisher_digest"
