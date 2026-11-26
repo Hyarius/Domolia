@@ -3,12 +3,27 @@ set -euo pipefail
 package=fr.domolia.domolia
 candidate=files/updates/update-2.apk
 signer=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+# Use the same persistent signer across builds, just like the published releases.
+# Flutter's generated debug signing configuration can use a per-build key.
+keytool -genkeypair -keystore "$RUNNER_TEMP/publisher.jks" -storepass android -keypass android \
+  -alias publisher -keyalg RSA -validity 365 -dname CN=Publisher >/dev/null
+for version in 1 2; do
+  "$signer" sign --ks "$RUNNER_TEMP/publisher.jks" --ks-pass pass:android \
+    --out "$RUNNER_TEMP/published-$version.apk" "$RUNNER_TEMP/domolia-$version.apk"
+done
+signer_digest() {
+  "$signer" verify --print-certs "$1" | awk '/Signer #1 certificate SHA-256 digest:/ { print $NF }'
+}
+publisher_digest=$(signer_digest "$RUNNER_TEMP/published-1.apk")
+test -n "$publisher_digest"
+test "$publisher_digest" = "$(signer_digest "$RUNNER_TEMP/published-2.apk")"
 keytool -genkeypair -keystore "$RUNNER_TEMP/other.jks" -storepass android -keypass android \
   -alias other -keyalg RSA -validity 365 -dname CN=Other >/dev/null
 "$signer" sign --ks "$RUNNER_TEMP/other.jks" --ks-pass pass:android \
   --out "$RUNNER_TEMP/wrong.apk" "$RUNNER_TEMP/domolia-2.apk"
 
-adb install "$RUNNER_TEMP/domolia-1.apk"
+test "$publisher_digest" != "$(signer_digest "$RUNNER_TEMP/wrong.apk")"
+adb install "$RUNNER_TEMP/published-1.apk"
 adb shell appops set "$package" REQUEST_INSTALL_PACKAGES allow
 adb shell run-as "$package" mkdir -p files/updates
 upload() {
@@ -40,7 +55,7 @@ adb shell run-as "$package" rm files/update-error
 # Android counts the rejected silent attempt towards its 30-second per-installer
 # throttle. Space these two artificial releases like independent updates.
 sleep 35
-upload "$RUNNER_TEMP/domolia-2.apk"
+upload "$RUNNER_TEMP/published-2.apk"
 adb shell am start -n "$package/.MainActivity"
 for _ in {1..90}; do
   if version_is 2; then
