@@ -33,6 +33,7 @@ class IllustrationController extends ChangeNotifier {
     required this.timeline,
     required this.lore,
     this.visualSettings,
+    this.bookAllowsNsfw,
     required this.memory,
     required this.awaitNarrativeWrites,
     required this.files,
@@ -51,6 +52,7 @@ class IllustrationController extends ChangeNotifier {
   final List<ChatTimelineEvent> Function() timeline;
   final BookLore Function() lore;
   final BookIllustrationSettings Function()? visualSettings;
+  final bool Function()? bookAllowsNsfw;
   final Iterable<LiveMemoryFact> Function() memory;
   final Future<void> Function() awaitNarrativeWrites;
   final LocalIllustrationFiles files;
@@ -182,6 +184,7 @@ class IllustrationController extends ChangeNotifier {
         scene: scene, provider: endpoint.provider,
         connection: endpoint.configuration,
         style: style, negativePrompt: negativePrompt,
+        nsfw: bookAllowsNsfw?.call() ?? false,
       );
       if (diagnostics == null) return await action();
       return await diagnostics!.captureDuring(action, exchanges.add);
@@ -285,7 +288,7 @@ class IllustrationController extends ChangeNotifier {
           intent: intents.single, timeline: all,
           lore: lore(), memory: memory());
       final options = (await preferences.forSession(sessionId))
-          .resolveProfiles(ai.profiles);
+          .resolveProfiles(ai.profiles, nsfw: bookAllowsNsfw?.call() ?? false);
       if (options.directorProfileId.isEmpty) {
         throw StateError('Choisissez un metteur en scène IA dans les réglages.');
       }
@@ -447,7 +450,7 @@ class IllustrationController extends ChangeNotifier {
     _notify();
   }
 
-  Future<void> generate(int intentId) async {
+  Future<void> generate(int intentId, {bool useDraft = false}) async {
     if (_closed || !_inFlight.add(intentId)) return;
     error = null;
     errorIntentId = null;
@@ -473,13 +476,14 @@ class IllustrationController extends ChangeNotifier {
         lore: lore(), memory: memory(),
       );
       final prepared = forIntent(intentId);
-      if (prepared?.state == IllustrationJobState.ready) {
+      if (prepared?.state == IllustrationJobState.ready && !useDraft) {
         throw StateError('Validez la description avant de générer l’image.');
       }
-      final preparedPrompt = prepared?.state == IllustrationJobState.approved
+      final preparedPrompt = prepared?.state == IllustrationJobState.approved ||
+              (useDraft && prepared?.state == IllustrationJobState.ready)
           ? prepared!.prompt : null;
       final options = (await preferences.forSession(sessionId))
-          .resolveProfiles(ai.profiles);
+          .resolveProfiles(ai.profiles, nsfw: bookAllowsNsfw?.call() ?? false);
       options.validate();
       final art = visualSettings?.call() ?? const BookIllustrationSettings();
       art.validate();
@@ -507,7 +511,8 @@ class IllustrationController extends ChangeNotifier {
             'Désactivez le plafond ou choisissez un modèle à prix garanti.');
       }
       final models = await imageProvider.listModels(profile.apiKey);
-      final capability = selectImageModel(models, options.model);
+      final capability = selectImageModel(models, options.model,
+          nsfw: providerId == 'openuncensored' && (bookAllowsNsfw?.call() ?? false));
       final effectiveQuality = providerId == 'openuncensored'
           ? null : art.quality;
       if (!capability.sizes.contains(art.size) ||

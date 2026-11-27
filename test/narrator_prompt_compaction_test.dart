@@ -96,10 +96,10 @@ void main() {
     expect(prompt, contains('des répliques naturelles'));
     expect(prompt, contains('Ne force ni rencontre'));
     expect(prompt, contains('Un personnage déjà rencontré'));
-    expect(theatricalNarratorProtocol, contains('[NARRATION]'));
-    expect(theatricalNarratorProtocol, contains('[PERSONNAGE:Nom]'));
-    expect(theatricalNarratorProtocol, contains('[SCENE]'));
-    expect(theatricalNarratorProtocol, contains('[JOUEUR]'));
+    expect(theatricalNarratorProtocol, contains('*'));
+    expect(theatricalNarratorProtocol, contains('@'));
+    expect(theatricalNarratorProtocol, contains('---'));
+    expect(theatricalNarratorProtocol, contains('intervention du joueur'));
   });
 
   test('Saved Book style keeps its wording and gains runtime craft rules', () {

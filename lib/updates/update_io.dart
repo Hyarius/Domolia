@@ -85,7 +85,16 @@ class HttpApkDownloader implements ApkDownloader {
     final temp=File('${folder.path}/candidate.apk.part');
     final ready=File('${folder.path}/update-${candidate.versionCode}.apk');
     if(await temp.exists()) await temp.delete();
-    if(await ready.exists()) await ready.delete();
+    if (await ready.exists()) {
+      try {
+        await verifyApkSha256(ready, candidate.sha256);
+        if (cancel.cancelled) throw const DownloadCancelled();
+        onProgress(1);
+        return ready.path;
+      } on FormatException {
+        await ready.delete();
+      }
+    }
     final client=HttpClient()..connectionTimeout=const Duration(seconds:15);
     cancel.attach(()=>client.close(force:true));
     IOSink? output;
@@ -162,8 +171,8 @@ class SharedPreferencesUpdateStore implements UpdatePreferences {
   }
 }
 
-UpdateController createProductionUpdateController()=>UpdateController(
+UpdateController createProductionUpdateController({bool Function()? canAutoInstall})=>UpdateController(
   releases:const GitHubReleaseSource(),
   downloader:const HttpApkDownloader(),
   android:const MethodChannelAndroidUpdater(),
-  preferences:const SharedPreferencesUpdateStore());
+  preferences:const SharedPreferencesUpdateStore(), canAutoInstall:canAutoInstall);

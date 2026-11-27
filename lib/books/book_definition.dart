@@ -125,7 +125,7 @@ class BookDefinition {
     this.narrativeStyle = defaultNarratorNarrativePrompt,
     this.detailLevel = 3,
     this.tuning = const NarrativeTuning(),
-    this.illustrationMode = IllustrationMode.suggestions,
+    this.illustrationMode = IllustrationMode.disabled,
     this.illustrationSettings = const BookIllustrationSettings(),
     this.openingMessages = defaultNarratorOpeningMessages,
     this.extensions = const <String, Object?>{},
@@ -154,15 +154,17 @@ class BookDefinition {
   final Map<String, Object?> extensions;
   final BookLore lore;
 
+  static const adultContentPreference =
+      'Livre NSFW : le contenu sexuel explicite entre adultes consentants '
+      'est permis si la scène le demande, dans les limites du fournisseur.';
+
   bool get nsfw => tags.contains('nsfw');
 
   Narrator get narrator => Narrator(
         narrativePrompt: [
           narrativeStyle,
           detailInstruction(detailLevel),
-          if (nsfw)
-            'Le contenu adulte est une préférence du Livre. Respecte '
-                'toujours les règles et limites du fournisseur IA.',
+          if (nsfw) adultContentPreference,
         ].join('\n\n'),
         openingMessages: openingMessages,
         tuning: tuning,

@@ -9,6 +9,7 @@ import '../ai/ai_diagnostics.dart';
 import '../ai/ai_usage.dart';
 import '../ai/ai_provider.dart';
 import '../ai/ai_task_routing.dart';
+import '../books/book_export.dart';
 import '../books/book_library_controller.dart';
 import '../chat/chat_controller.dart';
 import '../chat/chat_protocol.dart';
@@ -56,9 +57,9 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   String? _selected;
 
   String? _memoryProfile;
-  bool _memoryEnabled = true;
+  bool _memoryEnabled = false;
   String? _inheritedNarratorProfile;
-  bool _toolCallingEnabled = true;
+  bool _toolCallingEnabled = false;
   IllustrationMode? _illustrationModeOverride;
   int _cachedLoreCharacters = 0;
   Map<AiNarrativeTask, AiTaskGenerationOverride> _generationOverrides = {};
@@ -83,8 +84,8 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           _selected = session?.aiProfileId;
 
           _memoryProfile = session?.memoryProfileId;
-          _memoryEnabled = session?.memoryEnabled ?? true;
-          _toolCallingEnabled = session?.toolCallingEnabled ?? true;
+          _memoryEnabled = session?.memoryEnabled ?? false;
+          _toolCallingEnabled = session?.toolCallingEnabled ?? false;
           _illustrationModeOverride = session?.illustrationModeOverride;
           _inheritedNarratorProfile = bookProfile;
           _cachedLoreCharacters = session?.optimizedLore?.length ?? 0;
@@ -448,31 +449,12 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
 
   /// Export the canonical Book definition, not this session or its AI profile.
   Future<void> _exportBook() async {
-    try {
-      final book = widget.library.byId(widget.bookId);
-      if (book == null) {
-        _notify('Livre introuvable.');
-        return;
-      }
-      final bytes = Uint8List.fromList(utf8.encode(book.exportJson()));
-      final safeName = book.title.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
-      final fileName = '${safeName.isEmpty ? 'livre' : safeName}.json';
-      if (widget.onExportBookJson != null) {
-        await widget.onExportBookJson!(fileName, bytes);
-        _notify('Livre exporté.');
-        return;
-      }
-      final saved = await FilePicker.platform.saveFile(
-        dialogTitle: 'Exporter le Livre (JSON brut)',
-        fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: ['json'],
-        bytes: bytes,
-      );
-      if (saved != null) _notify('Livre exporté.');
-    } catch (_) {
-      _notify('Impossible d’exporter le Livre.');
+    final book = widget.library.byId(widget.bookId);
+    if (book == null) {
+      _notify('Livre introuvable.');
+      return;
     }
+    await exportBookFile(book, _notify, writer: widget.onExportBookJson);
   }
 
   Future<void> _purgeAiDiagnostics() async {
@@ -866,7 +848,8 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                 SwitchListTile(
                   key: const ValueKey('conversationMemoryEnabled'),
                   title: const Text('Mémoire automatique'),
-                  subtitle: const Text('Une extraction IA supplémentaire '
+                  subtitle: const Text('Le rappel de passages est toujours local. '
+                      'Une extraction IA supplémentaire '
                       'peut être facturée après chaque tour validé. '
                       'Désactiver ne supprime pas les souvenirs.'),
                   value: _memoryEnabled,

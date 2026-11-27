@@ -315,7 +315,7 @@ void main() {
       findsNothing);
     expect(find.byKey(const ValueKey('aiTaskTokens-optimizer-4096')),
       findsNothing);
-    final token = find.byKey(const ValueKey('aiTaskTokens-narrator-8192'));
+    final token = find.byKey(const ValueKey('aiTaskTokens-narrator-1536'));
     await tester.scrollUntilVisible(token, 250,
       scrollable: find.byType(Scrollable).first);
     await tester.ensureVisible(token);

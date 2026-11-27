@@ -213,6 +213,44 @@ void main() {
     expect(controller.phase,UpdatePhase.failed);
     expect(downloader.calls,0);
   });
+  test('foreground checks are throttled and a manual retry works after cancellation', () async {
+    releases.value = candidate;
+    android.result = 'cancelled';
+    await controller.initialize();
+    expect(controller.phase, UpdatePhase.cancelled);
+    await controller.checkAutomatically();
+    expect(releases.calls, 1);
+    controller.lastCheck = DateTime.now().subtract(const Duration(hours: 1));
+    await controller.checkAutomatically();
+    expect(releases.calls, 2);
+    expect(android.installs, 1);
+    android.result = 'installed';
+    await controller.checkNow();
+    expect(android.installs, 2);
+    expect(controller.phase, UpdatePhase.installed);
+  });
+
+  test('a download completed during play waits for home and is reused there', () async {
+    var atHome = true;
+    final app = UpdateController(releases: releases, downloader: downloader,
+      android: android, preferences: preferences, canAutoInstall: () => atHome);
+    addTearDown(app.dispose);
+    releases.value = candidate;
+    downloader.gate = Completer<void>();
+    final launch = app.initialize();
+    await Future<void>.delayed(Duration.zero);
+    atHome = false;
+    downloader.gate!.complete();
+    await launch;
+    expect(app.phase, UpdatePhase.readyToInstall);
+    await app.checkAutomatically();
+    expect(android.installs, 0);
+    atHome = true;
+    await app.checkAutomatically();
+    expect(android.installs, 1);
+    expect(releases.calls, 1);
+    expect(downloader.calls, 1);
+  });
   test('metadata validation rejects invalid sha and versionCode',() {
     expect(() => UpdateCandidate.parse({
       'channel':'dev-latest','versionName':'0.1.0',

@@ -143,7 +143,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   _Page _page = _Page.home;
   final List<_Page> _history = [];
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -182,7 +182,12 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _ownsUpdates = widget.updates == null;
-    _updates = widget.updates ?? createProductionUpdateController();
+    WidgetsBinding.instance.addObserver(this);
+    _updates = widget.updates ?? createProductionUpdateController(
+      canAutoInstall: () => mounted &&
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed &&
+          (_page == _Page.home || _page == _Page.updates) && !_chat.busy,
+    );
     _ownsAi = widget.ai == null;
     _ai = widget.ai ?? AiConnectionController(
       store: SecureAiProfileStore(),
@@ -208,6 +213,7 @@ class _HomePageState extends State<HomePage> {
     _chat = widget.chat ?? NarrativeChatController(
       provider: _ai.provider,
       configuration: () => null,
+      structuredStreamingEnabled: true,
       diagnostics: _aiDiagnostics,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -220,7 +226,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_updates.checkAutomatically());
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (_ownsUpdates) _updates.dispose();
     if (_ownsChat) _chat.dispose();
     _liveMemory?.dispose();
@@ -369,6 +381,7 @@ class _HomePageState extends State<HomePage> {
       }
       _page = next;
     });
+    if (next == _Page.home || next == _Page.updates) unawaited(_updates.checkAutomatically());
   }
 
   Future<void> _goBack() async {
@@ -380,6 +393,7 @@ class _HomePageState extends State<HomePage> {
     }
     if (!await _canLeaveCurrentPage() || !mounted || _history.isEmpty) return;
     setState(() => _page = _history.removeLast());
+    if (_page == _Page.home || _page == _Page.updates) unawaited(_updates.checkAutomatically());
     if (_page == _Page.chat &&
         _activeSessionId != null && _selectedBookId != null) {
       // The Book may have been edited/reset without restarting this Party.
@@ -419,7 +433,7 @@ class _HomePageState extends State<HomePage> {
             maxOutputTokens: settings.maxOutputTokens,
             toolCallingEnabled: task == AiNarrativeTask.narrator &&
                 binding.provider is AiToolCallingChatProvider &&
-                (current?.toolCallingEnabled ?? true) &&
+                (current?.toolCallingEnabled ?? false) &&
                 _ai.profiles.any((p) => p.id == id &&
                     p.toolCallingCompatibility ==
                         AiToolCallingCompatibility.supported),
@@ -582,6 +596,7 @@ class _HomePageState extends State<HomePage> {
           records: store,
           timeline: () => _chat.timeline,
           lore: () => _books.byId(book.id)?.lore ?? book.lore,
+          bookAllowsNsfw: () => (_books.byId(book.id) ?? book).nsfw,
           visualSettings: () => _books.byId(book.id)?.illustrationSettings ??
               book.illustrationSettings,
           memory: () => _liveMemory?.facts ?? const [],

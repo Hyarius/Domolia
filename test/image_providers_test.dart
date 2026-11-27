@@ -21,10 +21,12 @@ void main() {
   test('Auto model prefers a documented OpenUncensored default', () {
     const catalogue = [
       ImageModelCapability(id:'other', sizes:['1024x1024']),
+      ImageModelCapability(id:'lustify-v8', sizes:['1024x1024']),
       ImageModelCapability(id:'z-image-turbo', sizes:['1024x1024']),
     ];
     expect(selectImageModel(catalogue, '').id, 'z-image-turbo');
-    expect(selectImageModel(catalogue, 'other').id, 'other');
+    expect(selectImageModel(catalogue, '', nsfw: true).id, 'lustify-v8');
+    expect(selectImageModel(catalogue, 'other', nsfw: true).id, 'other');
     expect(() => selectImageModel(catalogue, 'no-such-model'),
         throwsA(isA<ImageGenerationFailure>()));
     expect(() => selectImageModel(const [], ''),

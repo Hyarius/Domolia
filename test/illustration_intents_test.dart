@@ -167,11 +167,11 @@ void main() {
   });
 
   group('Book and Party compatibility', () {
-    test('new Books suggest, old Books default disabled', () {
+    test('scene-first Books and legacy Books default to disabled', () {
       const fresh = BookDefinition(id: 'registre', title: 'Le Registre de Sel');
-      expect(fresh.illustrationMode, IllustrationMode.suggestions);
+      expect(fresh.illustrationMode, IllustrationMode.disabled);
       expect(BookDefinition.importJson(fresh.exportJson()).illustrationMode,
-          IllustrationMode.suggestions);
+          IllustrationMode.disabled);
       final old = jsonDecode(fresh.exportJson()) as Map<String, dynamic>;
       old['version'] = 2;
       (old['narrative'] as Map<String, dynamic>)
@@ -499,7 +499,7 @@ void main() {
       expect((chat.timeline.last as ChatIllustrationIntent).playerEventId, 4);
     });
 
-    test('rejects opening and player texts; keeps long descriptions', () async {
+    test('anchors opening and player illustrations and reloads long descriptions', () async {
       final chat = _chat(_ScriptProvider('[NARRATION]\nUnused.'),
           IllustrationMode.suggestions);
       addTearDown(chat.dispose);
@@ -511,12 +511,16 @@ void main() {
         ChatEntry(id: 2, speaker: ChatSpeaker.narrator,
             name: 'Narrateur', text: List.filled(520, 'A').join()),
       ]);
-      expect(chat.canIllustrateMessage(0), isFalse);
-      expect(chat.canIllustrateMessage(1), isFalse);
+      expect(await chat.illustrateMessage(0), isTrue);
+      expect(chat.illustrationForPassage(0)!.playerEventId, 0);
+      expect(await chat.illustrateMessage(1), isTrue);
+      expect(chat.illustrationForPassage(1)!.playerEventId, 1);
       expect(chat.canIllustrateMessage(2), isTrue);
       expect(await chat.illustrateMessage(2), isTrue);
-      expect((chat.timeline.last as ChatIllustrationIntent).description,
-          hasLength(520));
+      final json = BookSession(id: 's', bookId: 'b', title: 'Test',
+          timeline: chat.timeline).encodeTimeline();
+      expect((BookSession.decodeTimeline(json).last as ChatIllustrationIntent)
+          .description, hasLength(520));
     });
 
     test('failed atomic write leaves no partial manual intention', () async {

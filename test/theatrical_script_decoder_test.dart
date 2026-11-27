@@ -33,6 +33,28 @@ void main() {
     expect((events[3] as ChatLine).text, 'La rue est vide.');
   });
 
+  test('new script headers stay hidden while streaming and retain the voice', () {
+    final decoder = TheatricalScriptDecoder();
+    decoder.add('@L');
+    expect(decoder.preview, isNull);
+    decoder.add('iv|surprise\nVraiment ?');
+    expect(decoder.preview!.name, 'Liv');
+    final events = [...decoder.add('\n*\nElle plie la lettre.\n---\n*\nLe matin.'), ...decoder.finish()];
+    expect((events.first as ChatLine).status, 'surprise');
+    expect((events[1] as ChatLine).speaker, ChatSpeaker.narrator);
+    expect(events[2], isA<ChatSceneChangeOutput>());
+    expect((events.last as ChatLine).text, 'Le matin.');
+  });
+
+  test('inline gesture from a local model starts a narrator block', () {
+    final events = parse('@Liv\nHuit francs.\n* Liv tend la main. ---');
+    expect((events.first as ChatLine).name, 'Liv');
+    expect((events.last as ChatLine).speaker, ChatSpeaker.narrator);
+    expect((events.last as ChatLine).text, 'Liv tend la main.');
+    expect(stripIllustrationBlocks('[IMAGE] Boutique.\n* Liv tend la main.'),
+        '* Liv tend la main.');
+  });
+
   test('unmarked stage direction after a quoted PNJ line is narration', () {
     final events = parse(
       '[PERSONNAGE:Léa Monel|essoufflée]\n'
@@ -119,7 +141,7 @@ void main() {
 
   test('the narrator cannot impersonate the player', () {
     for (final speaker in [
-      '[JOUEUR]', '[PLAYER]', '[PERSONNAGE:Vous]',
+      '[JOUEUR]', '[PLAYER]', '[PERSONNAGE:Vous]', '@Joueur', '@Vous|surpris',
     ]) {
       expect(() => parse('$speaker\nJe vole la clef.'), throwsFormatException);
     }

@@ -7,8 +7,10 @@ enum IllustrationMode { disabled, suggestions, automatic }
 enum IllustrationIntentState { proposed, ignored, cancelled, queued }
 
 /// A proposal is not narrative evidence or a generated image. Its ID is the
-/// stable timeline event ID, and its origin is the player turn that produced it.
+/// stable timeline event ID. The opening itself anchors a pre-turn illustration.
 class ChatIllustrationIntent extends ChatTimelineEvent {
+  static const maxDescriptionLength = 6000;
+
   const ChatIllustrationIntent({
     required int id,
     required this.playerEventId,
@@ -37,7 +39,10 @@ String stripIllustrationBlocks(String raw) {
       inside = true;
       continue;
     }
-    if (inside && narrative.hasMatch(trimmed)) inside = false;
+    if (inside && (narrative.hasMatch(trimmed) || trimmed.startsWith('@') ||
+        trimmed.startsWith('* ') || trimmed.trimRight() == '*' || trimmed.trimRight() == '---')) {
+      inside = false;
+    }
     if (!inside) kept.add(line);
   }
   return kept.join('\n').trim();

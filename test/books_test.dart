@@ -379,12 +379,19 @@ void main() {
       )), provider: _NoNetwork(),
     );
     addTearDown(ai.dispose);
+    String? exported;
     await tester.pumpWidget(MaterialApp(theme: DomoliaTheme.dark,
       home: BookEditorPage(book: book, library: library,
-        ai: ai, onPlay: (_, session) async {}),
+        ai: ai, onExportBookJson: (_, bytes) async => exported = utf8.decode(bytes),
+        onPlay: (_, session) async {}),
     ));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('bookTitle')), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('bookTitle')), 'Livre renommé');
+    await tester.tap(find.byKey(const ValueKey('bookExport')));
+    await tester.pumpAndSettle();
+    expect(BookDefinition.importJson(exported!).title, 'Livre renommé');
+    expect(jsonDecode(exported!).containsKey('timeline'), isFalse);
     await tester.tap(find.text('Narrateur'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('bookDetailSlider')), findsOneWidget);
@@ -1122,8 +1129,8 @@ void main() {
     expect(restored.formatterProfileId, isNull);
     expect(restored.optimizerProfileId, isNull);
     expect(restored.memoryProfileId, isNull);
-    expect(restored.memoryEnabled, isTrue);
-    expect(restored.toolCallingEnabled, isTrue);
+    expect(restored.memoryEnabled, isFalse);
+    expect(restored.toolCallingEnabled, isFalse);
     expect(restored.illustrationModeOverride, isNull);
     expect(restored.generationOverrides, isEmpty);
     expect(library.byId(book.id)!.narrativeStyle,
@@ -1199,8 +1206,8 @@ void main() {
     final restored = (await library.session(party.id))!;
     expect(restored.aiProfileId, isNull);
     expect(restored.illustrationModeOverride, isNull);
-    expect(restored.memoryEnabled, isTrue);
-    expect(restored.toolCallingEnabled, isTrue);
+    expect(restored.memoryEnabled, isFalse);
+    expect(restored.toolCallingEnabled, isFalse);
     expect(restored.generationOverrides, isEmpty);
     expect(await images.overrideFor(party.id), isNull);
     expect((await images.forSession(party.id)).model, 'app-model');

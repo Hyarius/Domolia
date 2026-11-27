@@ -86,7 +86,8 @@ class _GroupChatPageState extends State<GroupChatPage> {
     if (last?.id == _lastTimelineEventId) return;
     _lastTimelineEventId = last?.id;
 
-    if (last is ChatIllustrationIntent && widget.illustrations != null) {
+    if (last is ChatIllustrationIntent && !widget.controller.insertingIllustration &&
+        widget.illustrations != null) {
       // Text-only direction pass. No image generation occurs here.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(widget.illustrations!.prepare(last.id));
@@ -329,6 +330,17 @@ class _GroupChatPageState extends State<GroupChatPage> {
                 _showExportMessage('Texte copié.');
               },
             ),
+            ListTile(
+              key: const ValueKey('chatActionIllustrate'),
+              leading: const Icon(Icons.brush_outlined),
+              title: const Text('Illustrer'),
+              subtitle: const Text('Lancer la mise en scène et le dessin (crédits IA).'),
+              enabled: _canIllustrate(entry.id),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _illustratePassage(entry.id);
+              },
+            ),
             if (isPlayer) ...[
               ListTile(
                 key: const ValueKey('chatActionEdit'),
@@ -349,26 +361,6 @@ class _GroupChatPageState extends State<GroupChatPage> {
                 },
               ),
             ] else ...[
-              ListTile(
-                key: const ValueKey('chatActionIllustrate'),
-                leading: const Icon(Icons.brush_outlined),
-                title: const Text('Illustrer'),
-                subtitle: const Text('Ajouter une intention d’image après ce passage'),
-                enabled: widget.controller.canIllustrateMessage(entry.id),
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  try {
-                    final added =
-                        await widget.controller.illustrateMessage(entry.id);
-                    _showExportMessage(added
-                        ? 'Illustration proposée.'
-                        : 'Impossible d’illustrer ce passage.');
-                  } catch (_) {
-                    _showExportMessage(
-                        'Impossible d’enregistrer l’illustration.');
-                  }
-                },
-              ),
               ListTile(
                 key: const ValueKey('chatActionRegenerate'),
                 leading: const Icon(Icons.refresh_rounded),
@@ -409,6 +401,32 @@ class _GroupChatPageState extends State<GroupChatPage> {
     }
   }
 
+
+  bool _canIllustrate(int messageId) {
+    final intent = widget.controller.illustrationForPassage(messageId);
+    if (intent == null) return widget.controller.canIllustrateMessage(messageId);
+    final images = widget.illustrations;
+    return images != null && !images.isBusy(intent.id) &&
+        intent.state == IllustrationIntentState.proposed &&
+        images.forIntent(intent.id)?.state != IllustrationJobState.available;
+  }
+
+  Future<void> _illustratePassage(int messageId) async {
+    final chat = widget.controller;
+    final images = widget.illustrations;
+    try {
+      final id = chat.illustrationForPassage(messageId)?.id ??
+          await chat.insertPassageIllustration(messageId);
+      if (id == null || !mounted || chat != widget.controller) return;
+      if (images == null) {
+        _showExportMessage('Générateur d’images indisponible.');
+        return;
+      }
+      await images.generate(id, useDraft: true);
+    } catch (_) {
+      _showExportMessage('Impossible de lancer l’illustration du passage.');
+    }
+  }
 
   Future<void> _generateImage(int intentId) async {
     final illustrations = widget.illustrations;
@@ -522,10 +540,8 @@ class _GroupChatPageState extends State<GroupChatPage> {
     }
     if (!create || !mounted) return;
     try {
-      final inserted = await widget.controller.illustrateMessage(messageId);
-      if (!inserted || !mounted) return;
-      final nextIntent = illustrations.lastUnillustratedIntent;
-      if (nextIntent != null) await illustrations.prepare(nextIntent);
+      final id = await widget.controller.insertPassageIllustration(messageId);
+      if (id != null && mounted) await illustrations.prepare(id);
     } catch (_) {
       _showExportMessage('Impossible de créer l’intention d’image.');
     }

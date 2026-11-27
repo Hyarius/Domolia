@@ -1,0 +1,46 @@
+name: Android self-update
+on:
+  pull_request:
+    paths:
+      - 'tool/android/MainActivity.kt'
+      - 'tool/configure_android_updates.py'
+      - 'tool/update_smoke/**'
+      - 'lib/updates/**'
+      - '.github/workflows/self-update.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Build two versions of the same application
+        run: |
+          flutter create --no-pub --platforms=android --org=fr.domolia --project-name=domolia .
+          python3 tool/configure_android_updates.py
+          flutter pub get
+          flutter build apk --debug --target-platform android-x64 --build-number=1 -t tool/update_smoke/main.dart
+          cp build/app/outputs/flutter-apk/app-debug.apk "$RUNNER_TEMP/domolia-1.apk"
+          flutter build apk --debug --target-platform android-x64 --build-number=2
+          cp build/app/outputs/flutter-apk/app-debug.apk "$RUNNER_TEMP/domolia-2.apk"
+      - name: Enable KVM for Android
+        run: sudo chmod 666 /dev/kvm
+      - name: Verify unattended upgrade and private data on Android 13
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          arch: x86_64
+          target: google_apis
+          script: bash tool/update_smoke/verify.sh

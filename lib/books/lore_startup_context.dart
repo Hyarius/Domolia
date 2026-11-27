@@ -66,7 +66,7 @@ class LoreStartupContextBuilder {
   /// Very small local rescue for providers with no tool calling. Even then
   /// the whole scenario tree must never be inserted into a prompt.
   String relevant(BookLore lore, Iterable<String> recentText,
-      {int maxCharacters = 1800}) {
+      {int maxCharacters = 1800, bool dialogueFocus = false}) {
     final recent = recentText.join('\n');
     if (recent.trim().isEmpty || lore.isEmpty) return '';
     final entries = <String>[];
@@ -86,15 +86,33 @@ class LoreStartupContextBuilder {
     final linkedCharacters = {
       for (final place in activePlaces) ...place.characterIds.take(3),
     };
-    for (final character in lore.characters.where((entry) =>
-        _mentioned(entry, recent) || linkedCharacters.contains(entry.id))
-        .take(5)) {
-      add('PERSONNAGE CANONIQUE — ${character.name}', [
-        character.description,
-        if (character.role.isNotEmpty) 'Rôle : ${character.role}',
-        if (character.personality.isNotEmpty)
-          'Caractère : ${character.personality}',
-      ].join(' '));
+    final named = lore.characters.where((e) => _mentioned(e, recent));
+    final characters = dialogueFocus && recentText.isNotEmpty
+        ? <LoreCharacter>{
+            ...named.where((e) => _mentioned(e, recentText.first)),
+            ...named,
+            ...lore.characters.where((e) => linkedCharacters.contains(e.id)),
+          }
+        : lore.characters.where((e) =>
+            _mentioned(e, recent) || linkedCharacters.contains(e.id));
+    for (final character in characters.take(5)) {
+      if (dialogueFocus) {
+        // Give voice and motive space even when the author wrote a long portrait.
+        add(character.name, [
+          if (character.role.isNotEmpty) _clip(character.role, 55),
+          if (character.personality.isNotEmpty) _clip(character.personality, 90),
+          if (character.motivations.isNotEmpty)
+            'But : ${_clip(character.motivations, 85)}',
+          if (character.description.isNotEmpty) _clip(character.description, 85),
+        ].join(' · '), maximum: 320);
+      } else {
+        add('PERSONNAGE CANONIQUE — ${character.name}', [
+          character.description,
+          if (character.role.isNotEmpty) 'Rôle : ${character.role}',
+          if (character.personality.isNotEmpty)
+            'Caractère : ${character.personality}',
+        ].join(' '));
+      }
     }
     for (final place in activePlaces) {
       add('LIEU CANONIQUE — ${place.name}', [

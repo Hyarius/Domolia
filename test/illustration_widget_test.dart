@@ -58,6 +58,7 @@ class _NoKeyStore implements AiProfileStore {
 }
 
 class _Text implements AiChatProvider {
+  final requests = <List<AiMessage>>[];
   Completer<String>? gate;
   @override
   Future<List<AiModel>> listModels(AiConfiguration configuration) async => [];
@@ -65,6 +66,7 @@ class _Text implements AiChatProvider {
   Future<String> complete(AiConfiguration configuration, {
     required List<AiMessage> messages, int maxTokens = 300,
   }) async {
+    requests.add(messages);
     if (gate != null) return gate!.future;
     return jsonEncode({
       'prompt':'Un personnage adulte se tient immobile au milieu d’une '
@@ -203,6 +205,52 @@ class _ImageRecords implements IllustrationRecordStore {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(()=>SharedPreferences.setMockInitialValues({}));
+
+  testWidgets('Illustrer draws the selected historical and latest passage exactly once',
+      (tester) async {
+    final text = _Text();
+    final ai = AiConnectionController(store: _Store(), provider: text);
+    final prefs = ImagePreferences();
+    await ai.initialize();
+    await prefs.saveApplication(const ImageGenerationOptions(
+      profileId: 'image', directorProfileId: 'director', model: 'test-image'));
+    final chat = NarrativeChatController(provider: text, configuration: () => null);
+    const first = 'Une lanterne dans le brouillard.';
+    const last = 'Je referme la fenêtre.';
+    chat.restoreTimeline(const [
+      ChatEntry(id: 0, speaker: ChatSpeaker.narrator, name: 'Narrateur', text: first),
+      ChatEntry(id: 1, speaker: ChatSpeaker.player, name: 'Vous', text: last),
+    ]);
+    final records = _ImageRecords()..timeline = () => chat.timeline;
+    final image = _Image();
+    final images = IllustrationController(
+      sessionId: 'passages', ai: ai, preferences: prefs, records: records,
+      timeline: () => chat.timeline, lore: () => const BookLore(),
+      bookAllowsNsfw: () => true, memory: () => const [],
+      awaitNarrativeWrites: () async {}, files: _MemoryFiles(), providerFactory: (_) => image,
+    );
+    addTearDown(() { images.dispose(); chat.dispose(); prefs.dispose(); ai.dispose(); });
+    await images.initialize();
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: GroupChatPage(
+        controller: chat, illustrations: images, onOpenSettings: () {}))));
+    for (final passage in [first, last]) {
+      await tester.ensureVisible(find.text(passage));
+      await tester.longPress(find.text(passage));
+      await tester.pumpAndSettle();
+      final action = find.byKey(const ValueKey('chatActionIllustrate'));
+      await tester.ensureVisible(action);
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+      final request = text.requests.last.last.content;
+      expect(request, contains('INSTANT À ILLUSTRER (prioritaire) : $passage'));
+      expect(request, contains(BookDefinition.adultContentPreference));
+      if (passage == first) expect(request, isNot(contains(last)));
+      final slot = chat.illustrationForPassage(passage == first ? 0 : 1)!;
+      expect(images.forIntent(slot.id)?.state, IllustrationJobState.available);
+    }
+    expect(text.requests, hasLength(2));
+    expect(image.calls, 2);
+  });
 
   testWidgets('Placeholder generates only after confirmation and brush exists',
       (tester) async {

@@ -246,8 +246,8 @@ class BookLibraryController extends ChangeNotifier {
       clearFormatterProfile: true,
       clearOptimizerProfile: true,
       clearMemoryProfile: true,
-      memoryEnabled: true,
-      toolCallingEnabled: true,
+      memoryEnabled: false,
+      toolCallingEnabled: false,
       clearIllustrationMode: true,
       generationOverrides: const {},
     );

@@ -33,7 +33,7 @@ class ImageModelCapability {
 
 /// Automatic default is selected from the live provider catalogue.
 ImageModelCapability selectImageModel(
-    List<ImageModelCapability> models, String requestedId) {
+    List<ImageModelCapability> models, String requestedId, {bool nsfw = false}) {
   if (requestedId.isNotEmpty) {
     for (final model in models) {
       if (model.id == requestedId) return model;
@@ -41,9 +41,10 @@ ImageModelCapability selectImageModel(
     throw const ImageGenerationFailure(ImageFailureKind.unsupported,
         'Modèle graphique indisponible. Choisissez un autre modèle.');
   }
-  for (final preferred in const [
-    'z-image-turbo', 'lustify-v8', 'qwen-image-3-uncensored',
-  ]) {
+  final defaults = nsfw
+      ? const ['lustify-v8', 'qwen-image-3-uncensored', 'lustify-v7']
+      : const ['z-image-turbo', 'lustify-v8', 'qwen-image-3-uncensored'];
+  for (final preferred in defaults) {
     for (final model in models) {
       if (model.id == preferred) return model;
     }

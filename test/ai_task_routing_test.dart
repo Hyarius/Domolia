@@ -52,7 +52,7 @@ void main() {
     final first = AiTaskRouting();
     addTearDown(first.dispose);
     await first.initialize();
-    expect(first.generationFor(AiNarrativeTask.narrator).maxOutputTokens, 8192);
+    expect(first.generationFor(AiNarrativeTask.narrator).maxOutputTokens, 1536);
     expect(first.generationFor(AiNarrativeTask.jsonifier).maxOutputTokens, 4096);
     await first.setGeneration(AiNarrativeTask.narrator,
       const AiTaskGenerationSettings(
@@ -80,7 +80,7 @@ void main() {
     final routing = AiTaskRouting();
     addTearDown(routing.dispose);
     await routing.initialize();
-    expect(routing.generationFor(AiNarrativeTask.narrator).maxOutputTokens, 8192);
+    expect(routing.generationFor(AiNarrativeTask.narrator).maxOutputTokens, 1536);
     expect(routing.generationFor(AiNarrativeTask.jsonifier).maxOutputTokens, 4096);
     expect(routing.initialized, true);
     await expectLater(routing.setGeneration(AiNarrativeTask.jsonifier,

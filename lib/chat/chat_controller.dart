@@ -7,7 +7,7 @@ import '../ai/ai_provider.dart';
 import '../ai/ai_diagnostics.dart';
 import '../logging/app_logger.dart';
 import 'chat_protocol.dart';
-import 'theatrical_narrator_protocol.dart';
+import 'scene_context.dart';
 import 'theatrical_script_decoder.dart';
 import 'jsonifier.dart';
 import 'narrator.dart';
@@ -43,8 +43,8 @@ class _ToolTurn {
   final int? completionTokens;
 }
 
-/// A two-call pipeline. No AI event is observable before the RAW and its
-/// complete validated representation have been written to durable storage.
+/// Streams a playable scene and persists the validated turn atomically.
+/// The older two-pass dialect remains available for pre-existing callers.
 class NarrativeChatController extends ChangeNotifier {
   NarrativeChatController({
     required this.provider,
@@ -344,35 +344,44 @@ class NarrativeChatController extends ChangeNotifier {
     return null;
   }
 
-  /// Insert a deliberate [IMAGE] directly after a committed AI message.
+  bool get insertingIllustration => _manualIllustrationInFlight;
+
+  /// Insert a deliberate [IMAGE] directly after a committed message.
   /// This is local-only: no provider call, RAW modification or token cost.
   bool canIllustrateMessage(int messageId) {
     if (_closed || busy || _manualIllustrationInFlight ||
         pendingRaw != null || _timeline.length >= 50000) {
       return false;
     }
-    final index = _timeline.indexWhere(
-      (event) => event is ChatEntry && event.id == messageId &&
-          event.speaker != ChatSpeaker.player && !event.inProgress,
-    );
-    if (index < 0 || (_timeline[index] as ChatEntry).text.trim().isEmpty ||
-        playerIdForAiMessage(messageId) == null) {
+    final index = _timeline.indexWhere((event) => event.id == messageId);
+    if (index < 0) return false;
+    final entry = _timeline[index];
+    if (entry is! ChatEntry || entry.inProgress || entry.text.trim().isEmpty ||
+        entry.text.trim().length > ChatIllustrationIntent.maxDescriptionLength) {
       return false;
     }
-    // Prevent duplicate placeholders on a repeated long press.
-    return index + 1 >= _timeline.length ||
-        _timeline[index + 1] is! ChatIllustrationIntent;
+    return illustrationForPassage(messageId) == null;
   }
 
-  /// The timeline and unchanged RAW are persisted atomically before the
-  /// proposal becomes visible. Rewinds remove it with its source turn.
-  Future<bool> illustrateMessage(int messageId) async {
-    if (!canIllustrateMessage(messageId)) return false;
+  ChatIllustrationIntent? illustrationForPassage(int messageId) {
+    final index = _timeline.indexWhere((event) => event.id == messageId);
+    if (index < 0 || index + 1 >= _timeline.length) return null;
+    final source = _timeline[index];
+    final next = _timeline[index + 1];
+    return source is ChatEntry && next is ChatIllustrationIntent &&
+        next.description == source.text.trim() ? next : null;
+  }
+
+  Future<bool> illustrateMessage(int messageId) async =>
+      await insertPassageIllustration(messageId) != null;
+
+  /// Return the exact persisted slot, including when illustrating an older turn.
+  Future<int?> insertPassageIllustration(int messageId) async {
+    if (!canIllustrateMessage(messageId)) return null;
     final index = _timeline.indexWhere((event) => event.id == messageId);
     final entry = _timeline[index] as ChatEntry;
-    final playerId = playerIdForAiMessage(messageId)!;
-    // A selected narrative bubble can be up to 6000 characters. Keep its
-    // complete visual details instead of cutting the pose or clothing midword.
+    // Before the first player turn, the opening itself anchors the illustration.
+    final playerId = playerIdForAiMessage(messageId) ?? entry.id;
     final description = entry.text.trim();
     final intent = ChatIllustrationIntent(
       id: _nextId, playerEventId: playerId, description: description,
@@ -385,7 +394,7 @@ class NarrativeChatController extends ChangeNotifier {
     _manualIllustrationInFlight = true;
     try {
       await _save(updated, _generations);
-      if (_closed) return false;
+      if (_closed) return null;
       _timeline.insert(index + 1, intent);
       _nextId++;
       if (_lastPlayerIndex != null && index < _lastPlayerIndex!) {
@@ -393,7 +402,7 @@ class NarrativeChatController extends ChangeNotifier {
       }
       _timelineChanged();
       _notify();
-      return true;
+      return intent.id;
     } finally {
       _manualIllustrationInFlight = false;
     }
@@ -453,63 +462,24 @@ class NarrativeChatController extends ChangeNotifier {
     return true;
   }
 
-  /// Reuse the validated timeline as few-shot theatrical dialogue, never the
-  /// prose compactText ("Résumé narratif ...", "Nom : réplique") generated for
-  /// memory. This stops long conversations from teaching the model the wrong
-  /// output format. A full turn becomes one assistant message.
-  List<AiMessage> _buildTheatricalHistory() {
-    final history = <AiMessage>[];
-    final stage = StringBuffer();
-
-    void flushStage() {
-      final text = stage.toString().trim();
-      if (text.isNotEmpty) {
-        history.add(AiMessage(role: 'assistant', content: text));
-      }
-      stage.clear();
-    }
-
-    for (final event in _timeline) {
-      if (event is ChatEntry && event.speaker == ChatSpeaker.player) {
-        flushStage();
-        history.add(AiMessage(role: 'user', content: event.text));
-      } else if (event is ChatSceneChange) {
-        stage.writeln('[SCENE]');
-      } else if (event is ChatEntry) {
-        final text = event.text.replaceFirst(
-          RegExp(r'^Résumé narratif factuel du tour\s*:\s*',
-            caseSensitive: false), '').trim();
-        if (text.isEmpty) continue;
-        final name = event.name.trim();
-        final status = event.status?.trim();
-        if (event.speaker == ChatSpeaker.character &&
-            name.isNotEmpty && name.length <= 50 &&
-            !name.contains(RegExp(r'[\]\r\n|]')) &&
-            !{'vous', 'joueur', 'player', 'narrateur', 'narrator'}
-                .contains(name.toLowerCase()) &&
-            (status == null || (status.length <= 50 &&
-                !status.contains(RegExp(r'[\]\r\n]'))))) {
-          stage.writeln(
-            '[PERSONNAGE:$name${status == null || status.isEmpty ? '' : '|$status'}]');
-        } else {
-          stage.writeln('[NARRATION]');
-        }
-        stage.writeln(text);
-        stage.writeln();
-      }
-    }
-    flushStage();
-    return history;
-  }
-
-  /// The last 24 conversational turns / 16k UTF-16 units are retained.
-  /// Compact narration replaces that turn's RAW when available; RAW is the fallback.
-  /// Legacy sessions without RAW fall back to their structured history.
   List<AiMessage> buildNarratorContext({bool hybrid = false,
       bool theatricalOutput = false}) {
-    final history = theatricalOutput
-        ? _buildTheatricalHistory() : <AiMessage>[];
-    if (!theatricalOutput) {
+    if (theatricalOutput) {
+      const scene = SceneContext();
+      final lore = loreProvider?.call() ?? const BookLore();
+      final hash = 'scene-v1-${const LoreContextOptimizer().sourceHash(lore)}';
+      return scene.build(
+        timeline: _timeline,
+        narrator: narratorProvider?.call() ?? narrator,
+        lore: lore,
+        briefing: hash == _optimizedHash && _optimizedLore != null
+            ? _optimizedLore! : scene.premise(lore),
+        suggestImages: illustrationMode != IllustrationMode.disabled,
+        memory: (focus) => memory?.context(focus, budget: 700) ?? '',
+        recentBudget: hybrid ? hybridRecentBudget : narratorRecentBudget,
+      );
+    }
+    final history = <AiMessage>[];
     final raws = {for (final r in _generations)
       if (r.isStructured) r.playerEventId: r};
     RawGeneration? active;
@@ -540,7 +510,6 @@ class NarrativeChatController extends ChangeNotifier {
               content: 'Une nouvelle scène commence.'));
         }
       }
-    }
     }
     final selected = <AiMessage>[];
     var used = 0;
@@ -809,10 +778,6 @@ class NarrativeChatController extends ChangeNotifier {
         hybrid: true, theatricalOutput: structuredOutput))
         AiToolMessage(role: message.role, content: message.content),
     ];
-    if (structuredOutput) {
-      context[0] = AiToolMessage(role: 'system',
-          content: '${_structuredInstructions(context[0].content)}\n\n$theatricalNarratorProtocol${illustrationMode == IllustrationMode.disabled ? '' : '\n$theatricalIllustrationInstruction'}');
-    }
     context[0] = AiToolMessage(role: 'system',
         content: '${context.first.content}\n'
             'Consulte les outils seulement si nécessaire (2 cycles max). '
@@ -846,10 +811,6 @@ class NarrativeChatController extends ChangeNotifier {
               failure: const AiToolsUnsupportedException());
           final fallback = buildNarratorContext(
               theatricalOutput: structuredOutput);
-          if (structuredOutput) {
-            fallback[0] = AiMessage(role: 'system',
-                content: '${_structuredInstructions(fallback.first.content)}\n\n$theatricalNarratorProtocol${illustrationMode == IllustrationMode.disabled ? '' : '\n$theatricalIllustrationInstruction'}');
-          }
           return _requestText(endpoint, fallback, token, maxTokens,
               onFragment: onFragment);
         }
@@ -963,7 +924,8 @@ class NarrativeChatController extends ChangeNotifier {
     _optimizationChecked = true;
     final lore = loreProvider?.call();
     if (lore == null || lore.isEmpty) return;
-    final hash = 'startup-v3-${const LoreContextOptimizer().sourceHash(lore)}';
+    final prefix = structuredStreamingEnabled ? 'scene-v1' : 'startup-v3';
+    final hash = '$prefix-${const LoreContextOptimizer().sourceHash(lore)}';
     if (!_forceOptimization && _optimizedHash == hash &&
         _optimizedLore != null && _optimizedLore!.isNotEmpty) {
       return;
@@ -972,7 +934,7 @@ class NarrativeChatController extends ChangeNotifier {
 
     // No AI request, regardless of the configured legacy optimizer profile.
     // This is a bounded briefing; all original canon stays in the Book.
-    final briefing = LoreStartupContextBuilder(
+    final briefing = structuredStreamingEnabled ? const SceneContext().premise(lore) : LoreStartupContextBuilder(
       maxCharacters: min(loreContextBudget, 3600),
     ).build(lore);
     _check(token);
@@ -988,23 +950,6 @@ class NarrativeChatController extends ChangeNotifier {
     }
     _check(token);
   }
-
-  /// New turns are generated once, decoded incrementally and committed
-  /// atomically. The old formatter is used only for pre-migration pending RAW.
-  /// Normalize legacy saved narrator prompts for theatrical output.
-  /// Modern defaults already support these markers without rewriting.
-  String _structuredInstructions(String source) => source
-      .replaceAll(
-        'Tu écris directement une histoire de jeu de rôle en français, en texte libre.',
-        'Tu écris une histoire de jeu de rôle en français.',
-      )
-      .replaceAll(
-        'Exprime naturellement la narration et les dialogues, sans format informatique.',
-        'Conserve une écriture littéraire naturelle dans chaque message.',
-      )
-      .replaceAll(
-        'Ne produis ni JSON, ni balises, ni instructions destinées à une interface.',
-        '');
 
   Future<void> _generateStructured() async {
     if (_closed || busy || _lastPlayerIndex == null) return;
@@ -1084,9 +1029,6 @@ class NarrativeChatController extends ChangeNotifier {
       modelUsed = endpoint.configuration.model;
       await _ensureOptimizedContext(token);
       _check(token);
-      final context = buildNarratorContext(theatricalOutput: true);
-      context[0] = AiMessage(role: 'system',
-          content: '${_structuredInstructions(context.first.content)}\n\n$theatricalNarratorProtocol${illustrationMode == IllustrationMode.disabled ? '' : '\n$theatricalIllustrationInstruction'}');
       final before = diagnostics?.last;
       Object? failure;
       try {
@@ -1095,12 +1037,12 @@ class NarrativeChatController extends ChangeNotifier {
           // Tool rounds are validated separately; their intermediate content
           // must never be rendered as a narrative message.
           await _requestHybrid(endpoint, token,
-              endpoint.maxOutputTokens ?? 2400, structuredOutput: true,
+              endpoint.maxOutputTokens ?? 1536, structuredOutput: true,
               onFragment: consume, onToolTurnDiscarded: discardToolDraft);
           _check(token);
         } else {
-          await _requestText(endpoint, context, token,
-              endpoint.maxOutputTokens ?? 2400, onFragment: consume);
+          await _requestText(endpoint, buildNarratorContext(theatricalOutput: true), token,
+              endpoint.maxOutputTokens ?? 1536, onFragment: consume);
         }
         _check(token);
         accepted.addAll(decoder.finish());
