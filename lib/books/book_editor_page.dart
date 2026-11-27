@@ -15,6 +15,7 @@ import 'book_cover_loader.dart';
 import 'book_cover_generation.dart';
 import '../illustration/image_providers.dart';
 import 'book_definition.dart';
+import 'book_export.dart';
 import 'book_lore.dart';
 import 'book_lore_tab.dart';
 import 'book_library_controller.dart';
@@ -29,6 +30,7 @@ class BookEditorPage extends StatefulWidget {
     required this.ai,
     required this.onPlay,
     this.initialTab = 0,
+    this.onExportBookJson,
     this.imagePreferences,
   });
 
@@ -37,6 +39,7 @@ class BookEditorPage extends StatefulWidget {
   final AiConnectionController ai;
   final Future<void> Function(BookDefinition book, BookSession session) onPlay;
   final int initialTab;
+  final BookFileWriter? onExportBookJson;
   final ImagePreferences? imagePreferences;
 
   @override
@@ -553,6 +556,16 @@ class BookEditorPageState extends State<BookEditorPage> {
                   color: DomoliaColors.goldLight,
                   fontSize: 22, fontWeight: FontWeight.bold,
                 ))),
+              TextButton.icon(
+                key: const ValueKey('bookExport'),
+                onPressed: () async {
+                  if (await _save() && mounted) {
+                    await exportBookFile(_book, _show, writer: widget.onExportBookJson);
+                  }
+                },
+                icon: const Icon(Icons.file_download_outlined),
+                label: const Text('Exporter'),
+              ),
               TextButton.icon(
                 key: const ValueKey('bookSave'),
                 onPressed: () async {

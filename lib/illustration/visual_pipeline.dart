@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import '../ai/ai_provider.dart';
 import '../books/book_lore.dart';
+import '../books/book_definition.dart';
 import '../chat/chat_protocol.dart';
 import '../memory/live_memory.dart';
 
@@ -404,6 +405,7 @@ class VisualDirector {
     required AiConfiguration connection,
     String style = 'illustration cinématographique',
     String negativePrompt = '',
+    bool nsfw = false,
   }) async {
     final raw = await provider.complete(connection, maxTokens: 1500,
       messages: [
@@ -475,6 +477,7 @@ Pas de titre, pas de longues listes, pas d'instructions techniques.
 '''),
         AiMessage(role: 'user',
           content: scene.evidence +
+              (nsfw ? '\n' + BookDefinition.adultContentPreference : '') +
               '\nSTYLE VISUEL : ' + style +
               (negativePrompt.trim().isEmpty ? '' :
                   '\nEXCLUSIONS DU LIVRE : ' + negativePrompt) +

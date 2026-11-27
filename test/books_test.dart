@@ -379,12 +379,19 @@ void main() {
       )), provider: _NoNetwork(),
     );
     addTearDown(ai.dispose);
+    String? exported;
     await tester.pumpWidget(MaterialApp(theme: DomoliaTheme.dark,
       home: BookEditorPage(book: book, library: library,
-        ai: ai, onPlay: (_, session) async {}),
+        ai: ai, onExportBookJson: (_, bytes) async => exported = utf8.decode(bytes),
+        onPlay: (_, session) async {}),
     ));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('bookTitle')), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('bookTitle')), 'Livre renommé');
+    await tester.tap(find.byKey(const ValueKey('bookExport')));
+    await tester.pumpAndSettle();
+    expect(BookDefinition.importJson(exported!).title, 'Livre renommé');
+    expect(jsonDecode(exported!).containsKey('timeline'), isFalse);
     await tester.tap(find.text('Narrateur'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('bookDetailSlider')), findsOneWidget);

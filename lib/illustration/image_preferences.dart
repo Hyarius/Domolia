@@ -38,7 +38,7 @@ class ImageGenerationOptions {
 
   /// Empty fields mean automatic routing. Resolve only when making a
   /// request; never overwrite explicit per-Party choices.
-  ImageGenerationOptions resolveProfiles(Iterable<AiProfile> profiles) {
+  ImageGenerationOptions resolveProfiles(Iterable<AiProfile> profiles, {bool nsfw = false}) {
     final all = profiles.toList();
     bool imageCapable(AiProfile profile) {
       final uri = Uri.tryParse(profile.baseUrl);
@@ -85,7 +85,9 @@ class ImageGenerationOptions {
           profile.kind == AiProviderKind.chatGpt).firstOrNull;
       final sameImageProvider = candidates.where((profile) =>
           profile.id == imageProfile?.id).firstOrNull;
-      director = (preferred ?? chatGpt ??
+      final adultDirector = nsfw ? candidates.where((profile) =>
+          profile.nsfwCompatibility == AiNsfwCompatibility.supported).firstOrNull : null;
+      director = (adultDirector ?? preferred ?? chatGpt ??
           sameImageProvider ?? candidates.firstOrNull)?.id ?? '';
     }
     return ImageGenerationOptions(

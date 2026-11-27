@@ -137,7 +137,7 @@ class BookSession {
           (item['playerEventId'] as int) >= 0 &&
           item['description'] is String &&
           (item['description'] as String).trim().isNotEmpty &&
-          (item['description'] as String).length <= 500 &&
+          (item['description'] as String).length <= ChatIllustrationIntent.maxDescriptionLength &&
           item['state'] is String &&
           IllustrationIntentState.values.any((v) => v.name == item['state']) &&
           item.length == 5) {

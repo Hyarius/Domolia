@@ -596,6 +596,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           records: store,
           timeline: () => _chat.timeline,
           lore: () => _books.byId(book.id)?.lore ?? book.lore,
+          bookAllowsNsfw: () => (_books.byId(book.id) ?? book).nsfw,
           visualSettings: () => _books.byId(book.id)?.illustrationSettings ??
               book.illustrationSettings,
           memory: () => _liveMemory?.facts ?? const [],

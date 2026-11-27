@@ -1,11 +1,11 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../theme/domolia_theme.dart';
 import 'book_definition.dart';
+import 'book_export.dart';
 import 'book_library_controller.dart';
 
 /// Responsive grid of installed books. File sharing is explicitly initiated
@@ -68,23 +68,6 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
     } catch (error) {
       _message(error is FormatException ? error.message :
           'Impossible d’importer le fichier JSON.');
-    }
-  }
-
-  Future<void> _export(BookDefinition book) async {
-    try {
-      final content = Uint8List.fromList(utf8.encode(book.exportJson()));
-      final filename = book.title.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
-      final saved = await FilePicker.platform.saveFile(
-        dialogTitle: 'Exporter le Livre',
-        fileName: '${filename.isEmpty ? 'livre' : filename}.json',
-        type: FileType.custom,
-        allowedExtensions: ['json'],
-        bytes: content,
-      );
-      if (saved != null) _message('Définition du Livre exportée.');
-    } catch (_) {
-      _message('Export JSON impossible.');
     }
   }
 
@@ -276,7 +259,7 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                                       ),
                                       IconButton(
                                         tooltip: 'Exporter ${book.title}',
-                                        onPressed: () => _export(book),
+                                        onPressed: () => exportBookFile(book, _message),
                                         constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                                         padding: EdgeInsets.zero,
                                         icon: const Icon(Icons.file_download_outlined),

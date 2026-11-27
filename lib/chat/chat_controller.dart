@@ -344,35 +344,44 @@ class NarrativeChatController extends ChangeNotifier {
     return null;
   }
 
-  /// Insert a deliberate [IMAGE] directly after a committed AI message.
+  bool get insertingIllustration => _manualIllustrationInFlight;
+
+  /// Insert a deliberate [IMAGE] directly after a committed message.
   /// This is local-only: no provider call, RAW modification or token cost.
   bool canIllustrateMessage(int messageId) {
     if (_closed || busy || _manualIllustrationInFlight ||
         pendingRaw != null || _timeline.length >= 50000) {
       return false;
     }
-    final index = _timeline.indexWhere(
-      (event) => event is ChatEntry && event.id == messageId &&
-          event.speaker != ChatSpeaker.player && !event.inProgress,
-    );
-    if (index < 0 || (_timeline[index] as ChatEntry).text.trim().isEmpty ||
-        playerIdForAiMessage(messageId) == null) {
+    final index = _timeline.indexWhere((event) => event.id == messageId);
+    if (index < 0) return false;
+    final entry = _timeline[index];
+    if (entry is! ChatEntry || entry.inProgress || entry.text.trim().isEmpty ||
+        entry.text.trim().length > ChatIllustrationIntent.maxDescriptionLength) {
       return false;
     }
-    // Prevent duplicate placeholders on a repeated long press.
-    return index + 1 >= _timeline.length ||
-        _timeline[index + 1] is! ChatIllustrationIntent;
+    return illustrationForPassage(messageId) == null;
   }
 
-  /// The timeline and unchanged RAW are persisted atomically before the
-  /// proposal becomes visible. Rewinds remove it with its source turn.
-  Future<bool> illustrateMessage(int messageId) async {
-    if (!canIllustrateMessage(messageId)) return false;
+  ChatIllustrationIntent? illustrationForPassage(int messageId) {
+    final index = _timeline.indexWhere((event) => event.id == messageId);
+    if (index < 0 || index + 1 >= _timeline.length) return null;
+    final source = _timeline[index];
+    final next = _timeline[index + 1];
+    return source is ChatEntry && next is ChatIllustrationIntent &&
+        next.description == source.text.trim() ? next : null;
+  }
+
+  Future<bool> illustrateMessage(int messageId) async =>
+      await insertPassageIllustration(messageId) != null;
+
+  /// Return the exact persisted slot, including when illustrating an older turn.
+  Future<int?> insertPassageIllustration(int messageId) async {
+    if (!canIllustrateMessage(messageId)) return null;
     final index = _timeline.indexWhere((event) => event.id == messageId);
     final entry = _timeline[index] as ChatEntry;
-    final playerId = playerIdForAiMessage(messageId)!;
-    // A selected narrative bubble can be up to 6000 characters. Keep its
-    // complete visual details instead of cutting the pose or clothing midword.
+    // Before the first player turn, the opening itself anchors the illustration.
+    final playerId = playerIdForAiMessage(messageId) ?? entry.id;
     final description = entry.text.trim();
     final intent = ChatIllustrationIntent(
       id: _nextId, playerEventId: playerId, description: description,
@@ -385,7 +394,7 @@ class NarrativeChatController extends ChangeNotifier {
     _manualIllustrationInFlight = true;
     try {
       await _save(updated, _generations);
-      if (_closed) return false;
+      if (_closed) return null;
       _timeline.insert(index + 1, intent);
       _nextId++;
       if (_lastPlayerIndex != null && index < _lastPlayerIndex!) {
@@ -393,7 +402,7 @@ class NarrativeChatController extends ChangeNotifier {
       }
       _timelineChanged();
       _notify();
-      return true;
+      return intent.id;
     } finally {
       _manualIllustrationInFlight = false;
     }
