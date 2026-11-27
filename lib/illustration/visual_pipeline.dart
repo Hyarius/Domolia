@@ -135,15 +135,23 @@ class VisualSceneSelector {
       partyCharacters.putIfAbsent(id, () => name);
       if (partyCharacters.length >= 5) break;
     }
+    // A turn-level fact extracted from the full reply can reveal a later bubble
+    // in that very reply. The visible prefix already contains the earlier beats.
+    final laterInTurn = timeline.skip(position + 1)
+        .takeWhile((e) => !(e is ChatEntry && e.speaker == ChatSpeaker.player))
+        .any((e) => e is ChatEntry || e is ChatIllustrationIntent);
+    final knownMemory = memory.where((fact) =>
+        fact.sourceTurnId < intent.playerEventId ||
+        (fact.sourceTurnId == intent.playerEventId &&
+            (!laterInTurn || fact.sourceSide == 'player')));
     // Names from confirmed Party memory also identify visually described
     // characters who have not spoken in this scene.
-    for (final fact in memory) {
+    for (final fact in knownMemory) {
       if (partyCharacters.length >= 5) {
         break;
       }
       if (fact.category != 'character' ||
           !fact.entityId.startsWith('party:') ||
-          fact.sourceTurnId > intent.playerEventId ||
           fact.certainty != 'confirmed' ||
           fact.visibility != 'player' ||
           !_mentioned(relevantText, [fact.label])) {
@@ -164,8 +172,7 @@ class VisualSceneSelector {
           (p) => _mentioned(sceneNames, [p.name, ...p.aliases])).toList();
       if (earlierPlaces.length == 1) places.add(earlierPlaces.single);
     }
-    final eligibleMemory = memory.where((m) =>
-        m.sourceTurnId <= intent.playerEventId &&
+    final eligibleMemory = knownMemory.where((m) =>
         m.certainty == 'confirmed' && m.visibility == 'player' &&
         !_uncertain(m.text) &&
         (_mentioned(relevantText, [m.label]) ||

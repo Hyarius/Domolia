@@ -15,7 +15,7 @@ class SceneContext {
   static const _direction = '''
 Écris en français au présent. Incarne le monde et les PNJ. Vouvoie le joueur. Le joueur seul décide de ses paroles, gestes, pensées et engagements.
 Pars de son initiative et montre ce qu’elle change. En dialogue, fais répondre celui qui a quelque chose à obtenir, cacher ou concéder. Sa voix et son savoir lui appartiennent. Un geste visible peut contredire ses mots. Laisse aussi place au silence.
-Arrête-toi au premier choix qui appartient au joueur. Ni menu ni question de relance automatique. Respecte le ton du Livre, les conditions, les secrets et les absences. Une intention ou une offre ne vaut pas fait accompli.''';
+Arrête-toi au premier choix qui appartient au joueur. Ni menu ni question de relance automatique. Respecte le ton du Livre. Conserve lieu, présences, possessions et savoir de chacun jusqu’à ce qu’un événement les change. Le dernier fait établi prime sur un souvenir ancien. Une intention ou une offre ne vaut pas fait accompli.''';
 
   static String _excerpt(String text, int limit) {
     final value = text.trim();
@@ -75,7 +75,8 @@ Arrête-toi au premier choix qui appartient au joueur. Ni menu ni question de re
           turn = _PlayedTurn(action: event);
         } else {
           turn.beats.add(event);
-          if (afterTransition && event.speaker == ChatSpeaker.narrator) {
+          final firstOpening = turns.isEmpty && turn.action == null && sceneOpening == null;
+          if ((afterTransition || firstOpening) && event.speaker == ChatSpeaker.narrator) {
             sceneOpening = event;
             openingTurn = turns.length;
             afterTransition = false;
@@ -337,19 +338,33 @@ class _PlayedTurn {
   }
 
   List<AiMessage> tail(int budget) {
-    final last = beats.whereType<ChatEntry>().lastOrNull;
-    if (last == null) return [];
-    final header = SceneContext._header(last);
-    final text = last.text.trim();
-    var start = max(0, text.length - budget + header.length + 3);
-    if (start < text.length && (text.codeUnitAt(start) & 0xfc00) == 0xdc00) {
-      start++;
+    final lines = <String>[];
+    var remaining = budget;
+    for (final beat in beats.reversed) {
+      if (beat is ChatSceneChange) {
+        if (remaining < 4) break;
+        lines.add('---');
+        remaining -= 4;
+        continue;
+      }
+      if (beat is! ChatEntry) continue;
+      final header = SceneContext._header(beat);
+      final text = beat.text.replaceFirst(SceneContext._summaryPrefix, '').trim();
+      if (text.isEmpty) continue;
+      final room = remaining - header.length - 1;
+      if (room < 2) break;
+      if (text.length > room) {
+        var start = text.length - room + 1;
+        if ((text.codeUnitAt(start) & 0xfc00) == 0xdc00) start++;
+        lines.add('$header\n…${text.substring(start)}');
+        break;
+      }
+      lines.add('$header\n$text');
+      remaining -= header.length + text.length + 2;
     }
     return [
-      AiMessage(
-        role: 'assistant',
-        content: '$header\n${start > 0 ? '…' : ''}${text.substring(start)}',
-      ),
+      if (lines.isNotEmpty)
+        AiMessage(role: 'assistant', content: lines.reversed.join('\n')),
     ];
   }
 }

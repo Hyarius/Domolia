@@ -4,6 +4,10 @@ Domolia est un livre dont vous êtes le héros sur Android. Vous écrivez librem
 
 Le **Livre** définit le cadre, les personnages, le ton et l’ouverture. Chaque **Partie** a son propre historique. Le tag **NSFW** exprime la préférence du Livre. Pour jouer avec OpenUncensored, choisissez votre profil et votre modèle dans les réglages du narrateur.
 
+La continuité de la Partie guide le texte et l’image. Le dernier événement établi détermine où se trouvent les personnages, ce qu’ils possèdent et ce qu’ils savent. Un changement doit se jouer dans la scène. Le tag NSFW autorise le registre adulte lorsque le récit s’y prête.
+
+Dans une Partie, un appui prolongé sur une bulle puis **Illustrer** lance le metteur en scène et le dessin pour ce passage précis. Les deux appels peuvent consommer des crédits. Dans la fiche du Livre, **Exporter** enregistre sa définition en JSON, réimportable depuis la bibliothèque. Les Parties et les clés API restent privées.
+
 ## Identité visuelle
 
 ![Icône Domolia](assets/images/domolia_emblem.png)

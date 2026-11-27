@@ -417,6 +417,12 @@ void main() {
         sourceSide: 'manual', sourceQuote: 'Tenue confirmée',
       ),
       const LiveMemoryFact(
+        id: 'later-same-turn', category: 'character', entityId: 'naelle',
+        label: 'Naëlle', field: 'visual_current', text: 'Veste orange enfilée après le geste',
+        kind: 'state', certainty: 'confirmed', visibility: 'player',
+        importance: 4, sourceTurnId: 9, sourceSide: 'raw', sourceQuote: 'Elle se redresse.',
+      ),
+      const LiveMemoryFact(
         id: 'future', category: 'character', entityId: 'naelle',
         label: 'Naëlle', field: 'visual_current',
         text: 'Manteau rouge aperçu seulement plus tard',
@@ -439,6 +445,7 @@ void main() {
     expect(selected.evidence, contains('Collants noirs et jupe sombre'));
     expect(selected.evidence, contains('parquet sombre'));
     expect(selected.evidence, isNot(contains('Manteau rouge')));
+    expect(selected.evidence, isNot(contains('Veste orange')));
     expect(selected.evidence, isNot(contains('Elle se redresse plus tard')));
     expect(selected.evidence, isNot(contains('NE PAS RÉVÉLER')));
     expect(selected.evidence, isNot(contains('Local secret')));

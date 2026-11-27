@@ -121,6 +121,23 @@ void main() {
     expect(prompt, isNot(contains('La grille du quai se referme.')));
   });
 
+  test('a short final line keeps the action immediately before it', () async {
+    final provider = OfflineScene();
+    final chat = party(provider);
+    addTearDown(chat.dispose);
+    chat.restoreTimeline([
+      const ChatEntry(id: 0, speaker: ChatSpeaker.player, name: 'Vous', text: 'Je patiente.'),
+      ChatEntry(id: 1, speaker: ChatSpeaker.narrator, name: 'Narrateur', text: 'Le temps passe. ' * 240),
+      const ChatEntry(id: 2, speaker: ChatSpeaker.narrator, name: 'Narrateur',
+          text: 'Liv donne la seule clé à Jeanne, puis quitte l’atelier.'),
+      const ChatEntry(id: 3, speaker: ChatSpeaker.character, name: 'Jeanne', text: 'On ferme ?'),
+    ]);
+    await chat.send('Oui.');
+    final recent = provider.prompts.single.where((m) => m.role == 'assistant').last.content;
+    expect(recent, endsWith('Liv donne la seule clé à Jeanne, puis quitte l’atelier.\n@Jeanne\nOn ferme ?'));
+    expect(recent.length, lessThanOrEqualTo(2400));
+  });
+
   test(
     'long prior reply still hands off its last line to a short answer',
     () async {
