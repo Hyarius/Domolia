@@ -557,16 +557,6 @@ class BookEditorPageState extends State<BookEditorPage> {
                   fontSize: 22, fontWeight: FontWeight.bold,
                 ))),
               TextButton.icon(
-                key: const ValueKey('bookExport'),
-                onPressed: () async {
-                  if (await _save() && mounted) {
-                    await exportBookFile(_book, _show, writer: widget.onExportBookJson);
-                  }
-                },
-                icon: const Icon(Icons.file_download_outlined),
-                label: const Text('Exporter'),
-              ),
-              TextButton.icon(
                 key: const ValueKey('bookSave'),
                 onPressed: () async {
                   if (await _save()) _show('Livre enregistré.');
@@ -633,6 +623,19 @@ class BookEditorPageState extends State<BookEditorPage> {
       maxLength: 120,
       decoration: const InputDecoration(labelText: 'Titre du Livre'),
       onChanged: (_) => _queueSave(),
+    ),
+    Align(
+      alignment: Alignment.centerRight,
+      child: TextButton.icon(
+        key: const ValueKey('bookExport'),
+        onPressed: () async {
+          if (await _save() && mounted) {
+            await exportBookFile(_book, _show, writer: widget.onExportBookJson);
+          }
+        },
+        icon: const Icon(Icons.file_download_outlined),
+        label: const Text('Exporter'),
+      ),
     ),
     const SizedBox(height: DomoliaSpacing.section),
     const Text('Couverture', style: TextStyle(
